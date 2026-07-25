@@ -149,6 +149,46 @@ def test_control_residual_is_zero_and_controls_share_reference(tiny_data) -> Non
     model.assert_soft_reference()
 
 
+def test_modulated_head_matches_expanded_projection(tiny_data) -> None:
+    torch.manual_seed(41)
+    model = _model(tiny_data)
+    hidden = torch.randn(3, 5, model.hidden_dim, requires_grad=True)
+    effective = torch.randn(3, model.embedding_dim, requires_grad=True)
+    inputs = (
+        hidden,
+        effective,
+        model.drift_reference.weight,
+        model.drift_reference.bias,
+        model.drift_residual.weight,
+        model.drift_residual.bias,
+    )
+
+    fused = model._modulated_head(
+        hidden,
+        effective,
+        model.drift_reference,
+        model.drift_residual,
+        model.latent_dim,
+    )
+    expanded = model.drift_reference(hidden) + torch.einsum(
+        "gnor,gr->gno",
+        model.drift_residual(hidden).reshape(
+            3, 5, model.latent_dim, model.embedding_dim
+        ),
+        effective,
+    )
+
+    assert torch.allclose(fused, expanded, atol=1e-6, rtol=1e-5)
+    fused_gradients = torch.autograd.grad(fused.square().sum(), inputs, retain_graph=True)
+    expanded_gradients = torch.autograd.grad(expanded.square().sum(), inputs)
+    for fused_gradient, expanded_gradient in zip(
+        fused_gradients, expanded_gradients, strict=True
+    ):
+        assert torch.allclose(
+            fused_gradient, expanded_gradient, atol=2e-5, rtol=2e-5
+        )
+
+
 def test_reference_branch_removes_only_selected_residual(tiny_data) -> None:
     model = _model(tiny_data)
     embedding_ids = ("__control__", "GENE1", "GENE2")
@@ -349,6 +389,19 @@ def test_endpoint_is_a_two_checkpoint_trajectory(tiny_data) -> None:
     )
     assert objective.observation_count == len(endpoint.measure_ids)
     assert len(objective.rows) == len(endpoint.measure_ids)
+    without_rows = checkpoint_geometry_mass_loss(
+        result,
+        endpoint,
+        mass_weight=1.0,
+        include_mass=True,
+        validation_source="train_self_eval",
+        collect_rows=False,
+    )
+    assert without_rows.observation_count == objective.observation_count
+    assert without_rows.rows == []
+    assert torch.allclose(without_rows.total, objective.total)
+    assert torch.allclose(without_rows.geometry, objective.geometry)
+    assert torch.allclose(without_rows.log_mass_error, objective.log_mass_error)
 
 
 def test_no_context_chunks_equal_the_full_rollout(tiny_data) -> None:

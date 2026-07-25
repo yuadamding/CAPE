@@ -57,9 +57,11 @@ class CatalogBank:
     seen: dict[str, torch.Tensor]
     age: dict[str, torch.Tensor]
     context_group_index: torch.Tensor
+    context_group_count: int
     time_to_index: dict[str, int]
     momentum: float = 0.9
     last_full_refresh_epoch: int = -1
+    _is_complete: bool = False
 
     @classmethod
     def empty(
@@ -99,6 +101,7 @@ class CatalogBank:
             seen=seen,
             age=age,
             context_group_index=group_index,
+            context_group_count=len(group_mapping),
             time_to_index={label: index for index, label in enumerate(data.axis.labels)},
         )
 
@@ -107,6 +110,7 @@ class CatalogBank:
             value.zero_()
         for value in self.age.values():
             value.zero_()
+        self._is_complete = False
 
     @torch.no_grad()
     def tick(self) -> None:
@@ -187,6 +191,8 @@ class CatalogBank:
             )
 
     def assert_complete(self) -> None:
+        if self._is_complete:
+            return
         incomplete = {
             name: int((~value).sum().item())
             for name, value in self.seen.items()
@@ -194,6 +200,7 @@ class CatalogBank:
         }
         if incomplete:
             raise RuntimeError(f"CatalogBank is incomplete: {incomplete}")
+        self._is_complete = True
 
     def context_for_active(
         self,
@@ -210,7 +217,12 @@ class CatalogBank:
         full_programs = self.tensors["context_programs"][step_index].detach().clone()
         full_log_mass = full_log_mass.index_copy(0, active, active_log_mass.to(full_log_mass))
         full_programs = full_programs.index_copy(0, active, active_programs.to(full_programs))
-        full_context = model.compose_context(full_log_mass, full_programs, self.context_group_index)
+        full_context = model.compose_context(
+            full_log_mass,
+            full_programs,
+            self.context_group_index,
+            context_group_count=self.context_group_count,
+        )
         return full_context.index_select(0, active)
 
     def fitness_for_active(
@@ -669,10 +681,7 @@ class Trainer:
     ) -> dict[str, float | int]:
         phase = stage.name
         self.model.train()
-        weighted_geometry = 0.0
-        weighted_mass = 0.0
-        count_total = 0.0
-        regularization_total = 0.0
+        metric_totals = torch.zeros(4, device=self.device, dtype=self.dtype)
         observations = 0
         batch_count = 0
         seed = self.training_plan.seed + self.completed_epochs * 10_000
@@ -722,6 +731,7 @@ class Trainer:
                     float(action_config.get("growth_weight", 0.0))
                     * (0.0 if action is None else action.weight),
                 ),
+                collect_rows=False,
             )
             model_objective = self._objective(stage, "model_regularization")
             model_config = {} if model_objective is None else dict(model_objective.config)
@@ -747,11 +757,15 @@ class Trainer:
                     particle_rollout, self.model, self.data, full_refresh=False
                 )
             count = objective.checkpoint.observation_count
-            weighted_geometry += float(objective.checkpoint.geometry.detach().cpu()) * count
-            weighted_mass += float(objective.checkpoint.log_mass_error.detach().cpu()) * count
-            count_total += float(objective.count.detach().cpu())
-            regularization_total += float(
-                (objective.regularization + model_regularization).detach().cpu()
+            metric_totals.add_(
+                torch.stack(
+                    (
+                        objective.checkpoint.geometry.detach() * count,
+                        objective.checkpoint.log_mass_error.detach() * count,
+                        objective.count.detach(),
+                        (objective.regularization + model_regularization).detach(),
+                    )
+                )
             )
             observations += count
             batch_count += 1
@@ -759,6 +773,9 @@ class Trainer:
             self._objective_weight(stage, "grouped_count_likelihood") > 0 and self.data.count_blocks
         ):
             raise RuntimeError("Training produced no active checkpoint observations.")
+        weighted_geometry, weighted_mass, count_total, regularization_total = (
+            float(value) for value in metric_totals.cpu().tolist()
+        )
         geometry_mean = weighted_geometry / max(observations, 1)
         mass_mean = weighted_mass / max(observations, 1)
         count_mean = count_total / max(batch_count, 1)

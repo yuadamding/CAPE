@@ -218,6 +218,7 @@ def checkpoint_geometry_mass_loss(
     validation_source: str,
     sinkhorn_epsilon: float = 0.1,
     time_labels: Iterable[str] | None = None,
+    collect_rows: bool = True,
 ) -> CheckpointObjective:
     """Apply one checkpoint objective to any number of observed times."""
     indices = checkpoint_indices(data.axis, rollout.axis_grid)
@@ -232,8 +233,12 @@ def checkpoint_geometry_mass_loss(
     geometry_sum = torch.zeros((), device=device, dtype=dtype)
     mass_sum = torch.zeros((), device=device, dtype=dtype)
     rows: list[dict[str, Any]] = []
+    row_keys: list[tuple[str, str]] = []
+    row_values: list[torch.Tensor] = []
     observation_count = 0
-    terminal_diagnostics = weight_diagnostics(rollout.logw_steps)
+    terminal_diagnostics = (
+        weight_diagnostics(rollout.logw_steps) if collect_rows else None
+    )
     for label in data.axis.labels[1:]:
         if label not in selected_times:
             continue
@@ -261,26 +266,42 @@ def checkpoint_geometry_mass_loss(
             geometry_sum = geometry_sum + geometry
             mass_sum = mass_sum + mass_error
             observation_count += 1
-            rows.append(
-                {
-                    "measure_id": measure_id,
-                    "time_label": label,
-                    "endpoint_role": "observed_checkpoint",
-                    "validation_source": validation_source,
-                    "geometry": float(geometry.detach().cpu()),
-                    "log_mass_error": float(mass_error.detach().cpu()),
-                    "predicted_log_mass": float(predicted_mass.detach().cpu()),
-                    "observed_log_mass": float(observed_mass.detach().cpu()),
-                    "ess_fraction": float(
-                        terminal_diagnostics["ess_fraction"][step, local_index].detach().cpu()
-                    ),
-                    "max_weight_fraction": float(
-                        terminal_diagnostics["max_weight_fraction"][step, local_index]
-                        .detach()
-                        .cpu()
-                    ),
-                }
+            if collect_rows:
+                assert terminal_diagnostics is not None
+                row_keys.append((measure_id, label))
+                row_values.append(
+                    torch.stack(
+                        (
+                            geometry,
+                            mass_error,
+                            predicted_mass,
+                            observed_mass,
+                            terminal_diagnostics["ess_fraction"][step, local_index],
+                            terminal_diagnostics["max_weight_fraction"][
+                                step, local_index
+                            ],
+                        )
+                    )
+                )
+    if row_values:
+        host_values = torch.stack(row_values).detach().cpu().tolist()
+        rows = [
+            {
+                "measure_id": measure_id,
+                "time_label": label,
+                "endpoint_role": "observed_checkpoint",
+                "validation_source": validation_source,
+                "geometry": float(values[0]),
+                "log_mass_error": float(values[1]),
+                "predicted_log_mass": float(values[2]),
+                "observed_log_mass": float(values[3]),
+                "ess_fraction": float(values[4]),
+                "max_weight_fraction": float(values[5]),
+            }
+            for (measure_id, label), values in zip(
+                row_keys, host_values, strict=True
             )
+        ]
     if observation_count == 0:
         zero = rollout.z_steps.new_zeros(())
         return CheckpointObjective(
@@ -516,6 +537,7 @@ def total_objective(
     sinkhorn_epsilon: float = 0.1,
     time_labels: Iterable[str] | None = None,
     action_weights: tuple[float, float, float] = (1e-4, 1e-5, 1e-4),
+    collect_rows: bool = True,
 ) -> ObjectiveResult:
     checkpoint = checkpoint_geometry_mass_loss(
         rollout,
@@ -525,6 +547,7 @@ def total_objective(
         validation_source=validation_source,
         sinkhorn_epsilon=sinkhorn_epsilon,
         time_labels=time_labels,
+        collect_rows=collect_rows,
     )
     counts = (
         count_block_loss(

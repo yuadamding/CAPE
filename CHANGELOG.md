@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Fused soft-reference drift and diffusion modulation before particle
+  expansion, removed training-only diagnostic transfers, and eliminated
+  repeated catalog synchronization so large CUDA runs retain the same
+  equations with substantially lower memory and launch overhead.
+
 ## 3.0.0a5 - 2026-07-22
 
 - Replaced the generic public study vocabulary with schema-v4

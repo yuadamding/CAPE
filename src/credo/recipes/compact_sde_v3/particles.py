@@ -196,7 +196,12 @@ class SelfConsistentContextProvider:
         del step_index
         log_mass, programs = model.summarize_context(z, absolute_log_weight)
         groups = _group_index(state.context_group_ids, z.device)
-        return model.compose_context(log_mass, programs, groups)
+        return model.compose_context(
+            log_mass,
+            programs,
+            groups,
+            context_group_count=len(set(state.context_group_ids)),
+        )
 
 
 class CatalogBankProtocol(Protocol):

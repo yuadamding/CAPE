@@ -91,6 +91,9 @@ class CREDOModel(nn.Module):
         self._residual_index = {
             value: index for index, value in enumerate(self.noncontrol_embedding_ids)
         }
+        self._residual_index_cache: dict[
+            tuple[tuple[str, ...], str, int | None], torch.Tensor
+        ] = {}
         self.latent_dim = int(latent_dim)
         self.embedding_dim = int(embedding_dim)
         self.n_programs = int(n_programs)
@@ -140,19 +143,27 @@ class CREDOModel(nn.Module):
         self.context_enabled = context_mode == "catalog_bank"
         self.assert_soft_reference()
 
-    def residuals(self, embedding_ids: Sequence[str]) -> torch.Tensor:
-        """Return exact-zero control residuals and learned noncontrol residuals."""
+    def _residual_indices(self, embedding_ids: Sequence[str]) -> torch.Tensor:
+        ids = tuple(str(value) for value in embedding_ids)
         device = self.reference_embedding.device
-        dtype = self.reference_embedding.dtype
-        output = torch.zeros(len(embedding_ids), self.embedding_dim, device=device, dtype=dtype)
-        for row, embedding_id in enumerate(embedding_ids):
-            value = str(embedding_id)
+        key = (ids, device.type, device.index)
+        cached = self._residual_index_cache.get(key)
+        if cached is not None:
+            return cached
+        indices = []
+        for value in ids:
             if value not in self.embedding_ids:
                 raise KeyError(f"Unknown embedding_id {value!r}.")
-            index = self._residual_index.get(value)
-            if index is not None:
-                output[row] = self.residual_embedding[index]
-        return output
+            indices.append(self._residual_index.get(value, -1) + 1)
+        result = torch.tensor(indices, device=device, dtype=torch.long)
+        self._residual_index_cache[key] = result
+        return result
+
+    def residuals(self, embedding_ids: Sequence[str]) -> torch.Tensor:
+        """Return exact-zero control residuals and learned noncontrol residuals."""
+        zero = self.residual_embedding.new_zeros(1, self.embedding_dim)
+        table = torch.cat((zero, self.residual_embedding), dim=0)
+        return table.index_select(0, self._residual_indices(embedding_ids))
 
     def effective_embeddings(
         self,
@@ -172,11 +183,8 @@ class CREDOModel(nn.Module):
         embedding_ids: Sequence[str],
         residual_scale: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        output = self.reference_embedding.new_zeros(len(embedding_ids))
-        for row, embedding_id in enumerate(embedding_ids):
-            index = self._residual_index.get(str(embedding_id))
-            if index is not None:
-                output[row] = self.growth_bias[index]
+        table = torch.cat((self.growth_bias.new_zeros(1), self.growth_bias), dim=0)
+        output = table.index_select(0, self._residual_indices(embedding_ids))
         if residual_scale is not None:
             output = output * residual_scale.to(device=output.device, dtype=output.dtype)
         return output
@@ -204,18 +212,45 @@ class CREDOModel(nn.Module):
         log_mass: torch.Tensor,
         mean_program: torch.Tensor,
         context_group_index: torch.Tensor,
+        *,
+        context_group_count: int | None = None,
     ) -> torch.Tensor:
         """Compose observation-derived ecological context within each group."""
         group = context_group_index.to(device=log_mass.device, dtype=torch.long)
         if group.ndim != 1 or len(group) != len(log_mass):
             raise ValueError("context_group_index must have one value per measure.")
-        _, inverse = torch.unique(group, sorted=True, return_inverse=True)
-        n_groups = int(inverse.max().item()) + 1
-        context_by_group = mean_program.new_zeros(n_groups, self.n_programs)
-        for index in range(n_groups):
-            mask = inverse.eq(index)
-            frequency = torch.softmax(log_mass[mask].float(), dim=0).to(mean_program.dtype)
-            context_by_group[index] = (frequency.unsqueeze(-1) * mean_program[mask]).sum(0)
+        if context_group_count is None:
+            _, inverse = torch.unique(group, sorted=True, return_inverse=True)
+            n_groups = int(inverse.max().item()) + 1
+        else:
+            inverse = group
+            n_groups = int(context_group_count)
+            if n_groups < 1:
+                raise ValueError("context_group_count must be positive.")
+
+        if n_groups == 1:
+            frequency = torch.softmax(log_mass.float(), dim=0).to(mean_program.dtype)
+            context = (frequency.unsqueeze(-1) * mean_program).sum(0, keepdim=True)
+            return context.expand(len(log_mass), -1)
+
+        log_mass32 = log_mass.float()
+        group_max = log_mass32.new_full((n_groups,), -torch.inf).scatter_reduce(
+            0,
+            inverse,
+            log_mass32,
+            reduce="amax",
+            include_self=True,
+        )
+        unnormalized = torch.exp(log_mass32 - group_max.index_select(0, inverse))
+        normalizer = log_mass32.new_zeros(n_groups).index_add(0, inverse, unnormalized)
+        frequency = (
+            unnormalized / normalizer.index_select(0, inverse).clamp_min(1e-30)
+        ).to(mean_program.dtype)
+        context_by_group = mean_program.new_zeros(n_groups, self.n_programs).index_add(
+            0,
+            inverse,
+            frequency.unsqueeze(-1) * mean_program,
+        )
         return context_by_group[inverse]
 
     def _modulated_head(
@@ -226,13 +261,23 @@ class CREDOModel(nn.Module):
         residual_head: nn.Linear,
         output_dim: int,
     ) -> torch.Tensor:
-        group_count, particle_count, _ = hidden.shape
-        baseline = reference_head(hidden)
-        matrix = residual_head(hidden).reshape(
-            group_count, particle_count, output_dim, self.embedding_dim
+        residual_weight = residual_head.weight.reshape(
+            output_dim, self.embedding_dim, self.hidden_dim
         )
-        modulation = torch.einsum("gnor,gr->gno", matrix, effective_embedding)
-        return baseline + modulation
+        effective_weight = reference_head.weight.unsqueeze(0) + torch.einsum(
+            "gr,orh->goh", effective_embedding, residual_weight
+        )
+        output = torch.bmm(hidden, effective_weight.transpose(1, 2))
+
+        if reference_head.bias is not None:
+            output = output + reference_head.bias.reshape(1, 1, output_dim)
+        if residual_head.bias is not None:
+            residual_bias = residual_head.bias.reshape(output_dim, self.embedding_dim)
+            effective_bias = torch.einsum(
+                "gr,or->go", effective_embedding, residual_bias
+            )
+            output = output + effective_bias.unsqueeze(1)
+        return output
 
     def _ecological_growth(
         self,
