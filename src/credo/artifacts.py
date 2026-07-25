@@ -454,7 +454,7 @@ def open_run(
         split = (
             SplitPlan.from_dict(payload["split_plan"])
             if payload.get("split_plan") is not None
-            else recipe.plan_split(view, config.recipe_config)
+            else recipe.plan_split(view, config.recipe_config, config.split)
         )
         validate_split_plan(view, split)
         validate_representation_scope(view, split)

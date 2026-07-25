@@ -119,7 +119,7 @@ def _load_runtime(args: argparse.Namespace):
     )
     try:
         view = config.view(semantic_study)
-        split = recipe.plan_split(view, config.recipe_config)
+        split = recipe.plan_split(view, config.recipe_config, config.split)
         validate_split_plan(view, split)
         validate_representation_scope(view, split)
         validate_view_for_recipe(

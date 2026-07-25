@@ -200,6 +200,13 @@ selection:
   reference_binding_id: donor_matched_ntc
   composition_policy: require_complete
 
+split:
+  strategy: guide
+  validation_values: [guide-17, guide-23]
+  fold: 0
+  folds: 4
+  representation_scope: shared
+
 recipe_config:
   validation:
     strategy: context_group

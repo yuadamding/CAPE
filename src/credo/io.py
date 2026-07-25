@@ -24,6 +24,7 @@ from .contracts import (
     FiniteMeasure,
     MassSemantics,
     RepresentationArtifact,
+    SplitSpec,
     TrajectoryData,
     validate_measure_meta,
 )
@@ -152,6 +153,7 @@ class RunConfig(_StrictModel):
     recipe: str = "credo.compact_sde_v3@3.0"
     study: Path | None = None
     selection: StudySelectionConfig = Field(default_factory=StudySelectionConfig)
+    split: SplitSpec | None = None
     data: DataConfig | None = None
     axis: AxisConfig | None = None
     recipe_config: Any
@@ -1094,7 +1096,7 @@ def validate_inputs(config: RunConfig | str | Path) -> dict[str, Any]:
     try:
         view = run_config.view(owner)
         recipe = get_recipe(run_config.recipe)
-        split = recipe.plan_split(view, run_config.recipe_config)
+        split = recipe.plan_split(view, run_config.recipe_config, run_config.split)
         validate_split_plan(view, split)
         validate_representation_scope(view, split)
         validate_view_for_recipe(
@@ -1111,6 +1113,10 @@ def validate_inputs(config: RunConfig | str | Path) -> dict[str, Any]:
     source = data.metadata.get("dataset", {}).get("source", {})
     return {
         "recipe": run_config.recipe,
+        "split_id": split.split_id,
+        "split_strategy": split.strategy,
+        "split_fold": None if run_config.split is None else run_config.split.fold,
+        "split_folds": None if run_config.split is None else run_config.split.folds,
         "measure_count": selected_measure_count,
         "training_measure_count": len(data.measure_ids),
         "validation_measure_count": len(validation_data.measure_ids),

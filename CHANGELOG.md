@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added an optional explicit `SplitSpec` to the strict run configuration so
+  deterministic cross-validation folds use the same validated split contract
+  in CLI preflight, training, checkpoint loading, and evaluation.
 - Fused soft-reference drift and diffusion modulation before particle
   expansion, removed training-only diagnostic transfers, and eliminated
   repeated catalog synchronization so large CUDA runs retain the same

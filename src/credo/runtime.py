@@ -936,6 +936,8 @@ class TrainingEngine:
             if callable(getattr(config, "recipe_configuration", None))
             else config
         )
+        if split is None:
+            split = getattr(config, "split", None)
         recipe.capabilities.require("train")
         if isinstance(study, (PerturbSeqStudy, Study)):
             study = config.view(study) if callable(getattr(config, "view", None)) else study.view()

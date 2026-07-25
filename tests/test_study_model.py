@@ -52,6 +52,7 @@ from credo.data import (
 from credo.data.splits import validate_representation_scope, validate_split_plan
 from credo.io import RunConfig, load_data, validate_inputs
 from credo.registry import get_recipe
+from credo.runtime import TrainingEngine
 
 
 def _general_study() -> SchemaV3Study:
@@ -1221,3 +1222,41 @@ def test_native_study_run_config_is_the_single_input_contract(tiny_config, tmp_p
     summary = validate_inputs(config)
     assert summary["measure_count"] == 12
     assert summary["axis_labels"] == ["Rest", "Stim8hr", "Stim48hr"]
+
+
+def test_run_config_routes_an_explicit_cross_validation_fold(tiny_config) -> None:
+    measure_meta = pd.read_parquet(tiny_config.data.measure_meta)
+    eligible = measure_meta.groupby("embedding_id", observed=True).filter(
+        lambda rows: len(rows) > 1
+    )
+    held_out = str(eligible.iloc[0]["measure_id"])
+    split = SplitSpec(
+        strategy="measure",
+        validation_values=(held_out,),
+        fold=0,
+        folds=4,
+        representation_scope="shared",
+        split_id="generated-cv-fold-00",
+    )
+    config = tiny_config.model_copy(update={"split": split})
+
+    summary = validate_inputs(config)
+
+    assert summary["split_strategy"] == "within_embedding_holdout"
+    assert summary["split_fold"] == 0
+    assert summary["split_folds"] == 4
+    assert summary["training_measure_count"] == summary["measure_count"] - 1
+    assert summary["validation_measure_count"] == 1
+
+    study = open_study(config)
+    try:
+        run = TrainingEngine().fit(
+            get_recipe(config.recipe),
+            config.view(study),
+            config,
+            device="cpu",
+        )
+        assert run.validation_measure_ids == (held_out,)
+        assert held_out not in run.train_measure_ids
+    finally:
+        study.close()
