@@ -160,11 +160,20 @@ def evaluate_replay(
         include_mass=True,
         validation_source="held_out",
         sinkhorn_epsilon=0.1,
+        uot_reach=1.0,
+        collect_benchmark_metrics=True,
+        compute_geometry=compute_geometry,
     )
     rows = checkpoint.rows
     if not compute_geometry:
         for row in rows:
-            row["geometry"] = float("nan")
+            for name in (
+                "geometry",
+                "unbalanced_sinkhorn",
+                "energy_distance",
+                "centroid_distance",
+            ):
+                row[name] = float("nan")
     order = {value: index for index, value in enumerate(study.measure_ids)}
     time_order = {value: index for index, value in enumerate(study.axis.labels)}
     frame = pd.DataFrame(rows)

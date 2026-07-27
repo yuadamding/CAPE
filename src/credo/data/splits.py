@@ -510,6 +510,28 @@ def _validate_holdout_embeddings(
         )
 
 
+def _requested_partition_values(
+    requested: SplitSpec,
+    *,
+    available: set[str],
+) -> tuple[set[str], set[str]]:
+    """Validate and resolve the exact identity sets in an explicit split contract."""
+    validation = set(requested.validation_values or ())
+    unknown_validation = validation - available
+    if unknown_validation:
+        raise ValueError(
+            f"Unknown validation {requested.strategy} values: {sorted(unknown_validation)}"
+        )
+
+    train = (
+        available - validation if requested.train_values is None else set(requested.train_values)
+    )
+    unknown_train = train - available
+    if unknown_train:
+        raise ValueError(f"Unknown training {requested.strategy} values: {sorted(unknown_train)}")
+    return train, validation
+
+
 def _selection_for(
     inputs: _SplitInputs,
     series_ids: tuple[str, ...],
@@ -724,6 +746,10 @@ def _plan(
 
     if requested is not None:
         representation_scope = requested.representation_scope
+        if requested.strategy == "none" and (
+            requested.train_values is not None or requested.validation_values is not None
+        ):
+            raise ValueError("Split strategy 'none' cannot declare train or validation values.")
         if requested.strategy != "none":
             if requested.strategy in {"context_group", "checkpoint"}:
                 strategy = requested.strategy
@@ -757,12 +783,11 @@ def _plan(
                 }[requested.strategy]
                 if column not in metadata:
                     raise ValueError(f"Split strategy {requested.strategy!r} requires {column!r}.")
-                selected = set(requested.validation_values or ())
-                unknown = selected - set(metadata[column].astype(str))
-                if unknown:
-                    raise ValueError(
-                        f"Unknown validation {requested.strategy} values: {sorted(unknown)}"
-                    )
+                available = set(metadata[column].dropna().astype(str))
+                selected_train, selected = _requested_partition_values(
+                    requested,
+                    available=available,
+                )
                 validation_ids = tuple(
                     series_id
                     for series_id in inputs.series_ids
@@ -772,7 +797,9 @@ def _plan(
                     series_id for series_id in validation_ids if series_id in eligible_set
                 )
                 train_ids = tuple(
-                    series_id for series_id in inputs.series_ids if series_id not in validation_ids
+                    series_id
+                    for series_id in inputs.series_ids
+                    if str(metadata.loc[series_id, column]) in selected_train
                 )
                 if not train_ids or not validation_outcomes:
                     raise ValueError(
@@ -808,11 +835,18 @@ def _plan(
 
     if strategy == "checkpoint":
         requested_values = set(values)
-        validation_times = tuple(label for label in downstream if label in requested_values)
         unknown = requested_values - set(downstream)
         if unknown:
             raise ValueError(f"Unknown validation checkpoints: {sorted(unknown)}")
-        train_times = tuple(label for label in downstream if label not in requested_values)
+        if requested is not None and requested.strategy == "checkpoint":
+            train_values, requested_values = _requested_partition_values(
+                requested,
+                available=set(downstream),
+            )
+        else:
+            train_values = set(downstream) - requested_values
+        validation_times = tuple(label for label in downstream if label in requested_values)
+        train_times = tuple(label for label in downstream if label in train_values)
         validation_ids = tuple(
             series_id
             for series_id in inputs.series_ids
@@ -837,6 +871,13 @@ def _plan(
         unknown = selected - available
         if unknown:
             raise ValueError(f"Unknown validation context groups: {sorted(unknown)}")
+        if requested is not None and requested.strategy == "context_group":
+            selected_train, selected = _requested_partition_values(
+                requested,
+                available=available,
+            )
+        else:
+            selected_train = available - selected
         validation_ids = tuple(
             series_id
             for series_id in eligible
@@ -845,7 +886,7 @@ def _plan(
         train_ids = tuple(
             series_id
             for series_id in inputs.series_ids
-            if str(metadata.loc[series_id, "context_group_id"]) not in selected
+            if str(metadata.loc[series_id, "context_group_id"]) in selected_train
         )
         _validate_holdout_embeddings(metadata, train_ids, validation_ids)
         return _finalize_plan(
@@ -1157,7 +1198,6 @@ def validate_split_plan(view: StudyView, split: SplitPlan) -> None:
             train_series == all_series
             and validation_series == expected_validation
             and not (train_checkpoints & validation_checkpoints)
-            and train_checkpoints | validation_checkpoints == all_downstream
         )
     elif split.strategy == "train_self_eval":
         valid_shape = (
@@ -1169,7 +1209,6 @@ def validate_split_plan(view: StudyView, split: SplitPlan) -> None:
     else:
         valid_shape = (
             not (train_series & validation_series)
-            and train_series | validation_series == all_series
             and train_checkpoints == all_downstream
             and validation_checkpoints == all_downstream
         )

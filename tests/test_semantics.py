@@ -14,7 +14,11 @@ from credo.io import RunConfig, load_data, validate_run_data
 from credo.model import CREDOModel
 from credo.objective import (
     CountBlock,
+    checkpoint_centroid_distance,
+    checkpoint_energy_distance,
+    checkpoint_geometry,
     checkpoint_geometry_mass_loss,
+    checkpoint_unbalanced_sinkhorn,
     count_block_loss,
     total_objective,
 )
@@ -29,7 +33,13 @@ from credo.particles import (
     sample_initial_particles,
     sample_noise,
 )
-from credo.training import CatalogBank, _representation_scope, _validation_split
+from credo.registry import get_recipe
+from credo.runtime import TrainingEngine
+from credo.training import CatalogBank, Trainer, _representation_scope, _validation_split
+
+
+def _fit(config, data):
+    return TrainingEngine().fit(get_recipe(config.recipe), data, config, device="cpu")
 
 
 def _model(data: TrajectoryData, *, context: str = "none") -> CREDOModel:
@@ -172,21 +182,15 @@ def test_modulated_head_matches_expanded_projection(tiny_data) -> None:
     )
     expanded = model.drift_reference(hidden) + torch.einsum(
         "gnor,gr->gno",
-        model.drift_residual(hidden).reshape(
-            3, 5, model.latent_dim, model.embedding_dim
-        ),
+        model.drift_residual(hidden).reshape(3, 5, model.latent_dim, model.embedding_dim),
         effective,
     )
 
     assert torch.allclose(fused, expanded, atol=1e-6, rtol=1e-5)
     fused_gradients = torch.autograd.grad(fused.square().sum(), inputs, retain_graph=True)
     expanded_gradients = torch.autograd.grad(expanded.square().sum(), inputs)
-    for fused_gradient, expanded_gradient in zip(
-        fused_gradients, expanded_gradients, strict=True
-    ):
-        assert torch.allclose(
-            fused_gradient, expanded_gradient, atol=2e-5, rtol=2e-5
-        )
+    for fused_gradient, expanded_gradient in zip(fused_gradients, expanded_gradients, strict=True):
+        assert torch.allclose(fused_gradient, expanded_gradient, atol=2e-5, rtol=2e-5)
 
 
 def test_reference_branch_removes_only_selected_residual(tiny_data) -> None:
@@ -402,6 +406,164 @@ def test_endpoint_is_a_two_checkpoint_trajectory(tiny_data) -> None:
     assert torch.allclose(without_rows.total, objective.total)
     assert torch.allclose(without_rows.geometry, objective.geometry)
     assert torch.allclose(without_rows.log_mass_error, objective.log_mass_error)
+
+
+def test_finite_measure_benchmark_metrics_separate_geometry_and_mass() -> None:
+    support = torch.tensor([[0.0], [1.0]])
+    first_log_weight = torch.log(torch.tensor([0.2, 0.3]))
+    second_log_weight = torch.log(torch.tensor([0.4, 0.6]))
+
+    assert checkpoint_energy_distance(
+        support,
+        first_log_weight,
+        support,
+        second_log_weight,
+    ).item() == pytest.approx(0.0, abs=1e-6)
+    assert checkpoint_centroid_distance(
+        support,
+        first_log_weight,
+        support,
+        second_log_weight,
+    ).item() == pytest.approx(0.0, abs=1e-6)
+    assert checkpoint_unbalanced_sinkhorn(
+        support,
+        first_log_weight,
+        support,
+        first_log_weight,
+    ).item() == pytest.approx(0.0, abs=1e-6)
+    assert checkpoint_unbalanced_sinkhorn(
+        support,
+        first_log_weight,
+        support,
+        second_log_weight,
+    ).item() > 0
+
+
+def test_benchmark_distances_are_translation_invariant_at_large_coordinates() -> None:
+    first = torch.tensor([[0.0], [1.0]])
+    second = torch.tensor([[1.0], [2.0]])
+    equal_log_weight = torch.log(torch.tensor([0.5, 0.5]))
+
+    metrics = (
+        lambda *args: checkpoint_geometry(*args, stable_distances=True),
+        checkpoint_unbalanced_sinkhorn,
+        checkpoint_energy_distance,
+        checkpoint_centroid_distance,
+    )
+    for metric in metrics:
+        near_origin = metric(
+            first,
+            equal_log_weight,
+            second,
+            equal_log_weight,
+        )
+        translated = metric(
+            first + 100_000.0,
+            equal_log_weight,
+            second + 100_000.0,
+            equal_log_weight,
+        )
+
+        assert torch.isfinite(translated)
+        assert translated.item() == pytest.approx(
+            near_origin.item(),
+            rel=1e-5,
+            abs=1e-6,
+        )
+
+
+def test_last_checkpoint_policy_does_not_select_on_outer_validation(
+    tiny_config,
+    tiny_data,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = tiny_config.recipe_config
+    epochs = settings.training.epochs.model_copy(
+        update={"state": 3, "mass": 0, "context": 0}
+    )
+    training = settings.training.model_copy(
+        update={
+            "epochs": epochs,
+            "patience": 1,
+            "checkpoint_selection": "last",
+        }
+    )
+    loss = settings.loss.model_copy(update={"mass": 0.0, "count": 0.0})
+    settings = settings.model_copy(update={"training": training, "loss": loss})
+    config = tiny_config.model_copy(update={"recipe_config": settings})
+    evaluation_calls: list[bool] = []
+    original_evaluate_ids = Trainer._evaluate_ids
+
+    def record_evaluation(self, *args, **kwargs):
+        evaluation_calls.append(bool(kwargs.get("collect_benchmark_metrics", False)))
+        return original_evaluate_ids(self, *args, **kwargs)
+
+    monkeypatch.setattr(
+        Trainer,
+        "_evaluate_ids",
+        record_evaluation,
+    )
+    monkeypatch.setattr(
+        Trainer,
+        "_validation_count_loss",
+        lambda *args, **kwargs: pytest.fail(
+            "last-checkpoint training accessed outer-fold validation counts"
+        ),
+    )
+
+    trainer = _fit(config, tiny_data)
+
+    assert trainer.completed_epochs == 3
+    assert evaluation_calls == [True]
+    assert trainer.execution_trace[0]["checkpoint_selection"] == "last"
+    assert trainer.execution_trace[0]["validation_monitored_during_training"] is False
+    assert trainer.execution_trace[0]["best_monitored_score"] is None
+    assert trainer.execution_trace[0]["selected_checkpoint_score"] is None
+    assert all(
+        row["validation_monitored"] is False for row in trainer.history_rows
+    )
+    assert all(row["validation_observations"] == 0 for row in trainer.history_rows)
+
+
+def test_evaluation_transport_parameters_are_independent_of_training_loss(
+    tiny_config,
+    tiny_data,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from credo.recipes.compact_sde_v3 import training as training_runtime
+
+    settings = tiny_config.recipe_config
+    epochs = settings.training.epochs.model_copy(
+        update={"state": 1, "mass": 0, "context": 0}
+    )
+    training = settings.training.model_copy(update={"epochs": epochs})
+    evaluation = settings.evaluation.model_copy(
+        update={"sinkhorn_epsilon": 0.23, "uot_reach": 0.71}
+    )
+    loss = settings.loss.model_copy(
+        update={"mass": 0.0, "count": 0.0, "sinkhorn_epsilon": 0.89}
+    )
+    settings = settings.model_copy(
+        update={"training": training, "evaluation": evaluation, "loss": loss}
+    )
+    config = tiny_config.model_copy(update={"recipe_config": settings})
+    observed: list[tuple[float, float]] = []
+    original = training_runtime.checkpoint_geometry_mass_loss
+
+    def record_parameters(*args, **kwargs):
+        observed.append((kwargs["sinkhorn_epsilon"], kwargs["uot_reach"]))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(
+        training_runtime,
+        "checkpoint_geometry_mass_loss",
+        record_parameters,
+    )
+
+    _fit(config, tiny_data)
+
+    assert observed
+    assert set(observed) == {(0.23, 0.71)}
 
 
 def test_no_context_chunks_equal_the_full_rollout(tiny_data) -> None:

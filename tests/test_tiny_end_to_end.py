@@ -69,6 +69,9 @@ def test_tiny_run_writes_generic_bundle_artifacts(trained_run) -> None:
     assert diagnostics.columns.tolist() == list(COMMON_DIAGNOSTIC_COLUMNS)
     assert set(metrics["metric_name"]) == {
         "sinkhorn_divergence",
+        "unbalanced_sinkhorn_divergence",
+        "latent_energy_distance",
+        "latent_centroid_distance",
         "log_abundance_squared_error",
     }
     manifest = json.loads((output / "run.json").read_text(encoding="utf-8"))

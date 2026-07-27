@@ -451,3 +451,50 @@ def test_v2_common_evaluation_and_counterfactual_runtime_contracts(tmp_path: Pat
     control = counterfactual(run, "reference", n_particles=4, seed=29, study=study)
     assert control["delta_log_mass"].eq(0).all()
     assert control["mean_shift_l2"].eq(0).all()
+
+
+def test_v2_no_geometry_replay_skips_all_distance_metrics(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from credo.recipes.compact_sde_v3 import objective as checkpoint_objective
+
+    def reject_distance(*args, **kwargs):
+        pytest.fail("compute_geometry=False evaluated a support-distance metric")
+
+    for name in (
+        "checkpoint_geometry",
+        "checkpoint_unbalanced_sinkhorn",
+        "checkpoint_energy_distance",
+        "checkpoint_centroid_distance",
+    ):
+        monkeypatch.setattr(checkpoint_objective, name, reject_distance)
+
+    run = import_legacy_checkpoint(**_public_legacy_fixture(tmp_path))
+    study = _generated_trajectory_study(run)
+    try:
+        metrics = evaluate(
+            run,
+            study=study,
+            particles=4,
+            seed=17,
+            noise_seed=23,
+            device="cpu",
+            compute_geometry=False,
+        )
+    finally:
+        run.close()
+
+    assert metrics[
+        [
+            "geometry",
+            "unbalanced_sinkhorn",
+            "energy_distance",
+            "centroid_distance",
+        ]
+    ].isna().all().all()
+    assert metrics["log_mass_error"].notna().all()
+    assert metrics["predicted_log_mass"].notna().all()
+    assert metrics["observed_log_mass"].notna().all()
+    assert metrics["ess_fraction"].notna().all()
+    assert metrics["max_weight_fraction"].notna().all()

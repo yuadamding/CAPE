@@ -465,6 +465,7 @@ class Trainer:
                     name: dict(self.objective_map[name].config) for name in stage.active_objectives
                 },
                 "checkpoint_metric": stage.checkpoint_metric,
+                "checkpoint_selection": self.settings.training.checkpoint_selection,
                 "context_policy": stage.context_policy,
             }
             self.execution_trace.append(trace)
@@ -473,22 +474,35 @@ class Trainer:
             best_model: dict[str, torch.Tensor] | None = None
             best_concentration: torch.Tensor | None = None
             stale_epochs = 0
+            monitor_validation = (
+                self.settings.training.checkpoint_selection == "validation_best"
+            )
+            trace["validation_monitored_during_training"] = monitor_validation
             for phase_epoch in range(stage.epochs):
                 train_summary = self._train_epoch(stage, optimizer, phase_epoch)
                 bank_values = self.bank.diagnostics()
                 if phase in {"mass", "context"}:
                     self._refresh_bank(epoch=self.completed_epochs + 1)
-                evaluation = self._evaluate_ids(
-                    self.validation_measure_ids,
-                    include_mass=phase != "state",
-                    validation_source=self.validation_source,
-                )
-                validation_count, validation_count_blocks = self._validation_count_loss(stage)
-                score = self._validation_score(
-                    stage,
-                    evaluation,
-                    validation_count=validation_count,
-                )
+                if monitor_validation:
+                    evaluation = self._evaluate_ids(
+                        self.validation_measure_ids,
+                        include_mass=phase != "state",
+                        validation_source=self.validation_source,
+                    )
+                    validation_count, validation_count_blocks = (
+                        self._validation_count_loss(stage)
+                    )
+                    score = self._validation_score(
+                        stage,
+                        evaluation,
+                        validation_count=validation_count,
+                    )
+                    validation_observations = int(len(evaluation))
+                else:
+                    score = float("nan")
+                    validation_count = float("nan")
+                    validation_count_blocks = 0
+                    validation_observations = 0
                 self.history_rows.append(
                     {
                         "epoch": self.completed_epochs,
@@ -496,27 +510,33 @@ class Trainer:
                         "phase_epoch": phase_epoch,
                         **train_summary,
                         "validation_objective": score,
-                        "validation_observations": int(len(evaluation)),
+                        "validation_observations": validation_observations,
                         "validation_source": self.validation_source,
                         "validation_strategy": self.validation_strategy,
+                        "validation_monitored": monitor_validation,
                         "validation_count_loss": validation_count,
                         "validation_count_blocks": validation_count_blocks,
                         **bank_values,
                     }
                 )
                 self.completed_epochs += 1
-                if score < best_score - 1e-8:
+                if monitor_validation and score < best_score - 1e-8:
                     best_score = score
                     best_model = copy.deepcopy(self.model.state_dict())
                     best_concentration = self.log_count_concentration.detach().clone()
                     stale_epochs = 0
-                else:
+                elif monitor_validation:
                     stale_epochs += 1
-                if stale_epochs >= self.training_plan.early_stopping_patience:
+                if monitor_validation and (
+                    stale_epochs >= self.training_plan.early_stopping_patience
+                ):
                     break
             trace["epochs_completed"] = self.completed_epochs - completed_before_stage
-            trace["selected_checkpoint_score"] = best_score
-            if best_model is not None:
+            trace["best_monitored_score"] = best_score if monitor_validation else None
+            trace["selected_checkpoint_score"] = (
+                best_score if monitor_validation else None
+            )
+            if monitor_validation and best_model is not None:
                 self.model.load_state_dict(best_model)
                 assert best_concentration is not None
                 self.log_count_concentration.data.copy_(best_concentration)
@@ -855,6 +875,7 @@ class Trainer:
         validation_source: str,
         particles: int | None = None,
         seed: int | None = None,
+        collect_benchmark_metrics: bool = False,
     ) -> pd.DataFrame:
         self.model.eval()
         rows: list[dict[str, Any]] = []
@@ -897,8 +918,10 @@ class Trainer:
                 mass_weight=self.settings.loss.mass,
                 include_mass=include_mass,
                 validation_source=validation_source,
-                sinkhorn_epsilon=self.settings.loss.sinkhorn_epsilon,
+                sinkhorn_epsilon=self.settings.evaluation.sinkhorn_epsilon,
+                uot_reach=self.settings.evaluation.uot_reach,
                 time_labels=self.validation_time_labels,
+                collect_benchmark_metrics=collect_benchmark_metrics,
             )
             rows.extend(checkpoint.rows)
         if not rows:
@@ -923,6 +946,7 @@ class Trainer:
             validation_source=self.validation_source,
             particles=particles,
             seed=seed,
+            collect_benchmark_metrics=True,
         )
 
     def evaluate_runtime(

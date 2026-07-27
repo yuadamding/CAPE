@@ -159,6 +159,12 @@ def evaluation_tables(
 
     metric_specs = {
         "geometry": ("sinkhorn_divergence", "latent_squared_distance"),
+        "unbalanced_sinkhorn": (
+            "unbalanced_sinkhorn_divergence",
+            "finite_measure_transport_cost",
+        ),
+        "energy_distance": ("latent_energy_distance", "latent_distance"),
+        "centroid_distance": ("latent_centroid_distance", "latent_distance"),
         "log_mass_error": ("log_abundance_squared_error", "squared_log_abundance"),
     }
     metric_rows = []

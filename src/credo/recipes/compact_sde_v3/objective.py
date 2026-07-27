@@ -143,6 +143,17 @@ def _pairwise_squared_distance(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor
     ).clamp_min(0)
 
 
+def _center_supports(
+    predicted_support: torch.Tensor,
+    observed_support: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Remove a shared origin before fp32 distance calculations."""
+    if predicted_support.shape[0] == 0 or observed_support.shape[0] == 0:
+        raise ValueError("Checkpoint supports must contain at least one atom.")
+    origin = predicted_support[0].detach()
+    return predicted_support - origin, observed_support - origin
+
+
 def _sinkhorn_cost(
     log_a: torch.Tensor,
     log_b: torch.Tensor,
@@ -168,10 +179,16 @@ def checkpoint_geometry(
     *,
     epsilon: float = 0.1,
     iterations: int = 80,
+    stable_distances: bool = False,
 ) -> torch.Tensor:
     """Debiased normalized Sinkhorn geometry at one checkpoint."""
     predicted_probability = torch.softmax(predicted_log_weight, dim=0)
     observed_probability = torch.softmax(observed_log_weight, dim=0)
+    geometry_predicted, geometry_observed = (
+        _center_supports(predicted_support, observed_support)
+        if stable_distances
+        else (predicted_support, observed_support)
+    )
     try:
         from geomloss import SamplesLoss
 
@@ -184,20 +201,128 @@ def checkpoint_geometry(
         )
         return loss(
             predicted_probability.unsqueeze(0),
-            predicted_support.unsqueeze(0),
+            geometry_predicted.unsqueeze(0),
             observed_probability.unsqueeze(0),
-            observed_support.unsqueeze(0),
+            geometry_observed.unsqueeze(0),
         ).squeeze()
     except ImportError:
         log_a = torch.log(predicted_probability.clamp_min(1e-30))
         log_b = torch.log(observed_probability.clamp_min(1e-30))
-        cross = 0.5 * _pairwise_squared_distance(predicted_support, observed_support)
-        self_a = 0.5 * _pairwise_squared_distance(predicted_support, predicted_support)
-        self_b = 0.5 * _pairwise_squared_distance(observed_support, observed_support)
+        cross = 0.5 * _pairwise_squared_distance(
+            geometry_predicted,
+            geometry_observed,
+        )
+        self_a = 0.5 * _pairwise_squared_distance(
+            geometry_predicted,
+            geometry_predicted,
+        )
+        self_b = 0.5 * _pairwise_squared_distance(
+            geometry_observed,
+            geometry_observed,
+        )
         value = _sinkhorn_cost(log_a, log_b, cross, epsilon, iterations)
         value = value - 0.5 * _sinkhorn_cost(log_a, log_a, self_a, epsilon, iterations)
         value = value - 0.5 * _sinkhorn_cost(log_b, log_b, self_b, epsilon, iterations)
         return value.clamp_min(0)
+
+
+def checkpoint_unbalanced_sinkhorn(
+    predicted_support: torch.Tensor,
+    predicted_log_weight: torch.Tensor,
+    observed_support: torch.Tensor,
+    observed_log_weight: torch.Tensor,
+    *,
+    epsilon: float = 0.1,
+    reach: float = 1.0,
+) -> torch.Tensor:
+    """Debiased KL-relaxed Sinkhorn divergence between absolute finite measures."""
+    if epsilon <= 0:
+        raise ValueError("Unbalanced Sinkhorn epsilon must be positive.")
+    if reach <= 0:
+        raise ValueError("Unbalanced Sinkhorn reach must be positive.")
+    from geomloss import SamplesLoss
+
+    predicted_weight = torch.exp(predicted_log_weight.float()).to(predicted_support.dtype)
+    observed_weight = torch.exp(observed_log_weight.float()).to(observed_support.dtype)
+    centered_predicted, centered_observed = _center_supports(
+        predicted_support,
+        observed_support,
+    )
+    loss = SamplesLoss(
+        loss="sinkhorn",
+        p=2,
+        blur=epsilon**0.5,
+        reach=reach,
+        debias=True,
+        backend="tensorized",
+    )
+    value = loss(
+        predicted_weight.unsqueeze(0),
+        centered_predicted.unsqueeze(0),
+        observed_weight.unsqueeze(0),
+        centered_observed.unsqueeze(0),
+    ).squeeze()
+    return value.clamp_min(0)
+
+
+def checkpoint_energy_distance(
+    predicted_support: torch.Tensor,
+    predicted_log_weight: torch.Tensor,
+    observed_support: torch.Tensor,
+    observed_log_weight: torch.Tensor,
+) -> torch.Tensor:
+    """Weighted energy distance between normalized latent distributions."""
+    predicted_probability = torch.softmax(predicted_log_weight.float(), dim=0).to(
+        predicted_support.dtype
+    )
+    observed_probability = torch.softmax(observed_log_weight.float(), dim=0).to(
+        observed_support.dtype
+    )
+    centered_predicted, centered_observed = _center_supports(
+        predicted_support,
+        observed_support,
+    )
+    distance_options = {
+        "p": 2.0,
+        "compute_mode": "donot_use_mm_for_euclid_dist",
+    }
+    cross = torch.cdist(centered_predicted, centered_observed, **distance_options)
+    self_predicted = torch.cdist(
+        centered_predicted,
+        centered_predicted,
+        **distance_options,
+    )
+    self_observed = torch.cdist(
+        centered_observed,
+        centered_observed,
+        **distance_options,
+    )
+    cross_mean = predicted_probability @ cross @ observed_probability
+    predicted_mean = predicted_probability @ self_predicted @ predicted_probability
+    observed_mean = observed_probability @ self_observed @ observed_probability
+    return (2 * cross_mean - predicted_mean - observed_mean).clamp_min(0)
+
+
+def checkpoint_centroid_distance(
+    predicted_support: torch.Tensor,
+    predicted_log_weight: torch.Tensor,
+    observed_support: torch.Tensor,
+    observed_log_weight: torch.Tensor,
+) -> torch.Tensor:
+    """Euclidean error between normalized weighted latent centroids."""
+    predicted_probability = torch.softmax(predicted_log_weight.float(), dim=0).to(
+        predicted_support.dtype
+    )
+    observed_probability = torch.softmax(observed_log_weight.float(), dim=0).to(
+        observed_support.dtype
+    )
+    centered_predicted, centered_observed = _center_supports(
+        predicted_support,
+        observed_support,
+    )
+    predicted_centroid = (predicted_probability[:, None] * centered_predicted).sum(dim=0)
+    observed_centroid = (observed_probability[:, None] * centered_observed).sum(dim=0)
+    return torch.linalg.vector_norm(predicted_centroid - observed_centroid)
 
 
 def checkpoint_log_mass_error(
@@ -217,10 +342,17 @@ def checkpoint_geometry_mass_loss(
     include_mass: bool,
     validation_source: str,
     sinkhorn_epsilon: float = 0.1,
+    uot_reach: float = 1.0,
     time_labels: Iterable[str] | None = None,
     collect_rows: bool = True,
+    collect_benchmark_metrics: bool = False,
+    compute_geometry: bool = True,
 ) -> CheckpointObjective:
-    """Apply one checkpoint objective to any number of observed times."""
+    """Apply one checkpoint objective to any number of observed times.
+
+    ``compute_geometry=False`` skips every support-distance calculation while
+    preserving mass, particle diagnostics, and NaN geometry result columns.
+    """
     indices = checkpoint_indices(data.axis, rollout.axis_grid)
     selected_times = (
         set(data.axis.labels[1:]) if time_labels is None else {str(value) for value in time_labels}
@@ -236,9 +368,7 @@ def checkpoint_geometry_mass_loss(
     row_keys: list[tuple[str, str]] = []
     row_values: list[torch.Tensor] = []
     observation_count = 0
-    terminal_diagnostics = (
-        weight_diagnostics(rollout.logw_steps) if collect_rows else None
-    )
+    terminal_diagnostics = weight_diagnostics(rollout.logw_steps) if collect_rows else None
     for label in data.axis.labels[1:]:
         if label not in selected_times:
             continue
@@ -253,17 +383,52 @@ def checkpoint_geometry_mass_loss(
             )
             predicted_support = rollout.z_steps[step, local_index]
             predicted_log_weight = rollout.absolute_log_weight_steps[step, local_index]
-            geometry = checkpoint_geometry(
-                predicted_support,
-                predicted_log_weight,
-                target_support,
-                target_log_weight,
-                epsilon=sinkhorn_epsilon,
+            missing_geometry = rollout.z_steps.new_full((), float("nan"))
+            geometry = (
+                checkpoint_geometry(
+                    predicted_support,
+                    predicted_log_weight,
+                    target_support,
+                    target_log_weight,
+                    epsilon=sinkhorn_epsilon,
+                    stable_distances=collect_benchmark_metrics,
+                )
+                if compute_geometry
+                else missing_geometry
             )
             mass_error, predicted_mass, observed_mass = checkpoint_log_mass_error(
                 predicted_log_weight, target_log_weight
             )
-            geometry_sum = geometry_sum + geometry
+            benchmark_values: tuple[torch.Tensor, ...] = ()
+            if collect_benchmark_metrics:
+                benchmark_values = (
+                    (
+                        checkpoint_unbalanced_sinkhorn(
+                            predicted_support,
+                            predicted_log_weight,
+                            target_support,
+                            target_log_weight,
+                            epsilon=sinkhorn_epsilon,
+                            reach=uot_reach,
+                        ),
+                        checkpoint_energy_distance(
+                            predicted_support,
+                            predicted_log_weight,
+                            target_support,
+                            target_log_weight,
+                        ),
+                        checkpoint_centroid_distance(
+                            predicted_support,
+                            predicted_log_weight,
+                            target_support,
+                            target_log_weight,
+                        ),
+                    )
+                    if compute_geometry
+                    else (missing_geometry, missing_geometry, missing_geometry)
+                )
+            if compute_geometry:
+                geometry_sum = geometry_sum + geometry
             mass_sum = mass_sum + mass_error
             observation_count += 1
             if collect_rows:
@@ -277,16 +442,16 @@ def checkpoint_geometry_mass_loss(
                             predicted_mass,
                             observed_mass,
                             terminal_diagnostics["ess_fraction"][step, local_index],
-                            terminal_diagnostics["max_weight_fraction"][
-                                step, local_index
-                            ],
+                            terminal_diagnostics["max_weight_fraction"][step, local_index],
+                            *benchmark_values,
                         )
                     )
                 )
     if row_values:
         host_values = torch.stack(row_values).detach().cpu().tolist()
-        rows = [
-            {
+        rows = []
+        for (measure_id, label), values in zip(row_keys, host_values, strict=True):
+            row = {
                 "measure_id": measure_id,
                 "time_label": label,
                 "endpoint_role": "observed_checkpoint",
@@ -298,10 +463,15 @@ def checkpoint_geometry_mass_loss(
                 "ess_fraction": float(values[4]),
                 "max_weight_fraction": float(values[5]),
             }
-            for (measure_id, label), values in zip(
-                row_keys, host_values, strict=True
-            )
-        ]
+            if collect_benchmark_metrics:
+                row.update(
+                    {
+                        "unbalanced_sinkhorn": float(values[6]),
+                        "energy_distance": float(values[7]),
+                        "centroid_distance": float(values[8]),
+                    }
+                )
+            rows.append(row)
     if observation_count == 0:
         zero = rollout.z_steps.new_zeros(())
         return CheckpointObjective(
@@ -311,9 +481,14 @@ def checkpoint_geometry_mass_loss(
             observation_count=0,
             rows=[],
         )
-    geometry_mean = geometry_sum / observation_count
+    geometry_mean = (
+        geometry_sum / observation_count
+        if compute_geometry
+        else rollout.z_steps.new_full((), float("nan"))
+    )
     mass_mean = mass_sum / observation_count
-    total = geometry_mean + (float(mass_weight) * mass_mean if include_mass else 0.0)
+    geometry_term = geometry_mean if compute_geometry else geometry_sum
+    total = geometry_term + (float(mass_weight) * mass_mean if include_mass else 0.0)
     return CheckpointObjective(
         total=total,
         geometry=geometry_mean,

@@ -203,6 +203,13 @@ def _summarize(run_dir: Path) -> int:
     diagnostics = pd.read_parquet(output("diagnostics"))
     history = pd.read_parquet(output("history"))
     geometry = metrics.loc[metrics["metric_name"].eq("sinkhorn_divergence"), "value"]
+    unbalanced_geometry = metrics.loc[
+        metrics["metric_name"].eq("unbalanced_sinkhorn_divergence"), "value"
+    ]
+    energy = metrics.loc[metrics["metric_name"].eq("latent_energy_distance"), "value"]
+    centroid = metrics.loc[
+        metrics["metric_name"].eq("latent_centroid_distance"), "value"
+    ]
     mass_error = metrics.loc[metrics["metric_name"].eq("log_abundance_squared_error"), "value"]
     ess = diagnostics.loc[diagnostics["diagnostic_name"].eq("particle_ess_fraction"), "value"]
     summary = {
@@ -214,6 +221,9 @@ def _summarize(run_dir: Path) -> int:
         "metric_rows": int(len(metrics)),
         "prediction_rows": int(len(predictions)),
         "mean_geometry": float(geometry.mean()),
+        "mean_unbalanced_sinkhorn": float(unbalanced_geometry.mean()),
+        "mean_energy_distance": float(energy.mean()),
+        "mean_centroid_distance": float(centroid.mean()),
         "mean_log_mass_error": float(mass_error.mean()),
         "minimum_ess_fraction": float(ess.min()),
     }

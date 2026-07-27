@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 import random
 from collections.abc import Mapping
@@ -454,6 +455,199 @@ def validate_recipe_study(recipe: CREDORecipe, study: CREDOStudy) -> None:
         )
 
 
+def _lps_reference_binding_issues(
+    view: PerturbSeqView,
+    requirements: RecipeRequirements,
+    *,
+    observations: pd.DataFrame,
+    selected_series: pd.DataFrame,
+    selected_conditions: pd.DataFrame,
+    selected_binding: pd.DataFrame,
+) -> tuple[ValidationIssue, ...]:
+    """Resolve declared reference matches against selected control observations."""
+    issues: list[ValidationIssue] = []
+    perturbation_key = "perturbation_id"
+    binding_id = view.selection.reference_binding_id or "none"
+    control_by_perturbation = selected_conditions.set_index(perturbation_key)["is_control"].astype(
+        bool
+    )
+    pool_by_perturbation = selected_binding.set_index(perturbation_key)["reference_pool_id"].astype(
+        str
+    )
+    control_ids = set(control_by_perturbation.loc[control_by_perturbation].index.astype(str))
+    intervention_ids = set(control_by_perturbation.loc[~control_by_perturbation].index.astype(str))
+
+    parsed_match_keys = {
+        str(payload): tuple(str(value) for value in json.loads(str(payload)))
+        for payload in selected_binding["match_keys"].unique()
+    }
+    all_match_keys = tuple(
+        dict.fromkeys(key for keys in parsed_match_keys.values() for key in keys)
+    )
+    available_columns = set(observations) | set(selected_series)
+    observation_columns = list(
+        dict.fromkeys(
+            (
+                "observation_id",
+                "series_id",
+                *(key for key in all_match_keys if key in observations and key != perturbation_key),
+            )
+        )
+    )
+    series_columns = list(
+        dict.fromkeys(
+            (
+                "series_id",
+                perturbation_key,
+                *(
+                    key
+                    for key in all_match_keys
+                    if key not in observations and key in selected_series
+                ),
+            )
+        )
+    )
+    reference_observations = observations.loc[:, observation_columns].merge(
+        selected_series.loc[:, series_columns],
+        on="series_id",
+        how="left",
+        validate="many_to_one",
+    )
+
+    signature_columns = ("reference_pool_id", "scope_kind", "match_keys")
+    for (pool_id, scope_kind, match_payload), rows in selected_binding.groupby(
+        list(signature_columns),
+        observed=True,
+        sort=False,
+    ):
+        match_keys = parsed_match_keys[str(match_payload)]
+        missing_keys = tuple(key for key in match_keys if key not in available_columns)
+        if missing_keys:
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    "recipe.reference_match_keys",
+                    f"Reference scope {scope_kind!r} declares unavailable match keys "
+                    f"{list(missing_keys)}.",
+                    ("reference_bindings", binding_id, str(pool_id), "match_keys"),
+                )
+            )
+            continue
+
+        bound_ids = set(rows[perturbation_key].astype(str))
+        factual_ids = bound_ids & intervention_ids
+        if not factual_ids:
+            continue
+        pool_control_ids = {
+            perturbation_id
+            for perturbation_id in control_ids
+            if pool_by_perturbation.get(perturbation_id) == str(pool_id)
+        }
+        factual = reference_observations.loc[
+            reference_observations[perturbation_key].isin(factual_ids)
+        ]
+        controls = reference_observations.loc[
+            reference_observations[perturbation_key].isin(pool_control_ids)
+        ]
+        if match_keys:
+            missing_value_ids = factual.loc[
+                factual.loc[:, list(match_keys)].isna().any(axis=1), "observation_id"
+            ].astype(str)
+            candidate_keys = controls.loc[:, list(match_keys)].dropna().drop_duplicates()
+            resolvable = factual.loc[
+                ~factual.loc[:, list(match_keys)].isna().any(axis=1),
+                ["observation_id", *match_keys],
+            ]
+            matched = resolvable.merge(
+                candidate_keys.assign(_reference_match=True),
+                on=list(match_keys),
+                how="left",
+                validate="many_to_one",
+            )
+            unmatched_ids = matched.loc[
+                matched["_reference_match"].isna(), "observation_id"
+            ].astype(str)
+            unresolved_ids = tuple(
+                dict.fromkeys((*missing_value_ids.tolist(), *unmatched_ids.tolist()))
+            )
+        else:
+            unresolved_ids = ()
+        if unresolved_ids:
+            issues.append(
+                ValidationIssue(
+                    "error",
+                    "recipe.reference_match_coverage",
+                    f"Reference pool {pool_id!r} has no {scope_kind} control match for "
+                    f"{len(unresolved_ids)} selected intervention observations; "
+                    f"match_keys={list(match_keys)}, examples={list(unresolved_ids[:5])}.",
+                    ("reference_bindings", binding_id, str(pool_id)),
+                )
+            )
+
+    if requirements.reference_mode == "single_global_soft_reference":
+        all_effect_bindings = view.study.effect_bindings
+        all_reference_bindings = view.study.reference_bindings
+        if all_effect_bindings is not None and all_reference_bindings is not None:
+            effects = all_effect_bindings._unsafe_view()
+            references = all_reference_bindings._unsafe_view()
+            references = references.loc[references["binding_id"].eq(binding_id)]
+            perturbations = view.study.perturbations._unsafe_view()
+            all_control_ids = set(
+                perturbations.loc[perturbations["is_control"], perturbation_key].astype(str)
+            )
+            control_effects_by_pool: dict[str, set[str]] = {}
+            for pool_id, rows in references.groupby(
+                "reference_pool_id",
+                observed=True,
+                sort=False,
+            ):
+                pool_control_ids = set(rows[perturbation_key].astype(str)) & all_control_ids
+                control_effects_by_pool[str(pool_id)] = set(
+                    effects.loc[
+                        effects[perturbation_key].isin(pool_control_ids),
+                        "effect_id",
+                    ].astype(str)
+                )
+            unsupported: list[str] = []
+            for row in selected_binding.itertuples(index=False):
+                allowed = control_effects_by_pool.get(str(row.reference_pool_id), set())
+                if str(row.counterfactual_effect_id) not in allowed:
+                    unsupported.append(f"{row.perturbation_id}->{row.counterfactual_effect_id}")
+            if unsupported:
+                issues.append(
+                    ValidationIssue(
+                        "error",
+                        "recipe.counterfactual_reference_effect",
+                        "Recipe reference mode 'single_global_soft_reference' requires each "
+                        "counterfactual effect to be a declared control effect in the same "
+                        f"reference pool; invalid={unsupported[:5]}.",
+                        ("reference_bindings", binding_id, "counterfactual_effect_id"),
+                    )
+                )
+    return tuple(issues)
+
+
+def _validate_lps_reference_binding(
+    view: StudyView | PerturbSeqView,
+    requirements: RecipeRequirements,
+) -> ValidationReport:
+    if not isinstance(view, PerturbSeqView):
+        return ValidationReport()
+    selected_binding = view.reference_binding()
+    if selected_binding.empty:
+        return ValidationReport()
+    return ValidationReport(
+        _lps_reference_binding_issues(
+            view,
+            requirements,
+            observations=view.observations(),
+            selected_series=view.series(),
+            selected_conditions=view.perturbations(),
+            selected_binding=selected_binding,
+        )
+    )
+
+
 def validate_view_for_recipe(
     view: StudyView | PerturbSeqView,
     split: SplitSpec | SplitPlan,
@@ -842,6 +1036,16 @@ def validate_view_for_recipe(
                         ("reference_bindings", "scope_kind"),
                     )
                 )
+            issues.extend(
+                _lps_reference_binding_issues(
+                    view,
+                    requirements,
+                    observations=observations,
+                    selected_series=selected_series,
+                    selected_conditions=selected_conditions,
+                    selected_binding=selected_binding,
+                )
+            )
         if (
             requirements.maximum_reference_pools is not None
             and len(reference_groups) > requirements.maximum_reference_pools

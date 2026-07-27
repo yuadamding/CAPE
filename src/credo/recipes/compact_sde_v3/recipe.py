@@ -29,6 +29,7 @@ from ...runtime import (
     PredictionQuery,
     PredictionResult,
     RecipeRequirements,
+    _validate_lps_reference_binding,
 )
 from ..trajectory_compiler import compile_finite_measure_problem
 from .model import CREDOModel
@@ -66,12 +67,15 @@ class CompactTrainingConfig(_StrictConfig):
     batching: Literal["random", "target_round_robin", "target_blocked"] = "random"
     learning_rate: float = Field(default=1e-3, gt=0)
     patience: int = Field(default=10, ge=1)
+    checkpoint_selection: Literal["validation_best", "last"] = "validation_best"
     seed: int = Field(default=0, ge=0)
 
 
 class CompactEvaluationConfig(_StrictConfig):
     particles: int = Field(default=256, ge=2)
     measures_per_batch: int = Field(default=256, ge=1)
+    sinkhorn_epsilon: float = Field(default=0.1, gt=0)
+    uot_reach: float = Field(default=1.0, gt=0)
 
 
 class CompactValidationConfig(_StrictConfig):
@@ -192,9 +196,9 @@ class CompactSDEV3Recipe:
         split: SplitPlan | SplitSpec,
         config: Any,
     ) -> CREDOStudy:
-        del config
         if not isinstance(split, SplitPlan):
             raise TypeError("compact-v3 requires a content-addressed SplitPlan.")
+        _validate_lps_reference_binding(view, self.requirements(config)).raise_for_errors()
         return compile_finite_measure_problem(view, split)
 
     compile = compile_study

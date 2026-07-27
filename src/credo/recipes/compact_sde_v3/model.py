@@ -91,9 +91,7 @@ class CREDOModel(nn.Module):
         self._residual_index = {
             value: index for index, value in enumerate(self.noncontrol_embedding_ids)
         }
-        self._residual_index_cache: dict[
-            tuple[tuple[str, ...], str, int | None], torch.Tensor
-        ] = {}
+        self._residual_index_cache: dict[tuple[tuple[str, ...], str, int | None], torch.Tensor] = {}
         self.latent_dim = int(latent_dim)
         self.embedding_dim = int(embedding_dim)
         self.n_programs = int(n_programs)
@@ -243,9 +241,9 @@ class CREDOModel(nn.Module):
         )
         unnormalized = torch.exp(log_mass32 - group_max.index_select(0, inverse))
         normalizer = log_mass32.new_zeros(n_groups).index_add(0, inverse, unnormalized)
-        frequency = (
-            unnormalized / normalizer.index_select(0, inverse).clamp_min(1e-30)
-        ).to(mean_program.dtype)
+        frequency = (unnormalized / normalizer.index_select(0, inverse).clamp_min(1e-30)).to(
+            mean_program.dtype
+        )
         context_by_group = mean_program.new_zeros(n_groups, self.n_programs).index_add(
             0,
             inverse,
@@ -273,9 +271,7 @@ class CREDOModel(nn.Module):
             output = output + reference_head.bias.reshape(1, 1, output_dim)
         if residual_head.bias is not None:
             residual_bias = residual_head.bias.reshape(output_dim, self.embedding_dim)
-            effective_bias = torch.einsum(
-                "gr,or->go", effective_embedding, residual_bias
-            )
+            effective_bias = torch.einsum("gr,or->go", effective_embedding, residual_bias)
             output = output + effective_bias.unsqueeze(1)
         return output
 
