@@ -325,6 +325,31 @@ def checkpoint_centroid_distance(
     return torch.linalg.vector_norm(predicted_centroid - observed_centroid)
 
 
+def checkpoint_covariance_distance(
+    predicted_support: torch.Tensor,
+    predicted_log_weight: torch.Tensor,
+    observed_support: torch.Tensor,
+    observed_log_weight: torch.Tensor,
+) -> torch.Tensor:
+    """Frobenius error between normalized weighted latent covariance matrices."""
+
+    def covariance(
+        support: torch.Tensor,
+        log_weight: torch.Tensor,
+    ) -> torch.Tensor:
+        probability = torch.softmax(log_weight.float(), dim=0).to(support.dtype)
+        centroid = (probability[:, None] * support).sum(dim=0)
+        centered = support - centroid
+        return torch.einsum("n,ni,nj->ij", probability, centered, centered)
+
+    predicted_covariance = covariance(predicted_support, predicted_log_weight)
+    observed_covariance = covariance(observed_support, observed_log_weight)
+    return torch.linalg.matrix_norm(
+        predicted_covariance - observed_covariance,
+        ord="fro",
+    )
+
+
 def checkpoint_log_mass_error(
     predicted_log_weight: torch.Tensor,
     observed_log_weight: torch.Tensor,
@@ -367,6 +392,7 @@ def checkpoint_geometry_mass_loss(
     rows: list[dict[str, Any]] = []
     row_keys: list[tuple[str, str]] = []
     row_values: list[torch.Tensor] = []
+    row_centroids: list[tuple[torch.Tensor, torch.Tensor]] = []
     observation_count = 0
     terminal_diagnostics = weight_diagnostics(rollout.logw_steps) if collect_rows else None
     for label in data.axis.labels[1:]:
@@ -423,9 +449,20 @@ def checkpoint_geometry_mass_loss(
                             target_support,
                             target_log_weight,
                         ),
+                        checkpoint_covariance_distance(
+                            predicted_support,
+                            predicted_log_weight,
+                            target_support,
+                            target_log_weight,
+                        ),
                     )
                     if compute_geometry
-                    else (missing_geometry, missing_geometry, missing_geometry)
+                    else (
+                        missing_geometry,
+                        missing_geometry,
+                        missing_geometry,
+                        missing_geometry,
+                    )
                 )
             if compute_geometry:
                 geometry_sum = geometry_sum + geometry
@@ -434,6 +471,27 @@ def checkpoint_geometry_mass_loss(
             if collect_rows:
                 assert terminal_diagnostics is not None
                 row_keys.append((measure_id, label))
+                if collect_benchmark_metrics:
+                    predicted_probability = torch.softmax(
+                        predicted_log_weight.float(),
+                        dim=0,
+                    ).to(predicted_support.dtype)
+                    observed_probability = torch.softmax(
+                        target_log_weight.float(),
+                        dim=0,
+                    ).to(target_support.dtype)
+                    row_centroids.append(
+                        (
+                            (
+                                predicted_probability[:, None]
+                                * predicted_support
+                            ).sum(dim=0),
+                            (
+                                observed_probability[:, None]
+                                * target_support
+                            ).sum(dim=0),
+                        )
+                    )
                 row_values.append(
                     torch.stack(
                         (
@@ -449,8 +507,17 @@ def checkpoint_geometry_mass_loss(
                 )
     if row_values:
         host_values = torch.stack(row_values).detach().cpu().tolist()
+        host_centroids = [
+            (
+                predicted.detach().cpu().tolist(),
+                observed.detach().cpu().tolist(),
+            )
+            for predicted, observed in row_centroids
+        ]
         rows = []
-        for (measure_id, label), values in zip(row_keys, host_values, strict=True):
+        for row_index, ((measure_id, label), values) in enumerate(
+            zip(row_keys, host_values, strict=True)
+        ):
             row = {
                 "measure_id": measure_id,
                 "time_label": label,
@@ -464,11 +531,15 @@ def checkpoint_geometry_mass_loss(
                 "max_weight_fraction": float(values[5]),
             }
             if collect_benchmark_metrics:
+                predicted_centroid, observed_centroid = host_centroids[row_index]
                 row.update(
                     {
                         "unbalanced_sinkhorn": float(values[6]),
                         "energy_distance": float(values[7]),
                         "centroid_distance": float(values[8]),
+                        "covariance_distance": float(values[9]),
+                        "_predicted_centroid": predicted_centroid,
+                        "_observed_centroid": observed_centroid,
                     }
                 )
             rows.append(row)

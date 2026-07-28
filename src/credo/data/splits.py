@@ -95,6 +95,13 @@ def _selection_dict(selection: SelectionSpec) -> dict[str, Any]:
     }
 
 
+def canonical_selection_hash(selection: SelectionSpec) -> str:
+    """Return the canonical SHA-256 identity of an exact semantic selection."""
+    if not isinstance(selection, SelectionSpec):
+        raise TypeError("canonical_selection_hash requires a SelectionSpec.")
+    return _canonical_hash(_selection_dict(selection))
+
+
 @dataclass(frozen=True)
 class SplitPlan:
     """One content-addressed split used by compilation, training, and evaluation."""
@@ -305,6 +312,136 @@ class SplitPlan:
 
 
 @dataclass(frozen=True)
+class FutureNestedRepresentationContract:
+    """Exact fit contract for a representation that has not been materialized yet."""
+
+    representation_id: str
+    representation_protocol: RepresentationProtocol
+    split_plan: SplitPlan
+    fit_selection_hash: str
+    fit_series_ids: tuple[str, ...]
+    fit_observation_ids: tuple[str, ...]
+    fit_subject_ids: tuple[str, ...]
+    fit_perturbation_ids: tuple[str, ...]
+    fit_checkpoint_ids: tuple[str, ...]
+    source_study_id: str
+    source_study_content_hash: str
+    source_selection_hash: str
+    source_representation_id: str
+    future_split_basis_hash: str
+
+    def __post_init__(self) -> None:
+        for name in (
+            "representation_id",
+            "source_study_id",
+            "source_representation_id",
+        ):
+            value = str(getattr(self, name))
+            if not value:
+                raise ValueError(
+                    f"FutureNestedRepresentationContract.{name} must be nonempty."
+                )
+            object.__setattr__(self, name, value)
+        for name in (
+            "fit_selection_hash",
+            "source_study_content_hash",
+            "source_selection_hash",
+            "future_split_basis_hash",
+        ):
+            value = str(getattr(self, name)).lower()
+            if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+                raise ValueError(
+                    f"FutureNestedRepresentationContract.{name} must be a SHA-256 digest."
+                )
+            object.__setattr__(self, name, value)
+        for name in (
+            "fit_series_ids",
+            "fit_observation_ids",
+            "fit_subject_ids",
+            "fit_perturbation_ids",
+            "fit_checkpoint_ids",
+        ):
+            values = tuple(str(value) for value in getattr(self, name))
+            if any(not value for value in values) or len(values) != len(set(values)):
+                raise ValueError(
+                    f"FutureNestedRepresentationContract.{name} must contain "
+                    "unique nonempty IDs."
+                )
+            object.__setattr__(self, name, values)
+        nested = self.representation_protocol.startswith("nested_") or (
+            self.representation_protocol == "fully_nested"
+        )
+        if not nested:
+            raise ValueError("A future nested representation requires a nested protocol.")
+        split = self.split_plan
+        if split.representation_scope != "nested":
+            raise ValueError("Future nested representation split must have nested scope.")
+        if split.representation_protocol != self.representation_protocol:
+            raise ValueError(
+                "Future representation protocol disagrees with its exact SplitPlan."
+            )
+        if split.representation_evaluation != "inductive":
+            raise ValueError(
+                "Future nested representation protocol does not make this task inductive."
+            )
+        if split.train_selection.representation_id != self.representation_id:
+            raise ValueError(
+                "Future representation ID is not bound into the training selection."
+            )
+        if self.fit_selection_hash != canonical_selection_hash(split.train_selection):
+            raise ValueError(
+                "Future representation fit_selection_hash disagrees with its SplitPlan."
+            )
+        if self.fit_series_ids != split.train_series_ids:
+            raise ValueError("Future representation fit series disagree with its SplitPlan.")
+        if self.fit_observation_ids != split.train_observation_ids:
+            raise ValueError(
+                "Future representation fit observations disagree with its SplitPlan."
+            )
+        if self.fit_checkpoint_ids != tuple(split.train_selection.checkpoint_ids or ()):
+            raise ValueError(
+                "Future representation fit checkpoints disagree with its training selection."
+            )
+
+    @property
+    def fit_split_id(self) -> str:
+        """Content-addressed split identity consumed by representation builders."""
+        return self.split_plan.split_id
+
+    def _identity_payload(self) -> dict[str, Any]:
+        return {
+            "schema_version": 1,
+            "representation_id": self.representation_id,
+            "representation_protocol": self.representation_protocol,
+            "fit_split_id": self.fit_split_id,
+            "fit_selection_hash": self.fit_selection_hash,
+            "fit_series_ids": list(self.fit_series_ids),
+            "fit_observation_ids": list(self.fit_observation_ids),
+            "fit_subject_ids": list(self.fit_subject_ids),
+            "fit_perturbation_ids": list(self.fit_perturbation_ids),
+            "fit_checkpoint_ids": list(self.fit_checkpoint_ids),
+            "source": {
+                "study_id": self.source_study_id,
+                "study_content_hash": self.source_study_content_hash,
+                "selection_hash": self.source_selection_hash,
+                "representation_id": self.source_representation_id,
+            },
+            "future_split_basis_hash": self.future_split_basis_hash,
+            "split_plan": self.split_plan.to_dict(),
+        }
+
+    @property
+    def contract_hash(self) -> str:
+        """Canonical identity of all split, fit, and source-provenance fields."""
+        return _canonical_hash(self._identity_payload())
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = self._identity_payload()
+        payload["contract_hash"] = self.contract_hash
+        return payload
+
+
+@dataclass(frozen=True)
 class _SplitInputs:
     series_ids: tuple[str, ...]
     checkpoint_ids: tuple[str, ...]
@@ -317,16 +454,85 @@ class _SplitInputs:
     selection: SelectionSpec
     representation_protocol: RepresentationProtocol
     enforce_representation_protocol: bool
+    semantic_context: Mapping[str, Any] | None = None
+    support_availability: pd.DataFrame | None = None
 
 
-def _view_inputs(view: StudyView) -> _SplitInputs:
+def _view_semantic_hash(
+    semantic_context: Mapping[str, Any],
+    support_availability: pd.DataFrame,
+    selection: SelectionSpec,
+    representation_id: str,
+) -> str:
+    rebound_support = support_availability.copy()
+    rebound_support["representation_id"] = representation_id
+    return _canonical_hash(
+        {
+            **semantic_context,
+            "support_availability": _frame_digest(rebound_support),
+            "selection": _selection_dict(selection),
+            "representation_id": representation_id,
+        }
+    )
+
+
+def _rebind_view_inputs(
+    inputs: _SplitInputs,
+    *,
+    representation_id: str,
+    representation_protocol: RepresentationProtocol,
+) -> _SplitInputs:
+    if inputs.semantic_context is None or inputs.support_availability is None:
+        raise TypeError("Only StudyView split inputs can be rebound to a future representation.")
+    selection = replace(inputs.selection, representation_id=representation_id)
+    return replace(
+        inputs,
+        semantic_hash=_view_semantic_hash(
+            inputs.semantic_context,
+            inputs.support_availability,
+            selection,
+            representation_id,
+        ),
+        selection=selection,
+        representation_protocol=representation_protocol,
+    )
+
+
+def _view_inputs(
+    view: StudyView,
+    *,
+    future_representation_id: str | None = None,
+    future_representation_protocol: RepresentationProtocol | None = None,
+) -> _SplitInputs:
+    if (future_representation_id is None) != (future_representation_protocol is None):
+        raise ValueError(
+            "Future representation ID and protocol must be supplied together."
+        )
+    source_representation_id = view.representation_id
+    representation_id = (
+        source_representation_id
+        if future_representation_id is None
+        else str(future_representation_id)
+    )
+    if not representation_id:
+        raise ValueError("Future representation ID must be nonempty.")
+    representation_protocol = (
+        getattr(view.representation, "scope_mode", "external_frozen")
+        if future_representation_protocol is None
+        else future_representation_protocol
+    )
+    selection = (
+        view.selection
+        if future_representation_id is None
+        else replace(view.selection, representation_id=representation_id)
+    )
     design = view.study.design
     checkpoints = design.ordered_checkpoint_ids
     observations = view.observations()
     support = view.study.support_index._unsafe_view()
     available_ids = set(
         support.loc[
-            support["representation_id"].eq(view.representation_id) & support["available"],
+            support["representation_id"].eq(source_representation_id) & support["available"],
             "observation_id",
         ].astype(str)
     )
@@ -345,11 +551,17 @@ def _view_inputs(view: StudyView) -> _SplitInputs:
         )
         for checkpoint_id in checkpoints
     }
+    mutable_ids_by_pair: dict[tuple[str, str], list[str]] = {}
+    for checkpoint_id, series_id, observation_id in observations[
+        ["checkpoint_id", "series_id", "observation_id"]
+    ].itertuples(index=False, name=None):
+        mutable_ids_by_pair.setdefault(
+            (str(checkpoint_id), str(series_id)),
+            [],
+        ).append(str(observation_id))
     ids_by_pair = {
-        (str(checkpoint_id), str(series_id)): tuple(rows["observation_id"].astype(str))
-        for (checkpoint_id, series_id), rows in observations.groupby(
-            ["checkpoint_id", "series_id"], observed=True, sort=False
-        )
+        pair: tuple(observation_ids)
+        for pair, observation_ids in mutable_ids_by_pair.items()
     }
 
     series = view.study.series._unsafe_view()
@@ -416,10 +628,12 @@ def _view_inputs(view: StudyView) -> _SplitInputs:
     metadata = pd.DataFrame(rows).set_index("measure_id", drop=False)
     compositions = view.compositions()
     selected_support = support.loc[
-        support["representation_id"].eq(view.representation_id)
+        support["representation_id"].eq(source_representation_id)
         & support["observation_id"].isin(view.observation_ids),
         ["observation_id", "representation_id", "available"],
-    ]
+    ].copy()
+    if future_representation_id is not None:
+        selected_support["representation_id"] = representation_id
     perturbation_frame = (
         view.perturbations()
         if is_lps
@@ -427,20 +641,23 @@ def _view_inputs(view: StudyView) -> _SplitInputs:
             view.study.conditions._unsafe_view()["condition_id"].isin(series[perturbation_key])
         ]
     )
-    split_basis = _canonical_hash(
+    semantic_context = MappingProxyType(
         {
             "study_id": view.study.manifest.study_id,
             "design": _canonical_value(view.study.design),
             "perturbations": _frame_digest(perturbation_frame),
             "series": _frame_digest(series),
             "observations": _frame_digest(observations),
-            "support_availability": _frame_digest(selected_support),
             "effect_binding": _frame_digest(effect_binding),
             "reference_binding": _frame_digest(view.reference_binding()),
             "compositions": None if compositions.empty else _frame_digest(compositions),
-            "selection": _selection_dict(view.selection),
-            "representation_id": view.representation_id,
         }
+    )
+    split_basis = _view_semantic_hash(
+        semantic_context,
+        selected_support,
+        selection,
+        representation_id,
     )
     return _SplitInputs(
         series_ids=view.series_ids,
@@ -451,9 +668,11 @@ def _view_inputs(view: StudyView) -> _SplitInputs:
         metadata=metadata,
         has_compositions=not compositions.empty,
         semantic_hash=split_basis,
-        selection=view.selection,
-        representation_protocol=getattr(view.representation, "scope_mode", "external_frozen"),
+        selection=selection,
+        representation_protocol=representation_protocol,
         enforce_representation_protocol=hasattr(view.study, "perturbations"),
+        semantic_context=semantic_context,
+        support_availability=selected_support,
     )
 
 
@@ -1041,6 +1260,114 @@ def plan_compact_split(
     )
 
 
+@dataclass(frozen=True)
+class FutureNestedRepresentationPlanner:
+    """Reusable semantic planning context for multiple future nested artifacts."""
+
+    source_study_id: str
+    source_study_content_hash: str
+    source_selection_hash: str
+    source_representation_id: str
+    _inputs: _SplitInputs
+
+    @classmethod
+    def from_view(cls, view: StudyView) -> FutureNestedRepresentationPlanner:
+        """Index one source view once for efficient multi-fold contract derivation."""
+        return cls(
+            source_study_id=str(view.study.manifest.study_id),
+            source_study_content_hash=str(view.study.content_hash()),
+            source_selection_hash=str(view.semantic_hash()),
+            source_representation_id=str(view.representation_id),
+            _inputs=_view_inputs(view),
+        )
+
+    def plan(
+        self,
+        config: Any,
+        requested: SplitSpec,
+        *,
+        representation_id: str,
+        representation_protocol: RepresentationProtocol,
+    ) -> FutureNestedRepresentationContract:
+        """Derive one exact nested fit contract from the indexed source view."""
+        future_id = str(representation_id)
+        if not future_id:
+            raise ValueError("Future representation ID must be nonempty.")
+        if future_id == self.source_representation_id:
+            raise ValueError(
+                "Future nested representation ID must differ from the source representation."
+            )
+        if requested.representation_scope != "nested":
+            raise ValueError(
+                "Future nested representation planning requires representation_scope='nested'."
+            )
+        nested_protocol = representation_protocol.startswith("nested_") or (
+            representation_protocol == "fully_nested"
+        )
+        if not nested_protocol:
+            raise ValueError("Future representation protocol must be nested.")
+        inputs = _rebind_view_inputs(
+            self._inputs,
+            representation_id=future_id,
+            representation_protocol=representation_protocol,
+        )
+        split = _plan(
+            inputs,
+            config.validation,
+            seed=int(config.training.seed),
+            requested=requested,
+        )
+        if split.source != "held_out":
+            raise ValueError("Future nested representation requires an explicit held-out split.")
+
+        train_metadata = inputs.metadata.loc[list(split.train_series_ids)]
+
+        def unique_values(column: str) -> tuple[str, ...]:
+            if column not in train_metadata:
+                return ()
+            return tuple(dict.fromkeys(train_metadata[column].dropna().astype(str)))
+
+        return FutureNestedRepresentationContract(
+            representation_id=future_id,
+            representation_protocol=representation_protocol,
+            split_plan=split,
+            fit_selection_hash=canonical_selection_hash(split.train_selection),
+            fit_series_ids=split.train_series_ids,
+            fit_observation_ids=split.train_observation_ids,
+            fit_subject_ids=unique_values("subject_id"),
+            fit_perturbation_ids=unique_values("perturbation_id"),
+            fit_checkpoint_ids=tuple(split.train_selection.checkpoint_ids or ()),
+            source_study_id=self.source_study_id,
+            source_study_content_hash=self.source_study_content_hash,
+            source_selection_hash=self.source_selection_hash,
+            source_representation_id=self.source_representation_id,
+            future_split_basis_hash=inputs.semantic_hash,
+        )
+
+
+def plan_future_nested_representation(
+    view: StudyView,
+    config: Any,
+    requested: SplitSpec,
+    *,
+    representation_id: str,
+    representation_protocol: RepresentationProtocol,
+) -> FutureNestedRepresentationContract:
+    """Derive an exact split/fit contract before a nested artifact exists.
+
+    Support availability is projected from the selected source representation,
+    while both the semantic split basis and training selection are rebound to
+    the future representation identity. This is valid for encode-only projection
+    workflows that preserve the selected observation coverage.
+    """
+    return FutureNestedRepresentationPlanner.from_view(view).plan(
+        config,
+        requested,
+        representation_id=representation_id,
+        representation_protocol=representation_protocol,
+    )
+
+
 def plan_compact_trajectory_split(
     data: TrajectoryData,
     config: Any,
@@ -1114,7 +1441,7 @@ def validate_representation_scope(view: StudyView, split: SplitPlan) -> None:
         raise ValueError(
             "Nested representation fit_split_id must equal the exact content-addressed split."
         )
-    expected_selection_hash = _canonical_hash(_selection_dict(split.train_selection))
+    expected_selection_hash = canonical_selection_hash(split.train_selection)
     if (
         getattr(representation, "fit_selection_hash", None) is not None
         and representation.fit_selection_hash != expected_selection_hash
@@ -1260,11 +1587,15 @@ def validate_split_plan(view: StudyView, split: SplitPlan) -> None:
 
 
 __all__ = [
+    "FutureNestedRepresentationContract",
+    "FutureNestedRepresentationPlanner",
     "RepresentationProtocol",
     "SplitPlan",
     "SplitTaskKind",
+    "canonical_selection_hash",
     "plan_compact_split",
     "plan_compact_trajectory_split",
+    "plan_future_nested_representation",
     "validate_representation_scope",
     "validate_split_plan",
 ]

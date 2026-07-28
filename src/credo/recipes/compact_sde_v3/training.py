@@ -254,6 +254,71 @@ class CatalogBank:
         }
 
 
+def _add_nearest_observed_state_accuracy(frame: pd.DataFrame) -> pd.DataFrame:
+    """Score predicted centroids against the held-out observed-state catalog.
+
+    The observed endpoints are used only as evaluation prototypes. Equal
+    nearest distances receive fractional credit, making the metric invariant
+    to row order and duplicated/tied observed centroids.
+    """
+    required = {
+        "measure_id",
+        "time_label",
+        "_predicted_centroid",
+        "_observed_centroid",
+    }
+    if missing := required - set(frame):
+        raise ValueError(
+            "Nearest-state evaluation is missing centroid columns: "
+            f"{sorted(missing)}"
+        )
+    accuracy = pd.Series(np.nan, index=frame.index, dtype=float)
+    for _, rows in frame.groupby("time_label", observed=True, sort=False):
+        predicted = np.stack(
+            rows["_predicted_centroid"].map(
+                lambda value: np.asarray(value, dtype=np.float64)
+            )
+        )
+        observed = np.stack(
+            rows["_observed_centroid"].map(
+                lambda value: np.asarray(value, dtype=np.float64)
+            )
+        )
+        if (
+            predicted.ndim != 2
+            or observed.shape != predicted.shape
+            or not np.isfinite(predicted).all()
+            or not np.isfinite(observed).all()
+        ):
+            raise ValueError(
+                "Nearest-state evaluation received invalid latent centroids."
+            )
+        scores = np.empty(len(rows), dtype=np.float64)
+        observed_norm = np.square(observed).sum(axis=1)
+        for start in range(0, len(rows), 256):
+            stop = min(start + 256, len(rows))
+            block = predicted[start:stop]
+            distances = (
+                np.square(block).sum(axis=1, keepdims=True)
+                + observed_norm[None, :]
+                - 2.0 * block @ observed.T
+            )
+            distances = np.maximum(distances, 0.0)
+            minimum = distances.min(axis=1, keepdims=True)
+            tied = np.isclose(distances, minimum, rtol=1e-9, atol=1e-12)
+            for local_index, ties in enumerate(tied):
+                true_index = start + local_index
+                scores[true_index] = (
+                    1.0 / int(ties.sum()) if bool(ties[true_index]) else 0.0
+                )
+        accuracy.loc[rows.index] = scores
+    result = frame.copy()
+    result["nearest_observed_state_accuracy"] = accuracy
+    return result.drop(
+        columns=["_predicted_centroid", "_observed_centroid"]
+    )
+
+
 @dataclass
 class Trainer:
     """Compact-v3 runtime produced only from an immutable recipe plan."""
@@ -926,7 +991,12 @@ class Trainer:
             rows.extend(checkpoint.rows)
         if not rows:
             raise RuntimeError("Evaluation produced no observed checkpoint rows.")
-        return pd.DataFrame(rows)
+        frame = pd.DataFrame(rows)
+        return (
+            _add_nearest_observed_state_accuracy(frame)
+            if collect_benchmark_metrics
+            else frame
+        )
 
     def evaluate(
         self,

@@ -172,6 +172,7 @@ def evaluate_replay(
                 "unbalanced_sinkhorn",
                 "energy_distance",
                 "centroid_distance",
+                "covariance_distance",
             ):
                 row[name] = float("nan")
     order = {value: index for index, value in enumerate(study.measure_ids)}

@@ -15,6 +15,7 @@ from credo.model import CREDOModel
 from credo.objective import (
     CountBlock,
     checkpoint_centroid_distance,
+    checkpoint_covariance_distance,
     checkpoint_energy_distance,
     checkpoint_geometry,
     checkpoint_geometry_mass_loss,
@@ -35,7 +36,13 @@ from credo.particles import (
 )
 from credo.registry import get_recipe
 from credo.runtime import TrainingEngine
-from credo.training import CatalogBank, Trainer, _representation_scope, _validation_split
+from credo.training import (
+    CatalogBank,
+    Trainer,
+    _add_nearest_observed_state_accuracy,
+    _representation_scope,
+    _validation_split,
+)
 
 
 def _fit(config, data):
@@ -51,6 +58,29 @@ def _model(data: TrajectoryData, *, context: str = "none") -> CREDOModel:
         n_programs=4,
         hidden_dim=16,
         context_mode=context,
+    )
+
+
+def test_nearest_observed_state_accuracy_is_tie_and_order_invariant() -> None:
+    frame = pd.DataFrame(
+        {
+            "measure_id": ["a", "b", "c"],
+            "time_label": ["target", "target", "target"],
+            "_predicted_centroid": [[0.0, 0.0], [0.0, 0.0], [2.0, 0.0]],
+            "_observed_centroid": [[0.0, 0.0], [0.0, 0.0], [2.0, 0.0]],
+        }
+    )
+
+    first = _add_nearest_observed_state_accuracy(frame).set_index("measure_id")
+    second = _add_nearest_observed_state_accuracy(
+        frame.iloc[[2, 0, 1]].reset_index(drop=True)
+    ).set_index("measure_id")
+
+    assert first["nearest_observed_state_accuracy"].to_dict() == pytest.approx(
+        {"a": 0.5, "b": 0.5, "c": 1.0}
+    )
+    assert second["nearest_observed_state_accuracy"].to_dict() == pytest.approx(
+        first["nearest_observed_state_accuracy"].to_dict()
     )
 
 
@@ -425,6 +455,12 @@ def test_finite_measure_benchmark_metrics_separate_geometry_and_mass() -> None:
         support,
         second_log_weight,
     ).item() == pytest.approx(0.0, abs=1e-6)
+    assert checkpoint_covariance_distance(
+        support,
+        first_log_weight,
+        support,
+        second_log_weight,
+    ).item() == pytest.approx(0.0, abs=1e-6)
     assert checkpoint_unbalanced_sinkhorn(
         support,
         first_log_weight,
@@ -449,6 +485,7 @@ def test_benchmark_distances_are_translation_invariant_at_large_coordinates() ->
         checkpoint_unbalanced_sinkhorn,
         checkpoint_energy_distance,
         checkpoint_centroid_distance,
+        checkpoint_covariance_distance,
     )
     for metric in metrics:
         near_origin = metric(

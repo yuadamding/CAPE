@@ -165,6 +165,14 @@ def evaluation_tables(
         ),
         "energy_distance": ("latent_energy_distance", "latent_distance"),
         "centroid_distance": ("latent_centroid_distance", "latent_distance"),
+        "covariance_distance": (
+            "latent_covariance_distance",
+            "latent_covariance_frobenius",
+        ),
+        "nearest_observed_state_accuracy": (
+            "nearest_observed_state_accuracy",
+            "fraction",
+        ),
         "log_mass_error": ("log_abundance_squared_error", "squared_log_abundance"),
     }
     metric_rows = []

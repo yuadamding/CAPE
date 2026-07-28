@@ -467,6 +467,7 @@ def test_v2_no_geometry_replay_skips_all_distance_metrics(
         "checkpoint_unbalanced_sinkhorn",
         "checkpoint_energy_distance",
         "checkpoint_centroid_distance",
+        "checkpoint_covariance_distance",
     ):
         monkeypatch.setattr(checkpoint_objective, name, reject_distance)
 
@@ -491,6 +492,7 @@ def test_v2_no_geometry_replay_skips_all_distance_metrics(
             "unbalanced_sinkhorn",
             "energy_distance",
             "centroid_distance",
+            "covariance_distance",
         ]
     ].isna().all().all()
     assert metrics["log_mass_error"].notna().all()

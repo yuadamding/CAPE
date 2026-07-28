@@ -17,7 +17,11 @@ from credo.data import (
     SnapshotObservationTable,
     SupportIndexTable,
 )
-from credo.data.splits import validate_split_plan
+from credo.data.splits import (
+    canonical_selection_hash,
+    plan_future_nested_representation,
+    validate_split_plan,
+)
 from credo.problems import FiniteMeasureDynamicsProblem
 from credo.registry import get_recipe
 
@@ -103,6 +107,68 @@ def test_subject_split_compiles_outcome_separated_finite_measures(tiny_config) -
             set(problem.partition.training_targets.observation_ids)
             & set(problem.partition.validation_targets.observation_ids)
         )
+    finally:
+        study.close()
+
+
+def test_future_nested_representation_contract_is_locally_content_addressed(
+    tiny_config,
+) -> None:
+    study = credo.open_study(tiny_config)
+    try:
+        view = study.view()
+        requested = SplitSpec(
+            strategy="subject",
+            train_values=("D1",),
+            validation_values=("D2",),
+            fold=0,
+            folds=2,
+            representation_scope="nested",
+        )
+        first = plan_future_nested_representation(
+            view,
+            tiny_config.recipe_config,
+            requested,
+            representation_id="tiny-scvi-lodo-D2",
+            representation_protocol="nested_by_subject",
+        )
+        second = plan_future_nested_representation(
+            view,
+            tiny_config.recipe_config,
+            requested,
+            representation_id="tiny-scvi-lodo-D2",
+            representation_protocol="nested_by_subject",
+        )
+
+        assert first == second
+        assert first.contract_hash == second.contract_hash
+        assert first.fit_split_id.startswith("sha256:")
+        assert first.split_plan.task_kind == "subject_generalization"
+        assert first.split_plan.held_out_subject_ids == ("D2",)
+        assert first.split_plan.representation_evaluation == "inductive"
+        assert first.fit_subject_ids == ("D1",)
+        assert first.fit_selection_hash == canonical_selection_hash(
+            first.split_plan.train_selection
+        )
+        assert first.split_plan.train_selection.representation_id == "tiny-scvi-lodo-D2"
+        assert first.to_dict()["split_plan"] == first.split_plan.to_dict()
+
+        with pytest.raises(ValueError, match="does not make this task inductive"):
+            plan_future_nested_representation(
+                view,
+                tiny_config.recipe_config,
+                requested,
+                representation_id="tiny-scvi-wrong-protocol",
+                representation_protocol="nested_by_checkpoint",
+            )
+        with pytest.raises(ValueError, match="must differ"):
+            plan_future_nested_representation(
+                view,
+                tiny_config.recipe_config,
+                requested,
+                representation_id=view.representation_id,
+                representation_protocol="nested_by_subject",
+            )
     finally:
         study.close()
 

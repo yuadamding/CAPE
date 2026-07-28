@@ -31,7 +31,13 @@ from .native_v4 import (
     write_perturb_seq_study,
 )
 from .representations import ArtifactRef, RepresentationCatalog, RepresentationSpec
-from .splits import SplitPlan
+from .splits import (
+    FutureNestedRepresentationContract,
+    FutureNestedRepresentationPlanner,
+    SplitPlan,
+    canonical_selection_hash,
+    plan_future_nested_representation,
+)
 from .study import (
     CompositionPolicy,
     ReplicatePolicy,
@@ -101,6 +107,8 @@ __all__ = [
     "EmpiricalLaw",
     "EffectBindingTable",
     "FiveFileV2Codec",
+    "FutureNestedRepresentationContract",
+    "FutureNestedRepresentationPlanner",
     "InMemorySupportStore",
     "InterventionEventTable",
     "LPSCompositionTable",
@@ -142,8 +150,10 @@ __all__ = [
     "ValidationIssue",
     "ValidationReport",
     "available_study_codecs",
+    "canonical_selection_hash",
     "observation_id",
     "open_study",
+    "plan_future_nested_representation",
     "register_study_codec",
     "write_study",
     "write_study_v3",
