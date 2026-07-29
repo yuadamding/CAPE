@@ -235,7 +235,7 @@ def checkpoint_unbalanced_sinkhorn(
     epsilon: float = 0.1,
     reach: float = 1.0,
 ) -> torch.Tensor:
-    """Debiased KL-relaxed Sinkhorn divergence between absolute finite measures."""
+    """KL-relaxed Sinkhorn divergence in the measures' declared mass units."""
     if epsilon <= 0:
         raise ValueError("Unbalanced Sinkhorn epsilon must be positive.")
     if reach <= 0:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import math
 from dataclasses import replace
 
 import numpy as np
@@ -473,6 +474,29 @@ def test_finite_measure_benchmark_metrics_separate_geometry_and_mass() -> None:
         support,
         second_log_weight,
     ).item() > 0
+
+
+def test_unbalanced_sinkhorn_retains_the_declared_common_mass_scale() -> None:
+    first = torch.tensor([[0.0], [1.0]])
+    second = torch.tensor([[1.0], [2.0]])
+    log_weight = torch.log(torch.tensor([0.5, 0.5]))
+
+    unit_scale = checkpoint_unbalanced_sinkhorn(
+        first,
+        log_weight,
+        second,
+        log_weight,
+    )
+    common_scale = 1e-4
+    relative_frequency_scale = checkpoint_unbalanced_sinkhorn(
+        first,
+        log_weight + math.log(common_scale),
+        second,
+        log_weight + math.log(common_scale),
+    )
+
+    observed_scale = relative_frequency_scale.item() / unit_scale.item()
+    assert common_scale / 2 < observed_scale < common_scale * 2
 
 
 def test_benchmark_distances_are_translation_invariant_at_large_coordinates() -> None:
