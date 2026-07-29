@@ -646,15 +646,17 @@ def compile_finite_measure_problem(
     validation_target_ids = tuple(
         value for value in split_plan.validation_observation_ids if value not in source_id_set
     )
+    training_target_id_set = set(training_target_ids)
+    validation_target_id_set = set(validation_target_ids)
     training_observation_ids = tuple(
         value
         for value in split_plan.train_observation_ids
-        if value in source_id_set or value in set(training_target_ids)
+        if value in source_id_set or value in training_target_id_set
     )
     validation_observation_ids = tuple(
         value
         for value in split_plan.validation_observation_ids
-        if value in source_id_set or value in set(validation_target_ids)
+        if value in source_id_set or value in validation_target_id_set
     )
 
     def partition_selection(
