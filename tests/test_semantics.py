@@ -9,7 +9,14 @@ import pandas as pd
 import pytest
 import torch
 
-from credo.contracts import Axis, FiniteMeasure, MassSemantics, SplitSpec, TrajectoryData
+from credo.contracts import (
+    Axis,
+    FiniteMeasure,
+    FixedContextBackground,
+    MassSemantics,
+    SplitSpec,
+    TrajectoryData,
+)
 from credo.counterfactual import COMMON_COUNTERFACTUAL_COLUMNS
 from credo.io import RunConfig, load_data, validate_run_data
 from credo.model import CREDOModel
@@ -804,6 +811,90 @@ def test_catalog_bank_is_complete_before_optimization(tiny_data, trained_run) ->
     with pytest.raises(RuntimeError, match="incomplete"):
         empty.assert_complete()
     assert trained_run.bank.diagnostics()["bank_seen_fraction"] == 1.0
+
+
+def test_catalog_context_includes_fixed_background_without_modeling_its_trajectory(
+    tiny_data,
+) -> None:
+    group_id = str(tiny_data.measure_meta.iloc[0]["context_group_id"])
+    source_measure = tiny_data.measures[tiny_data.axis.source][tiny_data.measure_ids[0]]
+    total_mass = 5.0
+    background = FixedContextBackground(
+        context_group_id=group_id,
+        source_checkpoint_id=tiny_data.axis.source,
+        measure=FiniteMeasure(
+            source_measure.support,
+            source_measure.normalized_weights * total_mass,
+            total_mass,
+        ),
+        source_denominator_id="observed-source-pool",
+        observed_series_count=10,
+        supported_series_count=9,
+        support_mass_fraction=0.99,
+        compression_method="deterministic_mixture_sample",
+        compression_seed=17,
+    )
+    data = replace(tiny_data, context_backgrounds=(background,))
+    model = _model(data, context="catalog_bank")
+    bank = CatalogBank.empty(
+        data,
+        model,
+        n_steps=1,
+        device=torch.device("cpu"),
+        dtype=torch.float32,
+    )
+    bank.tensors["context_log_mass"][0] = torch.linspace(
+        -1.0, 1.0, len(data.measure_ids)
+    )
+    raw_programs = torch.arange(
+        len(data.measure_ids) * model.n_programs,
+        dtype=torch.float32,
+    ).reshape(len(data.measure_ids), model.n_programs)
+    bank.tensors["context_programs"][0] = torch.softmax(raw_programs / 7.0, dim=-1)
+    for seen in bank.seen.values():
+        seen.fill_(True)
+    bank.refresh_fixed_background(model)
+    bank.assert_complete()
+
+    active_indices = torch.tensor([0])
+    active_log_mass = torch.tensor([0.4], requires_grad=True)
+    active_programs = torch.tensor(
+        [[0.7, 0.1, 0.1, 0.1]],
+        requires_grad=True,
+    )
+    actual = bank.context_for_active(
+        step_index=0,
+        active_indices=active_indices,
+        active_log_mass=active_log_mass,
+        active_programs=active_programs,
+        model=model,
+    )
+
+    modeled_log_mass = bank.tensors["context_log_mass"][0].clone()
+    modeled_programs = bank.tensors["context_programs"][0].clone()
+    modeled_log_mass[0] = active_log_mass
+    modeled_programs[0] = active_programs
+    expected = model.compose_context(
+        torch.cat((modeled_log_mass, bank.background_log_mass)),
+        torch.cat((modeled_programs, bank.background_programs), dim=0),
+        torch.cat((bank.context_group_index, bank.background_group_index)),
+        context_group_count=bank.context_group_count,
+    )[: len(data.measure_ids)].index_select(0, active_indices)
+    without_background = model.compose_context(
+        modeled_log_mass,
+        modeled_programs,
+        bank.context_group_index,
+        context_group_count=bank.context_group_count,
+    ).index_select(0, active_indices)
+
+    assert torch.allclose(actual, expected)
+    assert not torch.allclose(actual, without_background)
+    assert bank.diagnostics()["fixed_context_background_groups"] == 1
+    assert bank.diagnostics()["fixed_context_background_atoms"] == len(
+        source_measure.support
+    )
+    actual.sum().backward()
+    assert active_programs.grad is not None
 
 
 def test_count_validation_holds_out_complete_context_groups(tiny_data, trained_run) -> None:

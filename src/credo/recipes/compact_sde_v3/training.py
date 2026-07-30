@@ -5,8 +5,10 @@ from __future__ import annotations
 import copy
 import hashlib
 import importlib.metadata
+import json
 import subprocess
 import sys
+import time
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -39,6 +41,7 @@ from .objective import (
 )
 from .particles import (
     CatalogContextProvider,
+    FixedBackgroundContextProvider,
     NoContextProvider,
     SelfConsistentContextProvider,
     axis_grid,
@@ -59,6 +62,12 @@ class CatalogBank:
     context_group_index: torch.Tensor
     context_group_count: int
     time_to_index: dict[str, int]
+    background_support: tuple[torch.Tensor, ...]
+    background_probability: tuple[torch.Tensor, ...]
+    background_log_mass: torch.Tensor
+    background_programs: torch.Tensor
+    background_group_index: torch.Tensor
+    background_seen: torch.Tensor
     momentum: float = 0.9
     last_full_refresh_epoch: int = -1
     _is_complete: bool = False
@@ -84,6 +93,49 @@ class CatalogBank:
         group_index = torch.tensor(
             [group_mapping[value] for value in group_values], device=device, dtype=torch.long
         )
+        unknown_background_groups = {
+            value.context_group_id for value in data.context_backgrounds
+        } - set(group_mapping)
+        if unknown_background_groups:
+            raise ValueError(
+                "Fixed context backgrounds reference unknown modeled groups: "
+                f"{sorted(unknown_background_groups)}."
+            )
+        background_support = tuple(
+            torch.as_tensor(
+                np.array(value.measure.support, copy=True),
+                device=device,
+                dtype=dtype,
+            )
+            for value in data.context_backgrounds
+        )
+        background_probability = tuple(
+            torch.as_tensor(
+                value.measure.normalized_weights,
+                device=device,
+                dtype=dtype,
+            )
+            for value in data.context_backgrounds
+        )
+        background_log_mass = torch.tensor(
+            [np.log(value.measure.total_mass) for value in data.context_backgrounds],
+            device=device,
+            dtype=torch.float32,
+        )
+        background_group_index = torch.tensor(
+            [group_mapping[value.context_group_id] for value in data.context_backgrounds],
+            device=device,
+            dtype=torch.long,
+        )
+        background_programs = torch.zeros(
+            len(data.context_backgrounds),
+            model.n_programs,
+            device=device,
+            dtype=dtype,
+        )
+        background_seen = torch.zeros(
+            len(data.context_backgrounds), device=device, dtype=torch.bool
+        )
         tensors = {
             "context_log_mass": torch.zeros(n_steps, measure_count, device=device),
             "context_programs": torch.zeros(
@@ -103,6 +155,12 @@ class CatalogBank:
             context_group_index=group_index,
             context_group_count=len(group_mapping),
             time_to_index={label: index for index, label in enumerate(data.axis.labels)},
+            background_support=background_support,
+            background_probability=background_probability,
+            background_log_mass=background_log_mass,
+            background_programs=background_programs,
+            background_group_index=background_group_index,
+            background_seen=background_seen,
         )
 
     def reset_coverage(self) -> None:
@@ -110,6 +168,23 @@ class CatalogBank:
             value.zero_()
         for value in self.age.values():
             value.zero_()
+        self.background_seen.zero_()
+        self._is_complete = False
+
+    @property
+    def has_fixed_background(self) -> bool:
+        return bool(len(self.background_support))
+
+    @torch.no_grad()
+    def refresh_fixed_background(self, model: CREDOModel) -> None:
+        """Encode fixed empirical source pools without creating trajectories."""
+        for index, (support, probability) in enumerate(
+            zip(self.background_support, self.background_probability, strict=True)
+        ):
+            programs = model.programs(support)
+            aggregate = (probability.unsqueeze(-1) * programs).sum(dim=0)
+            self.background_programs[index].copy_(aggregate)
+            self.background_seen[index] = True
         self._is_complete = False
 
     @torch.no_grad()
@@ -198,9 +273,74 @@ class CatalogBank:
             for name, value in self.seen.items()
             if not bool(value.all())
         }
+        if self.has_fixed_background and not bool(self.background_seen.all()):
+            incomplete["fixed_context_background"] = int(
+                (~self.background_seen).sum().item()
+            )
         if incomplete:
             raise RuntimeError(f"CatalogBank is incomplete: {incomplete}")
         self._is_complete = True
+
+    def _compose_with_fixed_background(
+        self,
+        *,
+        log_mass: torch.Tensor,
+        programs: torch.Tensor,
+        group_index: torch.Tensor,
+        model: CREDOModel,
+    ) -> torch.Tensor:
+        if not self.has_fixed_background:
+            return model.compose_context(
+                log_mass,
+                programs,
+                group_index,
+                context_group_count=self.context_group_count,
+            )
+        if not bool(self.background_seen.all()):
+            raise RuntimeError("Fixed context background has not been refreshed.")
+        combined_log_mass = torch.cat(
+            (log_mass, self.background_log_mass.to(device=log_mass.device))
+        )
+        combined_programs = torch.cat(
+            (
+                programs,
+                self.background_programs.to(
+                    device=programs.device,
+                    dtype=programs.dtype,
+                ),
+            ),
+            dim=0,
+        )
+        combined_groups = torch.cat(
+            (
+                group_index.to(device=log_mass.device, dtype=torch.long),
+                self.background_group_index.to(device=log_mass.device),
+            )
+        )
+        return model.compose_context(
+            combined_log_mass,
+            combined_programs,
+            combined_groups,
+            context_group_count=self.context_group_count,
+        )[: len(log_mass)]
+
+    def context_for_self_consistent(
+        self,
+        *,
+        active_indices: torch.Tensor,
+        active_log_mass: torch.Tensor,
+        active_programs: torch.Tensor,
+        model: CREDOModel,
+    ) -> torch.Tensor:
+        """Compose current active measures with only the fixed background."""
+        active = active_indices.to(device=self.context_group_index.device, dtype=torch.long)
+        groups = self.context_group_index.index_select(0, active)
+        return self._compose_with_fixed_background(
+            log_mass=active_log_mass,
+            programs=active_programs,
+            group_index=groups,
+            model=model,
+        )
 
     def context_for_active(
         self,
@@ -217,11 +357,11 @@ class CatalogBank:
         full_programs = self.tensors["context_programs"][step_index].detach().clone()
         full_log_mass = full_log_mass.index_copy(0, active, active_log_mass.to(full_log_mass))
         full_programs = full_programs.index_copy(0, active, active_programs.to(full_programs))
-        full_context = model.compose_context(
-            full_log_mass,
-            full_programs,
-            self.context_group_index,
-            context_group_count=self.context_group_count,
+        full_context = self._compose_with_fixed_background(
+            log_mass=full_log_mass,
+            programs=full_programs,
+            group_index=self.context_group_index,
+            model=model,
         )
         return full_context.index_select(0, active)
 
@@ -251,6 +391,13 @@ class CatalogBank:
             "bank_max_age": int(age_values.max().item()),
             "bank_mean_age": float(age_values.float().mean().item()),
             "last_full_refresh_epoch": int(self.last_full_refresh_epoch),
+            "fixed_context_background_groups": len(self.background_support),
+            "fixed_context_background_atoms": sum(
+                len(value) for value in self.background_support
+            ),
+            "fixed_context_background_total_mass": float(
+                self.background_log_mass.exp().sum().item()
+            ),
         }
 
 
@@ -268,21 +415,14 @@ def _add_nearest_observed_state_accuracy(frame: pd.DataFrame) -> pd.DataFrame:
         "_observed_centroid",
     }
     if missing := required - set(frame):
-        raise ValueError(
-            "Nearest-state evaluation is missing centroid columns: "
-            f"{sorted(missing)}"
-        )
+        raise ValueError(f"Nearest-state evaluation is missing centroid columns: {sorted(missing)}")
     accuracy = pd.Series(np.nan, index=frame.index, dtype=float)
     for _, rows in frame.groupby("time_label", observed=True, sort=False):
         predicted = np.stack(
-            rows["_predicted_centroid"].map(
-                lambda value: np.asarray(value, dtype=np.float64)
-            )
+            rows["_predicted_centroid"].map(lambda value: np.asarray(value, dtype=np.float64))
         )
         observed = np.stack(
-            rows["_observed_centroid"].map(
-                lambda value: np.asarray(value, dtype=np.float64)
-            )
+            rows["_observed_centroid"].map(lambda value: np.asarray(value, dtype=np.float64))
         )
         if (
             predicted.ndim != 2
@@ -290,9 +430,7 @@ def _add_nearest_observed_state_accuracy(frame: pd.DataFrame) -> pd.DataFrame:
             or not np.isfinite(predicted).all()
             or not np.isfinite(observed).all()
         ):
-            raise ValueError(
-                "Nearest-state evaluation received invalid latent centroids."
-            )
+            raise ValueError("Nearest-state evaluation received invalid latent centroids.")
         scores = np.empty(len(rows), dtype=np.float64)
         observed_norm = np.square(observed).sum(axis=1)
         for start in range(0, len(rows), 256):
@@ -308,15 +446,11 @@ def _add_nearest_observed_state_accuracy(frame: pd.DataFrame) -> pd.DataFrame:
             tied = np.isclose(distances, minimum, rtol=1e-9, atol=1e-12)
             for local_index, ties in enumerate(tied):
                 true_index = start + local_index
-                scores[true_index] = (
-                    1.0 / int(ties.sum()) if bool(ties[true_index]) else 0.0
-                )
+                scores[true_index] = 1.0 / int(ties.sum()) if bool(ties[true_index]) else 0.0
         accuracy.loc[rows.index] = scores
     result = frame.copy()
     result["nearest_observed_state_accuracy"] = accuracy
-    return result.drop(
-        columns=["_predicted_centroid", "_observed_centroid"]
-    )
+    return result.drop(columns=["_predicted_centroid", "_observed_centroid"])
 
 
 @dataclass
@@ -347,6 +481,8 @@ class Trainer:
         "train_self_eval",
     ]
     representation_scope: Literal["shared", "nested"]
+    _training_grid: torch.Tensor = field(repr=False)
+    _evaluation_grid: torch.Tensor = field(repr=False)
     history_rows: list[dict[str, Any]] = field(default_factory=list)
     metrics: pd.DataFrame = field(default_factory=pd.DataFrame)
     counterfactual_rows: list[dict[str, Any]] = field(default_factory=list)
@@ -447,6 +583,8 @@ class Trainer:
             validation_source=split.source,
             validation_strategy=split.strategy,
             representation_scope=representation_scope,
+            _training_grid=training_grid,
+            _evaluation_grid=evaluation_grid,
         )
         trainer._fit()
         return trainer
@@ -457,12 +595,7 @@ class Trainer:
 
     @property
     def training_grid(self) -> torch.Tensor:
-        return axis_grid(
-            self.data.axis,
-            self.training_plan.steps_per_interval,
-            device=self.device,
-            dtype=self.dtype,
-        )
+        return self._training_grid
 
     @property
     def evaluation_steps_per_interval(self) -> int:
@@ -471,12 +604,7 @@ class Trainer:
 
     @property
     def evaluation_grid(self) -> torch.Tensor:
-        return axis_grid(
-            self.validation_data.axis,
-            self.evaluation_steps_per_interval,
-            device=self.device,
-            dtype=self.dtype,
-        )
+        return self._evaluation_grid
 
     @property
     def grid(self) -> torch.Tensor:
@@ -515,11 +643,65 @@ class Trainer:
         objective = self._objective(stage, name)
         return 0.0 if objective is None else float(objective.weight)
 
+    def _catalog_bank_required(self) -> bool:
+        """Return whether context or count supervision can consume catalog state."""
+        return self.model.context_mode == "catalog_bank" or any(
+            objective.name == "grouped_count_likelihood" and float(objective.weight) > 0
+            for objective in self.objective_descriptors
+        )
+
+    def _bank_diagnostics(self) -> dict[str, float | int]:
+        if self._catalog_bank_required():
+            return self.bank.diagnostics()
+        return {
+            "bank_seen_fraction": 0.0,
+            "bank_max_age": 0,
+            "bank_mean_age": 0.0,
+            "last_full_refresh_epoch": -1,
+        }
+
+    def _emit_training_progress(
+        self,
+        *,
+        stage: str,
+        stage_epoch: int,
+        reason: Literal["interval", "stage_end"],
+        window_started: float,
+        window_epochs: int,
+        particle_steps: int,
+    ) -> float:
+        """Emit one bounded progress record without synchronizing between reports."""
+        if self.device.type == "cuda":
+            torch.cuda.synchronize(self.device)
+        reported_at = time.perf_counter()
+        window_seconds = max(reported_at - window_started, 1e-12)
+        payload: dict[str, Any] = {
+            "event": "credo.training_progress",
+            "reason": reason,
+            "stage": stage,
+            "epoch": int(self.completed_epochs),
+            "stage_epoch": int(stage_epoch),
+            "window_epochs": int(window_epochs),
+            "window_seconds": float(window_seconds),
+            "epochs_per_second": float(window_epochs / window_seconds),
+            "particle_steps_per_second": float(particle_steps / window_seconds),
+        }
+        if self.device.type == "cuda":
+            gib = float(1024**3)
+            payload["cuda"] = {
+                "allocated_gib": float(torch.cuda.memory_allocated(self.device) / gib),
+                "reserved_gib": float(torch.cuda.memory_reserved(self.device) / gib),
+                "peak_allocated_gib": float(torch.cuda.max_memory_allocated(self.device) / gib),
+            }
+        print(json.dumps(payload, sort_keys=True), flush=True)
+        return reported_at
+
     def _fit(self) -> None:
         torch.manual_seed(self.training_plan.seed)
         np.random.seed(self.training_plan.seed)
         for stage in self.training_plan.stages:
             phase = stage.name
+            catalog_bank_required = self._catalog_bank_required()
             if phase not in {"state", "mass", "context"}:
                 raise ValueError(f"compact-v3 cannot execute stage {phase!r}.")
             if stage.epochs == 0:
@@ -532,7 +714,7 @@ class Trainer:
                 growth_enabled=growth_enabled,
                 context_enabled=stage.context_policy == "catalog_bank",
             )
-            if phase in {"mass", "context"}:
+            if catalog_bank_required and phase in {"mass", "context"}:
                 self._refresh_bank(epoch=self.completed_epochs)
             parameters = [
                 parameter for parameter in self.model.parameters() if parameter.requires_grad
@@ -567,14 +749,26 @@ class Trainer:
             best_model: dict[str, torch.Tensor] | None = None
             best_concentration: torch.Tensor | None = None
             stale_epochs = 0
-            monitor_validation = (
-                self.settings.training.checkpoint_selection == "validation_best"
-            )
+            monitor_validation = self.settings.training.checkpoint_selection == "validation_best"
             trace["validation_monitored_during_training"] = monitor_validation
+            progress_interval = int(self.settings.training.progress_interval)
+            stage_started = time.perf_counter() if progress_interval > 0 else 0.0
+            window_started = stage_started
+            window_epochs = 0
+            window_particle_steps = 0
+            particle_steps_per_epoch = 0
+            if progress_interval > 0:
+                training_measure_count = len(self._training_ids_for_stage(stage))
+                particle_steps_per_epoch = (
+                    training_measure_count
+                    * self.training_plan.particles
+                    * (len(self.data.axis.labels) - 1)
+                    * self.training_plan.steps_per_interval
+                )
             for phase_epoch in range(stage.epochs):
                 train_summary = self._train_epoch(stage, optimizer, phase_epoch)
-                bank_values = self.bank.diagnostics()
-                if phase in {"mass", "context"}:
+                bank_values = self._bank_diagnostics()
+                if catalog_bank_required and phase in {"mass", "context"}:
                     self._refresh_bank(epoch=self.completed_epochs + 1)
                 if monitor_validation:
                     evaluation = self._evaluate_ids(
@@ -582,9 +776,7 @@ class Trainer:
                         include_mass=phase != "state",
                         validation_source=self.validation_source,
                     )
-                    validation_count, validation_count_blocks = (
-                        self._validation_count_loss(stage)
-                    )
+                    validation_count, validation_count_blocks = self._validation_count_loss(stage)
                     score = self._validation_score(
                         stage,
                         evaluation,
@@ -613,6 +805,8 @@ class Trainer:
                     }
                 )
                 self.completed_epochs += 1
+                window_epochs += 1
+                window_particle_steps += particle_steps_per_epoch
                 if monitor_validation and score < best_score - 1e-8:
                     best_score = score
                     best_model = copy.deepcopy(self.model.state_dict())
@@ -620,21 +814,40 @@ class Trainer:
                     stale_epochs = 0
                 elif monitor_validation:
                     stale_epochs += 1
+                if progress_interval > 0 and window_epochs >= progress_interval:
+                    window_started = self._emit_training_progress(
+                        stage=phase,
+                        stage_epoch=phase_epoch + 1,
+                        reason="interval",
+                        window_started=window_started,
+                        window_epochs=window_epochs,
+                        particle_steps=window_particle_steps,
+                    )
+                    window_epochs = 0
+                    window_particle_steps = 0
                 if monitor_validation and (
                     stale_epochs >= self.training_plan.early_stopping_patience
                 ):
                     break
             trace["epochs_completed"] = self.completed_epochs - completed_before_stage
             trace["best_monitored_score"] = best_score if monitor_validation else None
-            trace["selected_checkpoint_score"] = (
-                best_score if monitor_validation else None
-            )
+            trace["selected_checkpoint_score"] = best_score if monitor_validation else None
             if monitor_validation and best_model is not None:
                 self.model.load_state_dict(best_model)
                 assert best_concentration is not None
                 self.log_count_concentration.data.copy_(best_concentration)
-            if phase in {"mass", "context"}:
+            if catalog_bank_required and phase in {"mass", "context"}:
                 self._refresh_bank(epoch=self.completed_epochs)
+            if progress_interval > 0:
+                epochs_completed = self.completed_epochs - completed_before_stage
+                self._emit_training_progress(
+                    stage=phase,
+                    stage_epoch=epochs_completed,
+                    reason="stage_end",
+                    window_started=stage_started,
+                    window_epochs=epochs_completed,
+                    particle_steps=epochs_completed * particle_steps_per_epoch,
+                )
         self.metrics = self.evaluate()
 
     def _batches(
@@ -801,6 +1014,7 @@ class Trainer:
         batch_count = 0
         seed = self.training_plan.seed + self.completed_epochs * 10_000
         training_ids = self._training_ids_for_stage(stage)
+        catalog_bank_required = self._catalog_bank_required()
         if stage.batching.mode != "measure_batches":
             raise ValueError("compact-v3 stages require measure_batches batching.")
         assert stage.batching.measures_per_batch is not None
@@ -812,7 +1026,8 @@ class Trainer:
                 order=stage.batching.order,
             )
         ):
-            self.bank.tick()
+            if catalog_bank_required:
+                self.bank.tick()
             particle_rollout = self._rollout_ids(
                 batch_ids,
                 particles=self.training_plan.particles,
@@ -836,7 +1051,7 @@ class Trainer:
                     {"checkpoint_mass", "grouped_count_likelihood"} & set(stage.active_objectives)
                 ),
                 log_concentration=self.log_count_concentration,
-                fitness_bank=self.bank if phase != "state" else None,
+                fitness_bank=(self.bank if catalog_bank_required and phase != "state" else None),
                 sinkhorn_epsilon=float(geometry_config.get("sinkhorn_epsilon", 0.1)),
                 time_labels=self.train_time_labels,
                 action_weights=(
@@ -868,7 +1083,7 @@ class Trainer:
                     max_norm=self.training_plan.gradient_clip_norm,
                 )
             optimizer.step()
-            if phase in {"mass", "context"}:
+            if catalog_bank_required and phase in {"mass", "context"}:
                 self.bank.update_from_rollout(
                     particle_rollout, self.model, self.data, full_refresh=False
                 )
@@ -936,6 +1151,7 @@ class Trainer:
                 f"bank={bank_steps}, rollout={rollout_steps}."
             )
         bank.reset_coverage()
+        bank.refresh_fixed_background(self.model)
         metadata = data.measure_meta.set_index("measure_id")
         grouped: dict[str, list[str]] = {}
         for measure_id in data.measure_ids:
@@ -956,7 +1172,11 @@ class Trainer:
                 seed=self.training_plan.seed + epoch * 1009 + group_index + 2_000_003,
             )
             provider = (
-                SelfConsistentContextProvider()
+                (
+                    FixedBackgroundContextProvider(bank)
+                    if bank.has_fixed_background
+                    else SelfConsistentContextProvider()
+                )
                 if self.model.context_enabled
                 else NoContextProvider()
             )
@@ -993,7 +1213,7 @@ class Trainer:
         if evaluation_seed < 0:
             raise ValueError("Evaluation seed must be nonnegative.")
         evaluation_grid = self.evaluation_grid
-        if self.model.growth_enabled or self.model.context_enabled:
+        if self._catalog_bank_required():
             self._refresh_bank_for(
                 self.validation_data,
                 self.validation_bank,
@@ -1035,11 +1255,7 @@ class Trainer:
         if not rows:
             raise RuntimeError("Evaluation produced no observed checkpoint rows.")
         frame = pd.DataFrame(rows)
-        return (
-            _add_nearest_observed_state_accuracy(frame)
-            if collect_benchmark_metrics
-            else frame
-        )
+        return _add_nearest_observed_state_accuracy(frame) if collect_benchmark_metrics else frame
 
     def evaluate(
         self,
@@ -1174,7 +1390,7 @@ class Trainer:
             "split_contract": _split_contract(self),
             "checkpoint_mode": "inference_only",
             "checkpoint_sha256": self.checkpoint_sha256,
-            "bank_initialization": self.bank.diagnostics(),
+            "bank_initialization": self._bank_diagnostics(),
             "ess_thresholds": {"warning_fraction": 0.2, "failure_fraction": 0.05},
             "counterfactual_status": ("evaluated" if self.counterfactual_rows else "not_requested"),
         }
@@ -1458,6 +1674,8 @@ class Trainer:
             validation_source=payload["validation_source"],
             validation_strategy=payload["validation_strategy"],
             representation_scope=payload.get("representation_scope", "shared"),
+            _training_grid=training_grid,
+            _evaluation_grid=evaluation_grid,
             execution_trace=list(payload.get("execution_trace", ())),
             completed_epochs=int(payload["completed_epochs"]),
             checkpoint_sha256=_file_sha256(checkpoint_path),
@@ -1466,7 +1684,7 @@ class Trainer:
             stage.name for stage in reversed(trainer.training_plan.stages) if stage.epochs > 0
         )
         trainer.model.set_phase(final_phase)  # type: ignore[arg-type]
-        if final_phase in {"mass", "context"}:
+        if trainer._catalog_bank_required() and final_phase in {"mass", "context"}:
             trainer._refresh_bank(epoch=trainer.completed_epochs)
         trainer.metrics = trainer.evaluate()
         return trainer
@@ -1574,12 +1792,18 @@ def _partition_trajectory_data(
         )
     runtime_metadata = dict(data.metadata)
     runtime_metadata["split_plan"] = split.to_dict()
+    selected_context_groups = set(metadata["context_group_id"].astype(str))
     return TrajectoryData(
         axis=data.axis,
         measures=_TrajectorySubset(data, tuple(measure_ids), tuple(target_labels)),
         measure_meta=metadata,
         mass_semantics=data.mass_semantics,
         count_blocks=tuple(blocks),
+        context_backgrounds=tuple(
+            value
+            for value in data.context_backgrounds
+            if value.context_group_id in selected_context_groups
+        ),
         metadata=runtime_metadata,
         representation=data.representation,
     )

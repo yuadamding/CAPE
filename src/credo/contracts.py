@@ -556,6 +556,78 @@ class FiniteMeasure:
         return self.weights / self.total_mass
 
 
+@dataclass(frozen=True)
+class FixedContextBackground:
+    """Observed source-pool aggregate held fixed during trajectory rollout.
+
+    The finite measure is an explicit approximation to omitted population
+    members in one ecological context group. Its geometry and mass are observed
+    at the source checkpoint; it is not an additional modeled trajectory.
+    """
+
+    context_group_id: str
+    source_checkpoint_id: str
+    measure: FiniteMeasure
+    source_denominator_id: str
+    observed_series_count: int
+    supported_series_count: int
+    support_mass_fraction: float
+    compression_method: Literal["deterministic_mixture_sample"]
+    compression_seed: int
+
+    def __post_init__(self) -> None:
+        for name in ("context_group_id", "source_checkpoint_id", "source_denominator_id"):
+            value = str(getattr(self, name))
+            if not value:
+                raise ValueError(f"FixedContextBackground.{name} must be nonempty.")
+            object.__setattr__(self, name, value)
+        if not isinstance(self.measure, FiniteMeasure):
+            raise TypeError("FixedContextBackground.measure must be a FiniteMeasure.")
+        observed = int(self.observed_series_count)
+        supported = int(self.supported_series_count)
+        coverage = float(self.support_mass_fraction)
+        seed = int(self.compression_seed)
+        object.__setattr__(self, "observed_series_count", observed)
+        object.__setattr__(self, "supported_series_count", supported)
+        object.__setattr__(self, "support_mass_fraction", coverage)
+        object.__setattr__(self, "compression_seed", seed)
+        if observed < 1 or supported < 1 or supported > observed:
+            raise ValueError(
+                "FixedContextBackground series counts must satisfy "
+                "1 <= supported <= observed."
+            )
+        if not np.isfinite(coverage) or not 0 < coverage <= 1:
+            raise ValueError(
+                "FixedContextBackground.support_mass_fraction must be in (0, 1]."
+            )
+        if self.compression_method != "deterministic_mixture_sample":
+            raise ValueError("FixedContextBackground has an unknown compression method.")
+        if seed < 0:
+            raise ValueError("FixedContextBackground.compression_seed must be nonnegative.")
+
+    def content_hash(self) -> str:
+        digest = hashlib.sha256()
+        for value in (
+            self.context_group_id,
+            self.source_checkpoint_id,
+            self.source_denominator_id,
+            str(self.observed_series_count),
+            str(self.supported_series_count),
+            format(self.support_mass_fraction, ".17g"),
+            self.compression_method,
+            str(self.compression_seed),
+        ):
+            digest.update(value.encode("utf-8"))
+            digest.update(b"\0")
+        support = np.asarray(self.measure.support, dtype="<f4", order="C")
+        weights = np.asarray(self.measure.weights, dtype="<f8", order="C")
+        digest.update(np.asarray(support.shape, dtype="<i8").tobytes())
+        digest.update(support.tobytes(order="C"))
+        digest.update(weights.tobytes(order="C"))
+        digest.update(np.asarray([self.measure.total_mass], dtype="<f8").tobytes())
+        return digest.hexdigest()
+
+
 MEASURE_META_COLUMNS = (
     "measure_id",
     "sample_id",
@@ -658,6 +730,7 @@ class TrajectoryData:
     measure_meta: pd.DataFrame
     mass_semantics: MassSemantics
     count_blocks: tuple[Any, ...] = ()
+    context_backgrounds: tuple[FixedContextBackground, ...] = ()
     metadata: Mapping[str, Any] = field(default_factory=dict)
     representation: RepresentationArtifact | None = None
 
@@ -677,6 +750,7 @@ class TrajectoryData:
         object.__setattr__(self, "mass_semantics", semantics)
         object.__setattr__(self, "measures", measures)
         object.__setattr__(self, "count_blocks", tuple(self.count_blocks))
+        object.__setattr__(self, "context_backgrounds", tuple(self.context_backgrounds))
         metadata = dict(self.metadata)
         object.__setattr__(self, "metadata", MappingProxyType(metadata))
         representation = self.representation
@@ -757,6 +831,31 @@ class TrajectoryData:
                 raise ValueError(
                     "CountBlock denominator must contain every source-supported measure "
                     f"in context group {group_id!r}."
+                )
+        background_groups: set[str] = set()
+        available_groups = set(self.measure_meta["context_group_id"].astype(str))
+        for background in self.context_backgrounds:
+            if not isinstance(background, FixedContextBackground):
+                raise TypeError(
+                    "TrajectoryData.context_backgrounds must contain "
+                    "FixedContextBackground values."
+                )
+            if background.context_group_id in background_groups:
+                raise ValueError(
+                    "TrajectoryData permits at most one fixed context background per group."
+                )
+            background_groups.add(background.context_group_id)
+            if background.context_group_id not in available_groups:
+                raise ValueError(
+                    "Fixed context background references a group with no modeled measures."
+                )
+            if background.source_checkpoint_id != self.axis.source:
+                raise ValueError(
+                    "Fixed context background must be observed at the source checkpoint."
+                )
+            if background.measure.latent_dim != self.representation.latent_dim:
+                raise ValueError(
+                    "Fixed context background latent dimension disagrees with representation."
                 )
         if self.mass_semantics is MassSemantics.UNIT:
             nonunit = [

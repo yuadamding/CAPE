@@ -11,6 +11,7 @@ from credo import evaluate
 from credo.artifacts import CheckpointEnvelope, CheckpointMode, tensor_state_sha256
 from credo.particles import (
     CatalogContextProvider,
+    FixedBackgroundContextProvider,
     NoContextProvider,
     SelfConsistentContextProvider,
 )
@@ -66,10 +67,20 @@ def test_compact_recipe_is_registered_and_builds_the_canonical_model(
     assert plan.steps_per_interval == tiny_config.recipe_config.training.steps_per_interval
     default_config = recipe.config_schema()()
     default_plan = recipe.training_plan(tiny_data, {})
+    assert default_config.training.progress_interval == 0
     assert default_plan.stages[0].batching.measures_per_batch == (
         default_config.training.measures_per_batch
     )
     assert default_plan.stages[0].optimizer.learning_rate == (default_config.training.learning_rate)
+    with pytest.raises(ValueError, match="greater than or equal to 0"):
+        type(default_config.training).model_validate({"progress_interval": -1})
+    with pytest.raises(ValueError, match="requires model.context='catalog_bank'"):
+        type(default_config.model).model_validate(
+            {
+                "context": "none",
+                "context_background": "source_observed_aggregate",
+            }
+        )
 
 
 def test_compact_recipe_predicts_through_the_typed_query(trained_run) -> None:
@@ -129,6 +140,8 @@ def test_context_providers_declare_population_scope() -> None:
     assert NoContextProvider.requires_full_group_rollout is False
     assert SelfConsistentContextProvider.requires_complete_catalog is False
     assert SelfConsistentContextProvider.requires_full_group_rollout is True
+    assert FixedBackgroundContextProvider.requires_complete_catalog is False
+    assert FixedBackgroundContextProvider.requires_full_group_rollout is True
     assert CatalogContextProvider.requires_complete_catalog is True
     assert CatalogContextProvider.requires_full_group_rollout is False
 

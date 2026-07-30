@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import warnings
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
 
@@ -51,6 +52,8 @@ from credo.data import (
 )
 from credo.data.splits import validate_representation_scope, validate_split_plan
 from credo.io import RunConfig, load_data, validate_inputs
+from credo.recipes.compact_sde_v3.particles import sample_initial_particles
+from credo.recipes.trajectory_compiler import compile_trajectory_view
 from credo.registry import get_recipe
 from credo.runtime import TrainingEngine
 
@@ -1100,6 +1103,59 @@ def test_compact_replicate_pooling_concatenates_geometry_and_sums_abundance() ->
         assert len(selected_source.support) == 2
     finally:
         pooled_study.close()
+        original.close()
+
+
+def test_compiled_measures_cache_one_immutable_copy_per_key(monkeypatch) -> None:
+    original = _general_study()
+    abundance = original.abundance.to_pandas()
+    abundance.loc[abundance["value"].eq(0), "value"] = 10.0
+    study = replace(
+        original,
+        abundance=AbundanceTable(abundance, original.abundance.channels),
+        compositions=None,
+    )
+    store = study.supports["memory"]
+    source_ref = SupportRef("memory", "latent-all", "source-law")
+    source_law = store.read(source_ref)
+    original_read = store.read
+    reads: list[SupportRef] = []
+
+    def counted_read(ref: SupportRef):
+        reads.append(ref)
+        return original_read(ref)
+
+    monkeypatch.setattr(store, "read", counted_read)
+    try:
+        compiled = compile_trajectory_view(study.view())
+        reads.clear()
+        source = compiled.measures[compiled.axis.source]
+        measure_id = compiled.measure_ids[0]
+
+        first = source[measure_id]
+        expected_support = first.support.copy()
+        expected_weights = first.weights.copy()
+        assert reads == [source_ref]
+        assert not np.shares_memory(first.support, source_law.coordinates)
+        assert not np.shares_memory(first.weights, source_law.probabilities)
+        assert not first.support.flags.writeable
+        assert not first.weights.flags.writeable
+        with pytest.raises(ValueError):
+            first.support[0, 0] = -1.0
+        with pytest.raises(ValueError):
+            first.weights.setflags(write=True)
+
+        second = source[measure_id]
+        assert second is first
+        assert reads == [source_ref]
+        np.testing.assert_array_equal(second.support, expected_support)
+        np.testing.assert_array_equal(second.weights, expected_weights)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            sample_initial_particles(compiled, (measure_id,), 2)
+        assert not any("not writable" in str(item.message) for item in caught)
+    finally:
+        study.close()
         original.close()
 
 

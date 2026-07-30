@@ -403,9 +403,17 @@ def checkpoint_geometry_mass_loss(
             target = data.measures[label].get(measure_id)
             if target is None:
                 continue
-            target_support = torch.as_tensor(target.support, device=device, dtype=dtype)
+            target_support = torch.as_tensor(
+                np.array(target.support, copy=True),
+                device=device,
+                dtype=dtype,
+            )
             target_log_weight = torch.log(
-                torch.as_tensor(target.weights, device=device, dtype=dtype).clamp_min(1e-30)
+                torch.as_tensor(
+                    np.array(target.weights, copy=True),
+                    device=device,
+                    dtype=dtype,
+                ).clamp_min(1e-30)
             )
             predicted_support = rollout.z_steps[step, local_index]
             predicted_log_weight = rollout.absolute_log_weight_steps[step, local_index]
@@ -482,14 +490,8 @@ def checkpoint_geometry_mass_loss(
                     ).to(target_support.dtype)
                     row_centroids.append(
                         (
-                            (
-                                predicted_probability[:, None]
-                                * predicted_support
-                            ).sum(dim=0),
-                            (
-                                observed_probability[:, None]
-                                * target_support
-                            ).sum(dim=0),
+                            (predicted_probability[:, None] * predicted_support).sum(dim=0),
+                            (observed_probability[:, None] * target_support).sum(dim=0),
                         )
                     )
                 row_values.append(

@@ -216,6 +216,45 @@ class CatalogBankProtocol(Protocol):
     ) -> torch.Tensor: ...
 
 
+class FixedBackgroundBankProtocol(Protocol):
+    def context_for_self_consistent(
+        self,
+        *,
+        active_indices: torch.Tensor,
+        active_log_mass: torch.Tensor,
+        active_programs: torch.Tensor,
+        model: CREDOModel,
+    ) -> torch.Tensor: ...
+
+
+class FixedBackgroundContextProvider:
+    """Compose a full active group with its fixed observed source background."""
+
+    requires_complete_catalog = False
+    requires_full_group_rollout = True
+
+    def __init__(self, bank: FixedBackgroundBankProtocol) -> None:
+        self.bank = bank
+
+    def context(
+        self,
+        *,
+        step_index: int,
+        z: torch.Tensor,
+        absolute_log_weight: torch.Tensor,
+        state: ParticleState,
+        model: CREDOModel,
+    ) -> torch.Tensor:
+        del step_index
+        log_mass, programs = model.summarize_context(z, absolute_log_weight)
+        return self.bank.context_for_self_consistent(
+            active_indices=state.measure_indices,
+            active_log_mass=log_mass,
+            active_programs=programs,
+            model=model,
+        )
+
+
 class CatalogContextProvider:
     requires_complete_catalog = True
     requires_full_group_rollout = False
@@ -289,7 +328,11 @@ def sample_initial_particles(
     log_m0 = torch.empty(len(ids), device=device, dtype=dtype)
     for row, measure_id in enumerate(ids):
         measure = source[measure_id]
-        support = torch.as_tensor(measure.support, device=device, dtype=dtype)
+        support = torch.as_tensor(
+            np.array(measure.support, copy=True),
+            device=device,
+            dtype=dtype,
+        )
         probability = torch.as_tensor(measure.normalized_weights, device=device, dtype=dtype)
         selected = torch.multinomial(
             probability, n_particles, replacement=True, generator=generator

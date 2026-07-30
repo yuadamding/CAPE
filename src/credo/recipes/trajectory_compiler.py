@@ -4,14 +4,22 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 from collections.abc import Iterator, Mapping
 from dataclasses import replace
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
 
-from ..contracts import Axis, FiniteMeasure, MassSemantics, RepresentationArtifact, TrajectoryData
+from ..contracts import (
+    Axis,
+    FiniteMeasure,
+    FixedContextBackground,
+    MassSemantics,
+    RepresentationArtifact,
+    TrajectoryData,
+)
 from ..data.splits import SplitPlan
 from ..data.study import StudyView
 from ..data.support import SupportRef
@@ -81,7 +89,13 @@ class _CompiledCheckpointMeasures(Mapping[str, FiniteMeasure]):
 
 
 class _CompiledMeasures(Mapping[str, Mapping[str, FiniteMeasure]]):
-    """Lazy finite-measure adapter over one representation and abundance channel."""
+    """Lazy finite-measure adapter over one representation and abundance channel.
+
+    Measures are materialized at most once per compiled dataset.  The cached
+    arrays are immutable and own no writable alias, so returning the same
+    ``FiniteMeasure`` on later epochs cannot let a caller corrupt subsequent
+    training batches.
+    """
 
     is_lazy = True
 
@@ -123,6 +137,8 @@ class _CompiledMeasures(Mapping[str, Mapping[str, FiniteMeasure]]):
             checkpoint_id: _CompiledCheckpointMeasures(self, checkpoint_id)
             for checkpoint_id in axis.labels
         }
+        self._measure_cache: dict[tuple[str, str], FiniteMeasure] = {}
+        self._cache_lock = threading.RLock()
 
     def __getitem__(self, checkpoint_id: str) -> Mapping[str, FiniteMeasure]:
         return self._views[str(checkpoint_id)]
@@ -134,6 +150,27 @@ class _CompiledMeasures(Mapping[str, Mapping[str, FiniteMeasure]]):
         return len(self._views)
 
     def measure(self, checkpoint_id: str, series_id: str) -> FiniteMeasure:
+        key = (str(checkpoint_id), str(series_id))
+        with self._cache_lock:
+            cached = self._measure_cache.get(key)
+            if cached is not None:
+                return cached
+            measure = self._load_measure(*key)
+            cached = self._immutable_measure(measure)
+            self._measure_cache[key] = cached
+            return cached
+
+    @staticmethod
+    def _immutable_measure(measure: FiniteMeasure) -> FiniteMeasure:
+        """Copy one validated measure into immutable, non-aliased cache storage."""
+        cached = FiniteMeasure(measure.support, measure.weights, measure.total_mass)
+        support = np.frombuffer(cached.support.tobytes(order="C"), dtype=cached.support.dtype)
+        weights = np.frombuffer(cached.weights.tobytes(order="C"), dtype=cached.weights.dtype)
+        object.__setattr__(cached, "support", support.reshape(cached.support.shape))
+        object.__setattr__(cached, "weights", weights.reshape(cached.weights.shape))
+        return cached
+
+    def _load_measure(self, checkpoint_id: str, series_id: str) -> FiniteMeasure:
         try:
             observation = self._observation.loc[(checkpoint_id, series_id)]
         except KeyError as exc:
@@ -510,10 +547,240 @@ def _representation(view: StudyView) -> RepresentationArtifact:
     )
 
 
+def _source_observed_context_backgrounds(
+    view: StudyView,
+    axis: Axis,
+    measure_meta: pd.DataFrame,
+    *,
+    particles: int,
+    minimum_mass_coverage: float,
+) -> tuple[FixedContextBackground, ...]:
+    """Compress omitted source-pool members into fixed donor-local measures."""
+    if view.selection.composition_policy != "preserve_background":
+        raise ValueError(
+            "source_observed_aggregate context requires "
+            "selection.composition_policy='preserve_background'."
+        )
+    if view.abundance_channel is None or view.study.abundance is None:
+        raise ValueError(
+            "source_observed_aggregate context requires an explicit abundance channel."
+        )
+    composition = view.compositions()
+    if composition.empty:
+        raise ValueError(
+            "source_observed_aggregate context requires pooled composition blocks."
+        )
+    active_series = set(measure_meta["measure_id"].astype(str))
+    active_rows = composition.loc[composition["series_id"].isin(active_series)]
+    if active_rows.empty:
+        raise ValueError("No active rows were found in pooled composition blocks.")
+    touched_blocks = tuple(dict.fromkeys(active_rows["composition_block_id"].astype(str)))
+    composition = composition.loc[
+        composition["composition_block_id"].isin(touched_blocks)
+    ].copy()
+    context_by_series = (
+        measure_meta.set_index("measure_id")["context_group_id"].astype(str).to_dict()
+    )
+    series_frame = view.study.series._unsafe_view().set_index("series_id")
+    abundance = view.study.abundance._unsafe_view()
+    abundance = abundance.loc[
+        abundance["channel_id"].eq(view.abundance_channel),
+        ["observation_id", "value", "observed", "denominator_id"],
+    ].copy()
+    if abundance["observation_id"].duplicated().any():
+        raise ValueError("Background abundance channel contains duplicate observations.")
+    abundance = abundance.set_index("observation_id")
+    support = view.study.support_index._unsafe_view()
+    support = support.loc[
+        support["representation_id"].eq(view.representation_id)
+    ].set_index("observation_id")
+    if support.index.duplicated().any():
+        raise ValueError("Background support index contains duplicate observations.")
+    source_observations = view.study.observations._unsafe_view()
+    source_observations = source_observations.loc[
+        source_observations["checkpoint_id"].eq(axis.source),
+        ["observation_id", "series_id", "context_id"],
+    ].copy()
+    if source_observations["series_id"].duplicated().any():
+        raise ValueError(
+            "Fixed source context currently requires one source observation per series."
+        )
+    if "schema_v3_conversion" not in view.study.provenance:
+        series_context = series_frame["context_trajectory_id"].astype(str).to_dict()
+    else:
+        source_by_series = source_observations.set_index("series_id")
+        series_context = {
+            str(series_id): (
+                str(source_by_series.loc[series_id, "context_id"])
+                if pd.notna(source_by_series.loc[series_id, "context_id"])
+                else str(series_frame.loc[series_id, "subject_id"])
+            )
+            for series_id in source_by_series.index
+        }
+
+    backgrounds: list[FixedContextBackground] = []
+    blocks_by_group: dict[str, list[str]] = {}
+    for block_id in touched_blocks:
+        rows = composition.loc[composition["composition_block_id"].eq(block_id)]
+        active = rows.loc[rows["series_id"].isin(active_series)]
+        groups = {
+            context_by_series[str(series_id)] for series_id in active["series_id"].astype(str)
+        }
+        if len(groups) != 1:
+            raise ValueError(
+                "One source composition block must map to one modeled context group; "
+                f"block={block_id!r}, groups={sorted(groups)}."
+            )
+        blocks_by_group.setdefault(next(iter(groups)), []).append(block_id)
+
+    for context_group_id, group_blocks in blocks_by_group.items():
+        background_memberships: list[set[str]] = []
+        for block_id in group_blocks:
+            rows = composition.loc[composition["composition_block_id"].eq(block_id)]
+            background_memberships.append(
+                set(
+                    rows.loc[~rows["series_id"].isin(active_series), "series_id"].astype(str)
+                )
+            )
+        if not background_memberships[0]:
+            raise ValueError(
+                "source_observed_aggregate context requires omitted source-pool members; "
+                f"group={context_group_id!r} has none."
+            )
+        if any(
+            membership != background_memberships[0]
+            for membership in background_memberships[1:]
+        ):
+            raise ValueError(
+                "Omitted population membership must be stable across checkpoint "
+                f"composition blocks for group={context_group_id!r}."
+            )
+        background_series = background_memberships[0]
+        background_contexts = {
+            series_context.get(str(series_id))
+            for series_id in background_series
+        }
+        if background_contexts != {context_group_id}:
+            raise ValueError(
+                "An omitted source-pool denominator crosses ecological context groups; "
+                f"group={context_group_id!r}, "
+                f"contexts={sorted(str(v) for v in background_contexts)}."
+            )
+        background = source_observations.loc[
+            source_observations["series_id"].isin(background_series)
+        ].copy()
+        if set(background["series_id"].astype(str)) != background_series:
+            missing = sorted(background_series - set(background["series_id"].astype(str)))[:5]
+            raise ValueError(
+                "Fixed source context background lacks source observations for "
+                f"series={missing}."
+            )
+        observation_ids = background["observation_id"].astype(str)
+        missing_abundance = sorted(set(observation_ids) - set(abundance.index))[:5]
+        if missing_abundance:
+            raise ValueError(
+                "Fixed source context background lacks modeling abundance for "
+                f"observations={missing_abundance}."
+            )
+        mass_rows = abundance.loc[list(observation_ids)].copy()
+        mass_values = pd.to_numeric(mass_rows["value"], errors="raise").to_numpy(float)
+        if (
+            not mass_rows["observed"].astype(bool).all()
+            or not np.isfinite(mass_values).all()
+            or np.any(mass_values <= 0)
+        ):
+            raise ValueError(
+                "Fixed source context background requires positive observed abundance."
+            )
+        total_mass = float(mass_values.sum())
+        background["_background_mass"] = mass_values
+        background["_support_available"] = background["observation_id"].map(
+            support["available"].astype(bool)
+        )
+        supported = background.loc[background["_support_available"].eq(True)].copy()
+        if supported.empty:
+            raise ValueError(
+                f"Fixed source context background {context_group_id!r} has no latent support."
+            )
+        supported_mass = float(supported["_background_mass"].sum())
+        coverage = supported_mass / total_mass
+        if coverage < float(minimum_mass_coverage):
+            raise ValueError(
+                "Fixed source context background support-mass coverage is below the "
+                f"configured minimum: group={context_group_id!r}, "
+                f"coverage={coverage:.6f}, minimum={minimum_mass_coverage:.6f}."
+            )
+
+        supported = supported.sort_values("observation_id").reset_index(drop=True)
+        mixture = supported["_background_mass"].to_numpy(float, copy=True)
+        mixture = mixture / mixture.sum()
+        seed_material = (
+            f"{view.semantic_hash()}:{axis.source}:{context_group_id}:"
+            f"{','.join(sorted(group_blocks))}:"
+            f"{particles}:source_observed_aggregate"
+        )
+        seed = int(hashlib.sha256(seed_material.encode()).hexdigest()[:8], 16)
+        generator = np.random.default_rng(seed)
+        selected = generator.choice(
+            len(supported),
+            size=int(particles),
+            replace=True,
+            p=mixture,
+        )
+        coordinates = np.empty(
+            (int(particles), view.representation.dimension),
+            dtype=np.float32,
+        )
+        for row_index in np.unique(selected):
+            positions = np.flatnonzero(selected == row_index)
+            support_row = support.loc[str(supported.loc[row_index, "observation_id"])]
+            ref = SupportRef(
+                str(support_row["store_id"]),
+                view.representation_id,
+                str(support_row["support_key"]),
+            )
+            law = view.study.supports.read(ref)
+            atom_indices = generator.choice(
+                len(law.coordinates),
+                size=len(positions),
+                replace=True,
+                p=law.probabilities,
+            )
+            coordinates[positions] = law.coordinates[atom_indices]
+        measure = FiniteMeasure(
+            coordinates,
+            np.full(int(particles), total_mass / int(particles), dtype=np.float64),
+            total_mass,
+        )
+        denominator_ids = set(mass_rows["denominator_id"].dropna().astype(str))
+        if len(denominator_ids) != 1:
+            raise ValueError(
+                "Fixed source context background must have one source denominator; "
+                f"group={context_group_id!r}, denominators={sorted(denominator_ids)}."
+            )
+        backgrounds.append(
+            FixedContextBackground(
+                context_group_id=context_group_id,
+                source_checkpoint_id=axis.source,
+                measure=measure,
+                source_denominator_id=next(iter(denominator_ids)),
+                observed_series_count=int(background["series_id"].nunique()),
+                supported_series_count=int(supported["series_id"].nunique()),
+                support_mass_fraction=coverage,
+                compression_method="deterministic_mixture_sample",
+                compression_seed=seed,
+            )
+        )
+    return tuple(backgrounds)
+
+
 def compile_trajectory_view(
     view: StudyView,
     *,
     split_plan: SplitPlan | None = None,
+    context_background_mode: str = "none",
+    context_background_particles: int = 2048,
+    context_background_min_mass_coverage: float = 0.99,
 ) -> TrajectoryData:
     """Compile one semantically validated view for the legacy trajectory executor."""
     axis = _axis(view)
@@ -545,6 +812,35 @@ def compile_trajectory_view(
     metadata = _measure_meta(view, axis)
     measures = _CompiledMeasures(view, axis, mass_semantics)
     count_blocks = _count_blocks(view, metadata)
+    if context_background_mode == "none":
+        context_backgrounds: tuple[FixedContextBackground, ...] = ()
+    elif context_background_mode == "source_observed_aggregate":
+        context_backgrounds = _source_observed_context_backgrounds(
+            view,
+            axis,
+            metadata,
+            particles=int(context_background_particles),
+            minimum_mass_coverage=float(context_background_min_mass_coverage),
+        )
+    else:
+        raise ValueError(f"Unknown context background mode {context_background_mode!r}.")
+    context_background_contract = [
+        {
+            "context_group_id": background.context_group_id,
+            "source_checkpoint_id": background.source_checkpoint_id,
+            "source_denominator_id": background.source_denominator_id,
+            "observed_series_count": background.observed_series_count,
+            "supported_series_count": background.supported_series_count,
+            "support_mass_fraction": background.support_mass_fraction,
+            "aggregate_atoms": len(background.measure.support),
+            "total_mass": background.measure.total_mass,
+            "compression_method": background.compression_method,
+            "compression_seed": background.compression_seed,
+            "content_hash": background.content_hash(),
+            "trajectory_role": "observed_fixed_background",
+        }
+        for background in context_backgrounds
+    ]
     observation_map: dict[str, str] = {}
     pooled_observations: dict[str, tuple[str, ...]] = {}
     for (checkpoint_id, series_id), rows in view.observations().groupby(
@@ -579,7 +875,14 @@ def compile_trajectory_view(
                 view.semantic_hash()
                 + ":"
                 + ("unplanned" if split_plan is None else split_plan.split_id)
-                + ":trajectory-v1"
+                + ":trajectory-v1:"
+                + hashlib.sha256(
+                    json.dumps(
+                        context_background_contract,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ).encode()
+                ).hexdigest()
             ).encode()
         ).hexdigest(),
         "replicate_transform": {
@@ -598,6 +901,17 @@ def compile_trajectory_view(
             }
             for block in count_blocks
         ],
+        "context_background": {
+            "mode": context_background_mode,
+            "temporal_policy": (
+                "absent"
+                if not context_backgrounds
+                else "source_observed_geometry_and_mass_fixed_across_rollout"
+            ),
+            "modeled_active_trajectories": True,
+            "background_trajectories_modeled": False,
+            "groups": context_background_contract,
+        },
         "observation_id_by_series_checkpoint": observation_map,
     }
     if split_plan is not None:
@@ -608,6 +922,7 @@ def compile_trajectory_view(
         measure_meta=metadata,
         mass_semantics=mass_semantics,
         count_blocks=count_blocks,
+        context_backgrounds=context_backgrounds,
         metadata=runtime_metadata,
         representation=_representation(view),
     )
@@ -627,9 +942,48 @@ def _observation_set(
     )
 
 
+def _subject_local_composition_blocks(
+    view: StudyView,
+    composition_rows: pd.DataFrame,
+    selected_observation_ids: set[str],
+    *,
+    held_out_subject_ids: set[str],
+    partition: Literal["training", "validation"],
+) -> bool:
+    """Return whether every touched denominator stays within selected subjects."""
+    selected_rows = composition_rows.loc[
+        composition_rows["observation_id"].isin(selected_observation_ids)
+    ]
+    if selected_rows.empty:
+        return False
+    touched_blocks = set(selected_rows["composition_block_id"])
+    denominator_rows = composition_rows.loc[
+        composition_rows["composition_block_id"].isin(touched_blocks)
+    ]
+    subject_by_series = (
+        view.study.series._unsafe_view().set_index("series_id")["subject_id"].astype(str)
+    )
+    selected_subjects = selected_rows["series_id"].map(subject_by_series)
+    denominator_subjects = denominator_rows["series_id"].map(subject_by_series)
+    if selected_subjects.isna().any() or denominator_subjects.isna().any():
+        return False
+    selected_subject_set = set(selected_subjects.astype(str))
+    if partition == "training":
+        if selected_subject_set & held_out_subject_ids:
+            return False
+    elif partition == "validation":
+        if not selected_subject_set <= held_out_subject_ids:
+            return False
+    else:
+        raise ValueError(f"Unknown composition partition {partition!r}.")
+    return set(denominator_subjects.astype(str)) <= selected_subject_set
+
+
 def compile_finite_measure_problem(
     view: StudyView,
     split_plan: SplitPlan,
+    *,
+    config: Any | None = None,
 ) -> FiniteMeasureDynamicsProblem:
     """Compile target-outcome-separated train and validation finite measures."""
     observations = view.observations()
@@ -662,6 +1016,8 @@ def compile_finite_measure_problem(
     def partition_selection(
         selection: Any,
         observation_ids: tuple[str, ...],
+        *,
+        partition: Literal["training", "validation"],
     ) -> Any:
         compiled = replace(selection, observation_ids=observation_ids)
         compositions = getattr(view.study, "compositions", None)
@@ -678,6 +1034,21 @@ def compile_finite_measure_problem(
             frame.loc[frame["composition_block_id"].isin(touched), "observation_id"].astype(str)
         )
         if denominator_ids - selected_ids:
+            # A restricted guide panel may still use the full count denominator in
+            # donor-held-out CV when each physical pool is wholly donor-local.
+            if (
+                compiled.composition_policy == "preserve_background"
+                and split_plan.task_kind == "subject_generalization"
+                and split_plan.held_out_subject_ids
+                and _subject_local_composition_blocks(
+                    view,
+                    frame,
+                    selected_ids,
+                    held_out_subject_ids=set(split_plan.held_out_subject_ids),
+                    partition=partition,
+                )
+            ):
+                return compiled
             # A held-out outcome may never enter fitting as denominator background.
             return replace(compiled, composition_policy="condition_on_selection")
         return compiled
@@ -685,10 +1056,12 @@ def compile_finite_measure_problem(
     training_selection = partition_selection(
         split_plan.train_selection,
         training_observation_ids,
+        partition="training",
     )
     validation_selection = partition_selection(
         split_plan.validation_selection,
         validation_observation_ids,
+        partition="validation",
     )
     training_view = view.study.view(
         training_selection,
@@ -700,8 +1073,26 @@ def compile_finite_measure_problem(
         representation_id=view.representation_id,
         abundance_channel=view.abundance_channel,
     )
-    training = compile_trajectory_view(training_view, split_plan=split_plan)
-    validation = compile_trajectory_view(validation_view, split_plan=split_plan)
+    model_config = None if config is None else getattr(config, "model", None)
+    background_mode = (
+        "none" if model_config is None else str(model_config.context_background)
+    )
+    background_particles = (
+        2048 if model_config is None else int(model_config.context_background_particles)
+    )
+    background_coverage = (
+        0.99
+        if model_config is None
+        else float(model_config.context_background_min_mass_coverage)
+    )
+    compile_options = {
+        "split_plan": split_plan,
+        "context_background_mode": background_mode,
+        "context_background_particles": background_particles,
+        "context_background_min_mass_coverage": background_coverage,
+    }
+    training = compile_trajectory_view(training_view, **compile_options)
+    validation = compile_trajectory_view(validation_view, **compile_options)
 
     background = None
     if getattr(view.study, "compositions", None) is not None:
@@ -737,6 +1128,13 @@ def compile_finite_measure_problem(
         "validation_target_observation_ids": list(validation_target_ids),
         "training_composition_policy": training_selection.composition_policy,
         "validation_composition_policy": validation_selection.composition_policy,
+        "context_background_mode": background_mode,
+        "training_context_background_hashes": [
+            value.content_hash() for value in training.context_backgrounds
+        ],
+        "validation_context_background_hashes": [
+            value.content_hash() for value in validation.context_backgrounds
+        ],
         "compiler": "finite_measure_lps_v1",
     }
     problem_hash = hashlib.sha256(
@@ -752,6 +1150,7 @@ def compile_finite_measure_problem(
             "compiler": "finite_measure_lps_v1",
             "training_composition_policy": training_selection.composition_policy,
             "validation_composition_policy": validation_selection.composition_policy,
+            "context_background_mode": background_mode,
         },
         training=training,
         validation=validation,

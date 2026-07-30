@@ -44,7 +44,18 @@ class CompactModelConfig(_StrictConfig):
     n_programs: int = Field(default=8, ge=1)
     hidden_dim: int = Field(default=128, ge=8)
     context: Literal["none", "catalog_bank"] = "catalog_bank"
+    context_background: Literal["none", "source_observed_aggregate"] = "none"
+    context_background_particles: int = Field(default=2048, ge=2)
+    context_background_min_mass_coverage: float = Field(default=0.99, gt=0, le=1)
     growth_max: float = Field(default=3.0, gt=0)
+
+    @model_validator(mode="after")
+    def _validate_context_background(self) -> CompactModelConfig:
+        if self.context == "none" and self.context_background != "none":
+            raise ValueError(
+                "A source-observed context background requires model.context='catalog_bank'."
+            )
+        return self
 
 
 class CompactEpochConfig(_StrictConfig):
@@ -69,6 +80,7 @@ class CompactTrainingConfig(_StrictConfig):
     patience: int = Field(default=10, ge=1)
     checkpoint_selection: Literal["validation_best", "last"] = "validation_best"
     seed: int = Field(default=0, ge=0)
+    progress_interval: int = Field(default=0, ge=0)
 
 
 class CompactEvaluationConfig(_StrictConfig):
@@ -200,7 +212,7 @@ class CompactSDEV3Recipe:
         if not isinstance(split, SplitPlan):
             raise TypeError("compact-v3 requires a content-addressed SplitPlan.")
         _validate_lps_reference_binding(view, self.requirements(config)).raise_for_errors()
-        return compile_finite_measure_problem(view, split)
+        return compile_finite_measure_problem(view, split, config=config)
 
     compile = compile_study
 
@@ -209,8 +221,26 @@ class CompactSDEV3Recipe:
         problem: Any,
         config: Any,
     ) -> ValidationReport:
-        del config
         if isinstance(problem, (FiniteMeasureDynamicsProblem, CREDOStudy)):
+            if (
+                config.model.context_background == "source_observed_aggregate"
+                and isinstance(problem, FiniteMeasureDynamicsProblem)
+                and (
+                    not problem.training.context_backgrounds
+                    or not problem.validation.context_backgrounds
+                )
+            ):
+                return ValidationReport(
+                    (
+                        ValidationIssue(
+                            "error",
+                            "recipe.context_background",
+                            "The configured source-observed context background was not "
+                            "compiled for both data partitions.",
+                            ("compiled_problem",),
+                        ),
+                    )
+                )
             return ValidationReport()
         return ValidationReport(
             (

@@ -1065,6 +1065,15 @@ def validate_run_data(config: RunConfig, data: TrajectoryData) -> None:
         return
     settings = config.recipe_config
     reaction_epochs = settings.training.epochs.mass + settings.training.epochs.context
+    background_mode = settings.model.context_background
+    if background_mode == "source_observed_aggregate" and not data.context_backgrounds:
+        raise ValueError(
+            "source_observed_aggregate context requires compiled fixed context backgrounds."
+        )
+    if background_mode == "none" and data.context_backgrounds:
+        raise ValueError(
+            "Compiled fixed context backgrounds require an explicit model.context_background."
+        )
     if data.axis.kind == "effect":
         if data.count_blocks or settings.loss.count > 0:
             raise ValueError("Count likelihood cannot be configured for an effect axis.")

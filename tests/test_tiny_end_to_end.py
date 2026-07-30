@@ -376,6 +376,8 @@ def test_training_and_evaluation_use_separate_integration_grids(
     assert set(rollout_steps["evaluation"]) == {2 * interval_count}
     assert len(trainer.training_grid) - 1 == interval_count
     assert len(trainer.evaluation_grid) - 1 == 2 * interval_count
+    assert trainer.training_grid is trainer.training_grid
+    assert trainer.evaluation_grid is trainer.evaluation_grid
     assert trainer.bank.tensors["context_log_mass"].shape[0] == interval_count
     assert trainer.validation_bank.tensors["context_log_mass"].shape[0] == 2 * interval_count
     with pytest.raises(ValueError, match="CatalogBank integration-step count"):
@@ -385,6 +387,169 @@ def test_training_and_evaluation_use_separate_integration_grids(
             epoch=trainer.completed_epochs,
             grid=trainer.evaluation_grid,
         )
+
+
+def test_no_context_zero_count_skips_catalog_bank_without_changing_results(
+    tiny_config,
+    tiny_data,
+    monkeypatch,
+) -> None:
+    from credo.recipes.compact_sde_v3 import training as training_runtime
+
+    settings = tiny_config.recipe_config
+    model = settings.model.model_copy(update={"context": "none"})
+    epochs = settings.training.epochs.model_copy(update={"state": 1, "mass": 1, "context": 0})
+    training = settings.training.model_copy(
+        update={
+            "epochs": epochs,
+            "particles": 4,
+            "steps_per_interval": 1,
+            "measures_per_batch": 12,
+            "checkpoint_selection": "last",
+        }
+    )
+    evaluation = settings.evaluation.model_copy(update={"particles": 4, "measures_per_batch": 12})
+    loss = settings.loss.model_copy(update={"count": 0.0})
+    settings = settings.model_copy(
+        update={
+            "model": model,
+            "training": training,
+            "evaluation": evaluation,
+            "loss": loss,
+        }
+    )
+    config = tiny_config.model_copy(update={"recipe_config": settings})
+
+    required = Trainer._catalog_bank_required
+    monkeypatch.setattr(Trainer, "_catalog_bank_required", lambda self: True)
+    legacy = _fit(config, tiny_data)
+    monkeypatch.setattr(Trainer, "_catalog_bank_required", required)
+
+    def unexpected_catalog_work(*args, **kwargs):
+        raise AssertionError("inactive CatalogBank work was executed")
+
+    monkeypatch.setattr(Trainer, "_refresh_bank", unexpected_catalog_work)
+    monkeypatch.setattr(Trainer, "_refresh_bank_for", unexpected_catalog_work)
+    monkeypatch.setattr(training_runtime.CatalogBank, "tick", unexpected_catalog_work)
+    monkeypatch.setattr(
+        training_runtime.CatalogBank,
+        "update_from_rollout",
+        unexpected_catalog_work,
+    )
+    optimized = _fit(config, tiny_data)
+
+    assert optimized._catalog_bank_required() is False
+    for name, parameter in legacy.model.state_dict().items():
+        assert torch.equal(parameter, optimized.model.state_dict()[name])
+    pd.testing.assert_frame_equal(
+        legacy.metrics.reset_index(drop=True),
+        optimized.metrics.reset_index(drop=True),
+        check_exact=True,
+    )
+
+
+def test_training_progress_reports_throughput_without_changing_cpu_fit(
+    tiny_config,
+    tiny_data,
+    capsys,
+) -> None:
+    settings = tiny_config.recipe_config
+    epochs = settings.training.epochs.model_copy(update={"state": 2, "mass": 0, "context": 0})
+    common_training = settings.training.model_copy(
+        update={
+            "epochs": epochs,
+            "particles": 4,
+            "steps_per_interval": 1,
+            "checkpoint_selection": "last",
+        }
+    )
+    evaluation = settings.evaluation.model_copy(update={"particles": 4})
+    loss = settings.loss.model_copy(update={"mass": 0.0, "count": 0.0})
+    baseline_settings = settings.model_copy(
+        update={
+            "training": common_training,
+            "evaluation": evaluation,
+            "loss": loss,
+        }
+    )
+    baseline = _fit(
+        tiny_config.model_copy(update={"recipe_config": baseline_settings}),
+        tiny_data,
+    )
+    assert capsys.readouterr().out == ""
+
+    reporting_training = common_training.model_copy(update={"progress_interval": 1})
+    reporting_settings = baseline_settings.model_copy(update={"training": reporting_training})
+    reporting = _fit(
+        tiny_config.model_copy(update={"recipe_config": reporting_settings}),
+        tiny_data,
+    )
+    records = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.strip()]
+
+    assert [record["reason"] for record in records] == [
+        "interval",
+        "interval",
+        "stage_end",
+    ]
+    assert [record["stage"] for record in records] == ["state", "state", "state"]
+    assert [record["epoch"] for record in records] == [1, 2, 2]
+    assert [record["stage_epoch"] for record in records] == [1, 2, 2]
+    assert [record["window_epochs"] for record in records] == [1, 1, 2]
+    assert all(record["event"] == "credo.training_progress" for record in records)
+    assert all(record["window_seconds"] > 0 for record in records)
+    assert all(record["epochs_per_second"] > 0 for record in records)
+    assert all(record["particle_steps_per_second"] > 0 for record in records)
+    assert all("cuda" not in record for record in records)
+    for name, parameter in baseline.model.state_dict().items():
+        assert torch.equal(parameter, reporting.model.state_dict()[name])
+    pd.testing.assert_frame_equal(
+        baseline.metrics.reset_index(drop=True),
+        reporting.metrics.reset_index(drop=True),
+        check_exact=True,
+    )
+
+
+def test_training_progress_reports_cuda_memory_without_requiring_cuda(
+    monkeypatch,
+    capsys,
+) -> None:
+    from credo.recipes.compact_sde_v3 import training as training_runtime
+
+    trainer = object.__new__(Trainer)
+    trainer.device = torch.device("cuda:0")
+    trainer.completed_epochs = 7
+    synchronized: list[torch.device] = []
+    gib = 1024**3
+    monkeypatch.setattr(
+        torch.cuda,
+        "synchronize",
+        lambda device: synchronized.append(device),
+    )
+    monkeypatch.setattr(torch.cuda, "memory_allocated", lambda device: gib)
+    monkeypatch.setattr(torch.cuda, "memory_reserved", lambda device: 2 * gib)
+    monkeypatch.setattr(torch.cuda, "max_memory_allocated", lambda device: 3 * gib)
+    monkeypatch.setattr(training_runtime.time, "perf_counter", lambda: 12.5)
+
+    reported_at = trainer._emit_training_progress(
+        stage="mass",
+        stage_epoch=3,
+        reason="interval",
+        window_started=10.0,
+        window_epochs=2,
+        particle_steps=1_000,
+    )
+    record = json.loads(capsys.readouterr().out)
+
+    assert reported_at == 12.5
+    assert synchronized == [torch.device("cuda:0")]
+    assert record["window_seconds"] == 2.5
+    assert record["epochs_per_second"] == 0.8
+    assert record["particle_steps_per_second"] == 400.0
+    assert record["cuda"] == {
+        "allocated_gib": 1.0,
+        "reserved_gib": 2.0,
+        "peak_allocated_gib": 3.0,
+    }
 
 
 def test_checkpoint_holdout_masks_training_and_evaluation_times(tiny_config, tiny_data) -> None:

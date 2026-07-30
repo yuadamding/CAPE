@@ -14,6 +14,7 @@ from credo.data import (
     PerturbationReferenceBindingTable,
     PopulationPoolTable,
     PopulationSeriesTable,
+    SelectionSpec,
     SnapshotObservationTable,
     SupportIndexTable,
 )
@@ -24,6 +25,7 @@ from credo.data.splits import (
 )
 from credo.problems import FiniteMeasureDynamicsProblem
 from credo.registry import get_recipe
+from credo.runtime import TrainingEngine
 
 
 def test_public_study_is_the_domain_specific_lps_contract(tiny_config) -> None:
@@ -106,6 +108,158 @@ def test_subject_split_compiles_outcome_separated_finite_measures(tiny_config) -
         assert not (
             set(problem.partition.training_targets.observation_ids)
             & set(problem.partition.validation_targets.observation_ids)
+        )
+    finally:
+        study.close()
+
+
+def test_subject_split_preserves_only_donor_local_composition_background(tiny_config) -> None:
+    study = credo.open_study(tiny_config)
+    try:
+        selected_series = tuple(
+            series_id
+            for series_id in study.series.series_ids
+            if series_id.endswith(("NTC-1", "GENE1-1"))
+        )
+        view = study.view(
+            SelectionSpec(
+                series_ids=selected_series,
+                composition_policy="preserve_background",
+            )
+        )
+        recipe = get_recipe(tiny_config.recipe)
+        plan = recipe.plan_split(
+            view,
+            tiny_config.recipe_config,
+            SplitSpec(strategy="subject", validation_values=("D2",)),
+        )
+
+        problem = recipe.compile(view, plan, tiny_config.recipe_config)
+
+        assert problem.problem_metadata["training_composition_policy"] == "preserve_background"
+        assert problem.problem_metadata["validation_composition_policy"] == "preserve_background"
+        assert problem.training.count_blocks
+        assert problem.validation.count_blocks
+        training_background = {
+            series_id
+            for block in problem.training.count_blocks
+            for series_id in block.background_series_ids
+        }
+        validation_background = {
+            series_id
+            for block in problem.validation.count_blocks
+            for series_id in block.background_series_ids
+        }
+        assert training_background
+        assert validation_background
+        assert all(series_id.startswith("D1::") for series_id in training_background)
+        assert all(series_id.startswith("D2::") for series_id in validation_background)
+        assert not any(series_id.startswith("D2::") for series_id in training_background)
+    finally:
+        study.close()
+
+
+def test_subject_split_compiles_fixed_source_background_without_donor_leakage(
+    tiny_config,
+) -> None:
+    study = credo.open_study(tiny_config)
+    try:
+        selected_series = tuple(
+            series_id
+            for series_id in study.series.series_ids
+            if series_id.endswith(("NTC-1", "GENE1-1"))
+        )
+        view = study.view(
+            SelectionSpec(
+                series_ids=selected_series,
+                composition_policy="preserve_background",
+            )
+        )
+        settings = tiny_config.recipe_config
+        model = settings.model.model_copy(
+            update={
+                "context_background": "source_observed_aggregate",
+                "context_background_particles": 32,
+                "context_background_min_mass_coverage": 1.0,
+            }
+        )
+        settings = settings.model_copy(update={"model": model})
+        recipe = get_recipe(tiny_config.recipe)
+        plan = recipe.plan_split(
+            view,
+            settings,
+            SplitSpec(strategy="subject", validation_values=("D2",)),
+        )
+
+        first = recipe.compile(view, plan, settings)
+        second = recipe.compile(view, plan, settings)
+
+        assert [value.context_group_id for value in first.training.context_backgrounds] == [
+            "D1"
+        ]
+        assert [value.context_group_id for value in first.validation.context_backgrounds] == [
+            "D2"
+        ]
+        for data in (first.training, first.validation):
+            background = data.context_backgrounds[0]
+            assert background.source_checkpoint_id == data.axis.source
+            assert len(background.measure.support) == 32
+            assert background.measure.total_mass > 0
+            assert background.support_mass_fraction == 1.0
+            contract = data.metadata["context_background"]
+            assert contract["mode"] == "source_observed_aggregate"
+            assert contract["background_trajectories_modeled"] is False
+            assert contract["groups"][0]["trajectory_role"] == (
+                "observed_fixed_background"
+            )
+        assert [
+            value.content_hash() for value in first.training.context_backgrounds
+        ] == [value.content_hash() for value in second.training.context_backgrounds]
+        assert [
+            value.content_hash() for value in first.validation.context_backgrounds
+        ] == [value.content_hash() for value in second.validation.context_backgrounds]
+
+        trainer = TrainingEngine().fit(
+            recipe,
+            first,
+            tiny_config.model_copy(update={"recipe_config": settings}),
+            device="cpu",
+        )
+        assert trainer.bank.diagnostics()["fixed_context_background_groups"] == 1
+        assert (
+            trainer.validation_bank.diagnostics()["fixed_context_background_groups"]
+            == 1
+        )
+        assert trainer.bank.diagnostics()["bank_seen_fraction"] == 1.0
+        assert not trainer.metrics.empty
+    finally:
+        study.close()
+
+
+def test_within_block_holdout_conditions_composition_background(tiny_config) -> None:
+    study = credo.open_study(tiny_config)
+    try:
+        view = study.view(SelectionSpec(composition_policy="preserve_background"))
+        recipe = get_recipe(tiny_config.recipe)
+        plan = recipe.plan_split(
+            view,
+            tiny_config.recipe_config,
+            SplitSpec(
+                strategy="measure",
+                validation_values=("D1::GENE1-1",),
+            ),
+        )
+
+        problem = recipe.compile(view, plan, tiny_config.recipe_config)
+
+        assert problem.problem_metadata["training_composition_policy"] == ("condition_on_selection")
+        assert problem.problem_metadata["validation_composition_policy"] == (
+            "condition_on_selection"
+        )
+        assert all(
+            not block.background_series_ids
+            for data in (problem.training, problem.validation)
+            for block in data.count_blocks
         )
     finally:
         study.close()

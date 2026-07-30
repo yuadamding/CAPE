@@ -11,6 +11,7 @@ import torch
 
 from .recipes.compact_sde_v3.particles import (
     ClampedContextProvider,
+    FixedBackgroundContextProvider,
     NoContextProvider,
     SelfConsistentContextProvider,
     checkpoint_indices,
@@ -209,7 +210,14 @@ def counterfactual(
 
     run.model.eval()
     if run.model.context_enabled:
-        self_consistent = SelfConsistentContextProvider()
+        context_bank = (
+            run.bank if counterfactual_data is run.data else run.validation_bank
+        )
+        self_consistent = (
+            FixedBackgroundContextProvider(context_bank)
+            if context_bank.has_fixed_background
+            else SelfConsistentContextProvider()
+        )
     else:
         self_consistent = NoContextProvider()
     reference_rollout = rollout(
