@@ -396,23 +396,32 @@ class Trainer:
             else _validation_split(training_data, config, seed=plan.seed)
         )
         representation_scope = _representation_scope(training_data, split, config)
-        grid = axis_grid(
+        training_grid = axis_grid(
             training_data.axis,
             plan.steps_per_interval,
+            device=selected_device,
+            dtype=dtype,
+        )
+        evaluation_steps = config.recipe_config.evaluation.steps_per_interval
+        if evaluation_steps is None:
+            evaluation_steps = plan.steps_per_interval
+        evaluation_grid = axis_grid(
+            validation_data.axis,
+            evaluation_steps,
             device=selected_device,
             dtype=dtype,
         )
         bank = CatalogBank.empty(
             training_data,
             model,
-            len(grid) - 1,
+            len(training_grid) - 1,
             device=selected_device,
             dtype=dtype,
         )
         validation_bank = CatalogBank.empty(
             validation_data,
             model,
-            len(grid) - 1,
+            len(evaluation_grid) - 1,
             device=selected_device,
             dtype=dtype,
         )
@@ -447,13 +456,32 @@ class Trainer:
         return self.config.recipe_config
 
     @property
-    def grid(self) -> torch.Tensor:
+    def training_grid(self) -> torch.Tensor:
         return axis_grid(
             self.data.axis,
             self.training_plan.steps_per_interval,
             device=self.device,
             dtype=self.dtype,
         )
+
+    @property
+    def evaluation_steps_per_interval(self) -> int:
+        configured = self.settings.evaluation.steps_per_interval
+        return self.training_plan.steps_per_interval if configured is None else int(configured)
+
+    @property
+    def evaluation_grid(self) -> torch.Tensor:
+        return axis_grid(
+            self.validation_data.axis,
+            self.evaluation_steps_per_interval,
+            device=self.device,
+            dtype=self.dtype,
+        )
+
+    @property
+    def grid(self) -> torch.Tensor:
+        """Backward-compatible alias for the runtime evaluation grid."""
+        return self.evaluation_grid
 
     @property
     def objective_map(self) -> dict[str, ObjectiveDescriptor]:
@@ -719,8 +747,10 @@ class Trainer:
         seed: int,
         provider,
         data: TrajectoryData | None = None,
+        grid: torch.Tensor | None = None,
     ):
         selected_data = self.data if data is None else data
+        rollout_grid = self.training_grid if grid is None else grid
         state = sample_initial_particles(
             selected_data,
             measure_ids,
@@ -729,11 +759,11 @@ class Trainer:
             dtype=self.dtype,
             seed=seed,
         )
-        noise = sample_noise(state, self.grid, seed=seed + 1_000_003)
+        noise = sample_noise(state, rollout_grid, seed=seed + 1_000_003)
         return rollout(
             self.model,
             state,
-            self.grid,
+            rollout_grid,
             context_provider=provider,
             noise=noise,
         )
@@ -788,6 +818,7 @@ class Trainer:
                 particles=self.training_plan.particles,
                 seed=seed + batch_index,
                 provider=self._provider(stage),
+                grid=self.training_grid,
             )
             mass_weight = self._objective_weight(stage, "checkpoint_mass")
             count_weight = self._objective_weight(stage, "grouped_count_likelihood")
@@ -893,8 +924,17 @@ class Trainer:
         bank: CatalogBank,
         *,
         epoch: int,
+        grid: torch.Tensor | None = None,
     ) -> None:
         self.model.eval()
+        rollout_grid = self.training_grid if grid is None else grid
+        bank_steps = int(bank.tensors["context_log_mass"].shape[0])
+        rollout_steps = len(rollout_grid) - 1
+        if bank_steps != rollout_steps:
+            raise ValueError(
+                "CatalogBank integration-step count does not match its rollout grid: "
+                f"bank={bank_steps}, rollout={rollout_steps}."
+            )
         bank.reset_coverage()
         metadata = data.measure_meta.set_index("measure_id")
         grouped: dict[str, list[str]] = {}
@@ -912,7 +952,7 @@ class Trainer:
             )
             noise = sample_noise(
                 state,
-                self.grid,
+                rollout_grid,
                 seed=self.training_plan.seed + epoch * 1009 + group_index + 2_000_003,
             )
             provider = (
@@ -923,7 +963,7 @@ class Trainer:
             full_group_rollout = rollout(
                 self.model,
                 state,
-                self.grid,
+                rollout_grid,
                 context_provider=provider,
                 noise=noise,
             )
@@ -952,11 +992,13 @@ class Trainer:
         evaluation_seed = self.training_plan.seed + 9_100_001 if seed is None else int(seed)
         if evaluation_seed < 0:
             raise ValueError("Evaluation seed must be nonnegative.")
+        evaluation_grid = self.evaluation_grid
         if self.model.growth_enabled or self.model.context_enabled:
             self._refresh_bank_for(
                 self.validation_data,
                 self.validation_bank,
                 epoch=self.completed_epochs,
+                grid=evaluation_grid,
             )
         if self.model.context_enabled:
             provider = CatalogContextProvider(self.validation_bank)
@@ -976,6 +1018,7 @@ class Trainer:
                 seed=evaluation_seed + batch_index,
                 provider=provider,
                 data=self.validation_data,
+                grid=evaluation_grid,
             )
             checkpoint = checkpoint_geometry_mass_loss(
                 particle_rollout,
@@ -1364,23 +1407,32 @@ class Trainer:
         if payload.get("objective_descriptors") != [value.to_dict() for value in objectives]:
             raise ValueError("Checkpoint objectives disagree with the run config.")
         model.load_state_dict(payload["model_state"])
-        grid = axis_grid(
+        training_grid = axis_grid(
             training_data.axis,
             plan.steps_per_interval,
+            device=selected_device,
+            dtype=torch.float32,
+        )
+        evaluation_steps = settings.evaluation.steps_per_interval
+        if evaluation_steps is None:
+            evaluation_steps = plan.steps_per_interval
+        evaluation_grid = axis_grid(
+            validation_data.axis,
+            evaluation_steps,
             device=selected_device,
             dtype=torch.float32,
         )
         bank = CatalogBank.empty(
             training_data,
             model,
-            len(grid) - 1,
+            len(training_grid) - 1,
             device=selected_device,
             dtype=torch.float32,
         )
         validation_bank = CatalogBank.empty(
             validation_data,
             model,
-            len(grid) - 1,
+            len(evaluation_grid) - 1,
             device=selected_device,
             dtype=torch.float32,
         )

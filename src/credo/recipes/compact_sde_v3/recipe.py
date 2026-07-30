@@ -74,6 +74,7 @@ class CompactTrainingConfig(_StrictConfig):
 class CompactEvaluationConfig(_StrictConfig):
     particles: int = Field(default=256, ge=2)
     measures_per_batch: int = Field(default=256, ge=1)
+    steps_per_interval: int | None = Field(default=None, ge=1)
     sinkhorn_epsilon: float = Field(default=0.1, gt=0)
     uot_reach: float = Field(default=1.0, gt=0)
 

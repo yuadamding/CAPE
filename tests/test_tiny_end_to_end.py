@@ -98,6 +98,10 @@ def test_tiny_run_writes_generic_bundle_artifacts(trained_run) -> None:
 
 
 def test_checkpoint_roundtrip_reproduces_predictions(trained_run, tiny_data, tmp_path) -> None:
+    assert trained_run.settings.evaluation.steps_per_interval is None
+    assert trained_run.evaluation_steps_per_interval == trained_run.training_plan.steps_per_interval
+    assert torch.equal(trained_run.grid, trained_run.training_grid)
+
     loaded = Trainer.load(
         trained_run.config.output / "state/checkpoint.pt",
         tiny_data,
@@ -113,10 +117,28 @@ def test_checkpoint_roundtrip_reproduces_predictions(trained_run, tiny_data, tmp
         tiny_data,
         trained_run.config,
         device="cpu",
-        evaluation_overrides={"particles": 10, "measures_per_batch": 6},
+        evaluation_overrides={
+            "particles": 10,
+            "measures_per_batch": 6,
+            "steps_per_interval": 2,
+        },
     )
     assert higher_resolution.settings.evaluation.particles == 10
     assert higher_resolution.settings.evaluation.measures_per_batch == 6
+    assert higher_resolution.settings.evaluation.steps_per_interval == 2
+    expected_training_steps = (
+        len(tiny_data.axis.labels) - 1
+    ) * trained_run.training_plan.steps_per_interval
+    expected_evaluation_steps = (len(tiny_data.axis.labels) - 1) * 2
+    assert len(higher_resolution.training_grid) - 1 == expected_training_steps
+    assert len(higher_resolution.evaluation_grid) - 1 == expected_evaluation_steps
+    assert len(higher_resolution.grid) - 1 == expected_evaluation_steps
+    assert (
+        higher_resolution.validation_bank.tensors["context_log_mass"].shape[0]
+        == expected_evaluation_steps
+    )
+    runtime_metrics = higher_resolution.evaluate_runtime(particles=4, seed=29)
+    assert runtime_metrics["integration_steps"].eq(expected_evaluation_steps).all()
 
     settings = trained_run.settings
     wrong_model = settings.model.model_copy(update={"hidden_dim": settings.model.hidden_dim + 8})
@@ -286,6 +308,83 @@ def test_growth_bound_is_configured_in_the_model(tiny_config, tiny_data) -> None
     config = tiny_config.model_copy(update={"recipe_config": settings})
     trainer = _fit(config, tiny_data)
     assert trainer.model.growth_max == 7.5
+
+
+def test_training_and_evaluation_use_separate_integration_grids(
+    tiny_config,
+    tiny_data,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    settings = tiny_config.recipe_config
+    epochs = settings.training.epochs.model_copy(update={"state": 1, "mass": 0, "context": 0})
+    training = settings.training.model_copy(
+        update={
+            "epochs": epochs,
+            "particles": 4,
+            "steps_per_interval": 1,
+            "measures_per_batch": 12,
+            "checkpoint_selection": "last",
+        }
+    )
+    evaluation = settings.evaluation.model_copy(
+        update={
+            "particles": 4,
+            "measures_per_batch": 12,
+            "steps_per_interval": 2,
+        }
+    )
+    loss = settings.loss.model_copy(update={"mass": 0.0, "count": 0.0})
+    settings = settings.model_copy(
+        update={"training": training, "evaluation": evaluation, "loss": loss}
+    )
+    config = tiny_config.model_copy(
+        update={"recipe_config": settings, "output": tmp_path / "separate-grids"}
+    )
+
+    rollout_steps: dict[str, list[int]] = {"training": [], "evaluation": []}
+    original_rollout_ids = Trainer._rollout_ids
+
+    def recording_rollout_ids(
+        self,
+        measure_ids,
+        *,
+        particles,
+        seed,
+        provider,
+        data=None,
+        grid=None,
+    ):
+        selected_grid = self.training_grid if grid is None else grid
+        kind = "training" if data is None else "evaluation"
+        rollout_steps[kind].append(len(selected_grid) - 1)
+        return original_rollout_ids(
+            self,
+            measure_ids,
+            particles=particles,
+            seed=seed,
+            provider=provider,
+            data=data,
+            grid=grid,
+        )
+
+    monkeypatch.setattr(Trainer, "_rollout_ids", recording_rollout_ids)
+    trainer = _fit(config, tiny_data)
+
+    interval_count = len(tiny_data.axis.labels) - 1
+    assert set(rollout_steps["training"]) == {interval_count}
+    assert set(rollout_steps["evaluation"]) == {2 * interval_count}
+    assert len(trainer.training_grid) - 1 == interval_count
+    assert len(trainer.evaluation_grid) - 1 == 2 * interval_count
+    assert trainer.bank.tensors["context_log_mass"].shape[0] == interval_count
+    assert trainer.validation_bank.tensors["context_log_mass"].shape[0] == 2 * interval_count
+    with pytest.raises(ValueError, match="CatalogBank integration-step count"):
+        trainer._refresh_bank_for(
+            trainer.data,
+            trainer.bank,
+            epoch=trainer.completed_epochs,
+            grid=trainer.evaluation_grid,
+        )
 
 
 def test_checkpoint_holdout_masks_training_and_evaluation_times(tiny_config, tiny_data) -> None:
