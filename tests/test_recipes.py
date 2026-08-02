@@ -72,6 +72,9 @@ def test_compact_recipe_is_registered_and_builds_the_canonical_model(
         default_config.training.measures_per_batch
     )
     assert default_plan.stages[0].optimizer.learning_rate == (default_config.training.learning_rate)
+    assert default_plan.stages[2].optimizer.learning_rate == (
+        default_config.training.learning_rate
+    )
     with pytest.raises(ValueError, match="greater than or equal to 0"):
         type(default_config.training).model_validate({"progress_interval": -1})
     with pytest.raises(ValueError, match="requires model.context='catalog_bank'"):
@@ -81,6 +84,52 @@ def test_compact_recipe_is_registered_and_builds_the_canonical_model(
                 "context_background": "source_observed_aggregate",
             }
         )
+
+
+def test_compact_context_controls_are_explicit_and_backward_compatible(
+    tiny_config, tiny_data
+) -> None:
+    recipe = get_recipe("credo.compact_sde_v3@3.0")
+    settings = tiny_config.recipe_config
+    model_config = settings.model.model_copy(update={"n_programs": 16, "payoff_rank": 8})
+    training = settings.training.model_copy(
+        update={
+            "context_learning_rate": 7.5e-5,
+            "catalog_refresh_particles": 64,
+            "catalog_bank_momentum": 0.75,
+        }
+    )
+    configured = settings.model_copy(update={"model": model_config, "training": training})
+
+    model = recipe.build_model(tiny_data, configured)
+    plan = recipe.training_plan(tiny_data, configured)
+
+    assert model.payoff_rank == 8
+    assert plan.stages[0].optimizer.learning_rate == training.learning_rate
+    assert plan.stages[1].optimizer.learning_rate == training.learning_rate
+    assert plan.stages[2].optimizer.learning_rate == 7.5e-5
+    assert configured.training.catalog_refresh_particles == 64
+    assert configured.training.catalog_bank_momentum == 0.75
+
+
+def test_compact_payoff_rank_must_fit_program_dimension(tiny_config) -> None:
+    model_type = type(tiny_config.recipe_config.model)
+    with pytest.raises(ValueError, match="payoff_rank cannot exceed"):
+        model_type.model_validate({"n_programs": 4, "payoff_rank": 8})
+
+
+def test_compact_build_rejects_unvalidated_payoff_rank_update(
+    tiny_config, tiny_data
+) -> None:
+    recipe = get_recipe("credo.compact_sde_v3@3.0")
+    settings = tiny_config.recipe_config
+    invalid_model = settings.model.model_copy(
+        update={"n_programs": 2, "payoff_rank": 8}
+    )
+    invalid = settings.model_copy(update={"model": invalid_model})
+
+    with pytest.raises(ValueError, match="payoff_rank cannot exceed"):
+        recipe.build_model(tiny_data, invalid)
 
 
 def test_compact_recipe_predicts_through_the_typed_query(trained_run) -> None:

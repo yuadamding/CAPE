@@ -50,6 +50,21 @@ class _TimeEmbedding(nn.Module):
         return torch.stack(values)
 
 
+def resolve_payoff_rank(n_programs: int, payoff_rank: int | None) -> int:
+    """Resolve the legacy default while rejecting an invalid explicit rank."""
+    programs = int(n_programs)
+    if programs < 1:
+        raise ValueError("n_programs must be positive.")
+    if payoff_rank is None:
+        return min(4, programs)
+    rank = int(payoff_rank)
+    if rank < 1:
+        raise ValueError("payoff_rank must be positive.")
+    if rank > programs:
+        raise ValueError("payoff_rank cannot exceed n_programs.")
+    return rank
+
+
 class CREDOModel(nn.Module):
     """Soft-reference drift, diagonal diffusion, growth, and ecological payoff.
 
@@ -70,7 +85,7 @@ class CREDOModel(nn.Module):
         context_mode: Literal["none", "catalog_bank"] = "catalog_bank",
         sigma_min: float = 1e-3,
         growth_max: float = 3.0,
-        payoff_rank: int = 4,
+        payoff_rank: int | None = None,
     ) -> None:
         super().__init__()
         ids = tuple(str(value) for value in embedding_ids)
@@ -81,8 +96,9 @@ class CREDOModel(nn.Module):
             raise ValueError("control_embedding_ids must be a nonempty subset of embedding_ids.")
         if context_mode not in {"none", "catalog_bank"}:
             raise ValueError("context_mode must be 'none' or 'catalog_bank'.")
-        if min(latent_dim, embedding_dim, n_programs, hidden_dim, payoff_rank) < 1:
-            raise ValueError("Model dimensions and payoff_rank must be positive.")
+        resolved_payoff_rank = resolve_payoff_rank(n_programs, payoff_rank)
+        if min(latent_dim, embedding_dim, n_programs, hidden_dim) < 1:
+            raise ValueError("Model dimensions must be positive.")
         if sigma_min <= 0 or growth_max <= 0:
             raise ValueError("sigma_min and growth_max must be positive.")
         self.embedding_ids = ids
@@ -99,7 +115,7 @@ class CREDOModel(nn.Module):
         self.context_mode = context_mode
         self.sigma_min = float(sigma_min)
         self.growth_max = float(growth_max)
-        self.payoff_rank = min(int(payoff_rank), self.n_programs)
+        self.payoff_rank = resolved_payoff_rank
 
         self.reference_embedding = nn.Parameter(torch.zeros(self.embedding_dim))
         residual = torch.empty(len(self.noncontrol_embedding_ids), self.embedding_dim)

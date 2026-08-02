@@ -48,6 +48,7 @@ class CompactModelConfig(_StrictConfig):
     context_background_particles: int = Field(default=2048, ge=2)
     context_background_min_mass_coverage: float = Field(default=0.99, gt=0, le=1)
     growth_max: float = Field(default=3.0, gt=0)
+    payoff_rank: int | None = Field(default=None, ge=1)
 
     @model_validator(mode="after")
     def _validate_context_background(self) -> CompactModelConfig:
@@ -55,6 +56,8 @@ class CompactModelConfig(_StrictConfig):
             raise ValueError(
                 "A source-observed context background requires model.context='catalog_bank'."
             )
+        if self.payoff_rank is not None and self.payoff_rank > self.n_programs:
+            raise ValueError("model.payoff_rank cannot exceed model.n_programs.")
         return self
 
 
@@ -77,6 +80,9 @@ class CompactTrainingConfig(_StrictConfig):
     measures_per_batch: int = Field(default=256, ge=1)
     batching: Literal["random", "target_round_robin", "target_blocked"] = "random"
     learning_rate: float = Field(default=1e-3, gt=0)
+    context_learning_rate: float | None = Field(default=None, gt=0)
+    catalog_refresh_particles: int | None = Field(default=None, ge=2)
+    catalog_bank_momentum: float = Field(default=0.9, ge=0, lt=1)
     patience: int = Field(default=10, ge=1)
     checkpoint_selection: Literal["validation_best", "last"] = "validation_best"
     seed: int = Field(default=0, ge=0)
@@ -371,6 +377,7 @@ class CompactSDEV3Recipe:
             hidden_dim=int(model.get("hidden_dim", 128)),
             context_mode=str(model.get("context", "catalog_bank")),
             growth_max=float(model.get("growth_max", 3.0)),
+            payoff_rank=model.get("payoff_rank"),
         )
 
     def build_objectives(
@@ -437,6 +444,16 @@ class CompactSDEV3Recipe:
             learning_rate=float(training.get("learning_rate", 1e-3)),
             weight_decay=0.0,
         )
+        configured_context_learning_rate = training.get("context_learning_rate")
+        context_optimizer = OptimizerSpec(
+            kind="adam",
+            learning_rate=float(
+                optimizer.learning_rate
+                if configured_context_learning_rate is None
+                else configured_context_learning_rate
+            ),
+            weight_decay=0.0,
+        )
         batching = BatchingSpec(
             "measure_batches",
             measures_per_batch=batch_size,
@@ -495,7 +512,7 @@ class CompactSDEV3Recipe:
                     int(epochs.get("context", 20)),
                     ("program_encoder", "ecological_payoff"),
                     "fp32",
-                    optimizer,
+                    context_optimizer,
                     (
                         "checkpoint_geometry",
                         "checkpoint_mass",

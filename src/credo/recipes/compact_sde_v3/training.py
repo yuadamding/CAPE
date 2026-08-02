@@ -30,7 +30,7 @@ from ...data.splits import SplitPlan, plan_compact_trajectory_split
 from ...io import RunConfig, resolved_config, validate_run_data
 from ...problems import FiniteMeasureDynamicsProblem
 from ...runtime import ObjectiveDescriptor
-from .model import CREDOModel
+from .model import CREDOModel, resolve_payoff_rank
 from .objective import (
     CountBlock,
     catalog_count_block_loss,
@@ -69,6 +69,7 @@ class CatalogBank:
     background_group_index: torch.Tensor
     background_seen: torch.Tensor
     momentum: float = 0.9
+    refresh_particles: int = 0
     last_full_refresh_epoch: int = -1
     _is_complete: bool = False
 
@@ -81,7 +82,10 @@ class CatalogBank:
         *,
         device: torch.device,
         dtype: torch.dtype,
+        momentum: float = 0.9,
     ) -> CatalogBank:
+        if not 0 <= float(momentum) < 1:
+            raise ValueError("CatalogBank momentum must satisfy 0 <= momentum < 1.")
         measure_count = len(data.measure_ids)
         time_count = len(data.axis.labels)
         group_values = data.measure_meta.set_index("measure_id").loc[
@@ -161,6 +165,7 @@ class CatalogBank:
             background_programs=background_programs,
             background_group_index=background_group_index,
             background_seen=background_seen,
+            momentum=float(momentum),
         )
 
     def reset_coverage(self) -> None:
@@ -391,6 +396,8 @@ class CatalogBank:
             "bank_max_age": int(age_values.max().item()),
             "bank_mean_age": float(age_values.float().mean().item()),
             "last_full_refresh_epoch": int(self.last_full_refresh_epoch),
+            "catalog_refresh_particles": int(self.refresh_particles),
+            "catalog_bank_momentum": float(self.momentum),
             "fixed_context_background_groups": len(self.background_support),
             "fixed_context_background_atoms": sum(
                 len(value) for value in self.background_support
@@ -547,12 +554,14 @@ class Trainer:
             device=selected_device,
             dtype=dtype,
         )
+        bank_momentum = float(config.recipe_config.training.catalog_bank_momentum)
         bank = CatalogBank.empty(
             training_data,
             model,
             len(training_grid) - 1,
             device=selected_device,
             dtype=dtype,
+            momentum=bank_momentum,
         )
         validation_bank = CatalogBank.empty(
             validation_data,
@@ -560,6 +569,7 @@ class Trainer:
             len(evaluation_grid) - 1,
             device=selected_device,
             dtype=dtype,
+            momentum=bank_momentum,
         )
         trainer = cls(
             data=training_data,
@@ -658,6 +668,10 @@ class Trainer:
             "bank_max_age": 0,
             "bank_mean_age": 0.0,
             "last_full_refresh_epoch": -1,
+            "catalog_refresh_particles": 0,
+            "catalog_bank_momentum": float(
+                self.settings.training.catalog_bank_momentum
+            ),
         }
 
     def _emit_training_progress(
@@ -742,6 +756,10 @@ class Trainer:
                 "checkpoint_metric": stage.checkpoint_metric,
                 "checkpoint_selection": self.settings.training.checkpoint_selection,
                 "context_policy": stage.context_policy,
+                "catalog_refresh_particles": self._catalog_refresh_particle_count(),
+                "catalog_bank_momentum": float(
+                    self.settings.training.catalog_bank_momentum
+                ),
             }
             self.execution_trace.append(trace)
             completed_before_stage = self.completed_epochs
@@ -1132,6 +1150,12 @@ class Trainer:
         """Initialize every entry using complete context groups before optimization."""
         self._refresh_bank_for(self.data, self.bank, epoch=epoch)
 
+    def _catalog_refresh_particle_count(self) -> int:
+        configured = self.settings.training.catalog_refresh_particles
+        if configured is None:
+            return max(2, min(16, self.training_plan.particles))
+        return int(configured)
+
     @torch.no_grad()
     def _refresh_bank_for(
         self,
@@ -1156,7 +1180,8 @@ class Trainer:
         grouped: dict[str, list[str]] = {}
         for measure_id in data.measure_ids:
             grouped.setdefault(metadata.loc[measure_id, "context_group_id"], []).append(measure_id)
-        particles = max(2, min(16, self.training_plan.particles))
+        particles = self._catalog_refresh_particle_count()
+        bank.refresh_particles = particles
         for group_index, group_ids in enumerate(grouped.values()):
             state = sample_initial_particles(
                 data,
@@ -1638,12 +1663,14 @@ class Trainer:
             device=selected_device,
             dtype=torch.float32,
         )
+        bank_momentum = float(settings.training.catalog_bank_momentum)
         bank = CatalogBank.empty(
             training_data,
             model,
             len(training_grid) - 1,
             device=selected_device,
             dtype=torch.float32,
+            momentum=bank_momentum,
         )
         validation_bank = CatalogBank.empty(
             validation_data,
@@ -1651,6 +1678,7 @@ class Trainer:
             len(evaluation_grid) - 1,
             device=selected_device,
             dtype=torch.float32,
+            momentum=bank_momentum,
         )
         trainer = cls(
             data=training_data,
@@ -1892,7 +1920,10 @@ def _model_matches(model: CREDOModel, data: TrajectoryData, config: RunConfig) -
         "context_mode": settings.model.context,
         "sigma_min": 1e-3,
         "growth_max": settings.model.growth_max,
-        "payoff_rank": min(4, settings.model.n_programs),
+        "payoff_rank": resolve_payoff_rank(
+            settings.model.n_programs,
+            settings.model.payoff_rank,
+        ),
     }
     return model.architecture() == expected
 

@@ -813,6 +813,27 @@ def test_catalog_bank_is_complete_before_optimization(tiny_data, trained_run) ->
     assert trained_run.bank.diagnostics()["bank_seen_fraction"] == 1.0
 
 
+def test_catalog_bank_accepts_bounded_configured_momentum(tiny_data, trained_run) -> None:
+    bank = CatalogBank.empty(
+        tiny_data,
+        trained_run.model,
+        len(trained_run.grid) - 1,
+        device=torch.device("cpu"),
+        dtype=torch.float32,
+        momentum=0.75,
+    )
+    assert bank.momentum == 0.75
+    with pytest.raises(ValueError, match="0 <= momentum < 1"):
+        CatalogBank.empty(
+            tiny_data,
+            trained_run.model,
+            len(trained_run.grid) - 1,
+            device=torch.device("cpu"),
+            dtype=torch.float32,
+            momentum=1.0,
+        )
+
+
 def test_catalog_context_includes_fixed_background_without_modeling_its_trajectory(
     tiny_data,
 ) -> None:
