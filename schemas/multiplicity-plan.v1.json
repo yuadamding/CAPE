@@ -1,0 +1,50 @@
+{
+  "$id": "https://credo.local/schemas/multiplicity-plan.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "families": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Families",
+      "type": "array"
+    },
+    "plan_id": {
+      "title": "Plan Id",
+      "type": "string"
+    },
+    "procedure": {
+      "default": "BH",
+      "enum": [
+        "BH",
+        "hierarchical_BH"
+      ],
+      "title": "Procedure",
+      "type": "string"
+    },
+    "q": {
+      "default": 0.05,
+      "exclusiveMaximum": 1,
+      "exclusiveMinimum": 0,
+      "title": "Q",
+      "type": "number"
+    },
+    "reporting_universe": {
+      "title": "Reporting Universe",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "plan_id",
+    "families",
+    "reporting_universe"
+  ],
+  "title": "MultiplicityPlan",
+  "type": "object"
+}

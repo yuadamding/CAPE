@@ -1,0 +1,73 @@
+{
+  "$id": "https://credo.local/schemas/count-store.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "backend": {
+      "const": "csr_hdf5",
+      "default": "csr_hdf5",
+      "title": "Backend",
+      "type": "string"
+    },
+    "content_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Content Sha256",
+      "type": "string"
+    },
+    "feature_index_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Feature Index Hash",
+      "type": "string"
+    },
+    "features": {
+      "exclusiveMinimum": 0,
+      "title": "Features",
+      "type": "integer"
+    },
+    "nnz": {
+      "minimum": 0,
+      "title": "Nnz",
+      "type": "integer"
+    },
+    "relative_uri": {
+      "title": "Relative Uri",
+      "type": "string"
+    },
+    "row_ids_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Row Ids Hash",
+      "type": "string"
+    },
+    "rows": {
+      "exclusiveMinimum": 0,
+      "title": "Rows",
+      "type": "integer"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "store_id": {
+      "title": "Store Id",
+      "type": "string"
+    },
+    "value_dtype": {
+      "title": "Value Dtype",
+      "type": "string"
+    }
+  },
+  "required": [
+    "store_id",
+    "rows",
+    "features",
+    "nnz",
+    "value_dtype",
+    "row_ids_hash",
+    "feature_index_hash",
+    "content_sha256",
+    "relative_uri"
+  ],
+  "title": "CountStoreManifest",
+  "type": "object"
+}

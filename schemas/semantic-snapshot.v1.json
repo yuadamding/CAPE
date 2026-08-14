@@ -1,0 +1,234 @@
+{
+  "$defs": {
+    "EvidenceRole": {
+      "enum": [
+        "development",
+        "sealed",
+        "external_confirmation"
+      ],
+      "title": "EvidenceRole",
+      "type": "string"
+    },
+    "ExposureRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "endpoint_seen": {
+          "title": "Endpoint Seen",
+          "type": "boolean"
+        },
+        "exposure_role": {
+          "$ref": "#/$defs/EvidenceRole",
+          "default": "development"
+        },
+        "first_exposure_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "First Exposure Date"
+        },
+        "source_artifact_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Artifact Hash"
+        },
+        "unit_id": {
+          "title": "Unit Id",
+          "type": "string"
+        },
+        "unit_type": {
+          "title": "Unit Type",
+          "type": "string"
+        },
+        "used_for_architecture": {
+          "default": false,
+          "title": "Used For Architecture",
+          "type": "boolean"
+        },
+        "used_for_biological_story": {
+          "default": false,
+          "title": "Used For Biological Story",
+          "type": "boolean"
+        },
+        "used_for_hyperparameters": {
+          "default": false,
+          "title": "Used For Hyperparameters",
+          "type": "boolean"
+        },
+        "used_for_thresholds": {
+          "default": false,
+          "title": "Used For Thresholds",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "unit_type",
+        "unit_id",
+        "endpoint_seen"
+      ],
+      "title": "ExposureRecord",
+      "type": "object"
+    },
+    "ExposureRegistry": {
+      "additionalProperties": false,
+      "properties": {
+        "records": {
+          "items": {
+            "$ref": "#/$defs/ExposureRecord"
+          },
+          "title": "Records",
+          "type": "array"
+        },
+        "schema_version": {
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "records"
+      ],
+      "title": "ExposureRegistry",
+      "type": "object"
+    },
+    "SeriesRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "duration": {
+          "exclusiveMinimum": 0,
+          "title": "Duration",
+          "type": "number"
+        },
+        "is_control": {
+          "default": false,
+          "title": "Is Control",
+          "type": "boolean"
+        },
+        "pool_index": {
+          "minimum": 0,
+          "title": "Pool Index",
+          "type": "integer"
+        },
+        "series_id": {
+          "title": "Series Id",
+          "type": "string"
+        },
+        "source_count": {
+          "minimum": 0,
+          "title": "Source Count",
+          "type": "integer"
+        },
+        "source_rows": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Source Rows",
+          "type": "array"
+        },
+        "target_index": {
+          "minimum": 0,
+          "title": "Target Index",
+          "type": "integer"
+        },
+        "terminal_count": {
+          "minimum": 0,
+          "title": "Terminal Count",
+          "type": "integer"
+        },
+        "terminal_rows": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Terminal Rows",
+          "type": "array"
+        }
+      },
+      "required": [
+        "series_id",
+        "target_index",
+        "pool_index",
+        "source_rows",
+        "terminal_rows",
+        "source_count",
+        "terminal_count",
+        "duration"
+      ],
+      "title": "SeriesRecord",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/semantic-snapshot.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "exposure_registry": {
+      "$ref": "#/$defs/ExposureRegistry"
+    },
+    "feature_index_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Feature Index Hash",
+      "type": "string"
+    },
+    "observed_edges": {
+      "items": {
+        "maxItems": 2,
+        "minItems": 2,
+        "prefixItems": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "type": "array"
+      },
+      "title": "Observed Edges",
+      "type": "array"
+    },
+    "row_universe_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Row Universe Hash",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "series": {
+      "items": {
+        "$ref": "#/$defs/SeriesRecord"
+      },
+      "title": "Series",
+      "type": "array"
+    },
+    "study_id": {
+      "title": "Study Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "study_id",
+    "series",
+    "observed_edges",
+    "feature_index_hash",
+    "row_universe_hash",
+    "exposure_registry"
+  ],
+  "title": "SemanticStudySnapshot",
+  "type": "object"
+}

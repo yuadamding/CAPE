@@ -1,0 +1,8 @@
+{
+  "distribution": "credo",
+  "source_archive": "vendor/credo-6f4f57c.tar",
+  "source_archive_sha256": "2020b0f2549bb98b2b0fbb9384783d39be3ce11aeef9ae2bfecf232ae07fc684",
+  "source_commit": "6f4f57c114606476cb6e93c6d52dc34628173a4d",
+  "supported_snapshot_schema": 1,
+  "version": "3.0.0a5"
+}

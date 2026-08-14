@@ -1,0 +1,50 @@
+{
+  "$id": "https://credo.local/schemas/split-contract.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "grouping_unit": {
+      "title": "Grouping Unit",
+      "type": "string"
+    },
+    "inner_validation_units": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Inner Validation Units",
+      "type": "array"
+    },
+    "outer_evaluation_units": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Outer Evaluation Units",
+      "type": "array"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "split_id": {
+      "title": "Split Id",
+      "type": "string"
+    },
+    "training_units": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Training Units",
+      "type": "array"
+    }
+  },
+  "required": [
+    "split_id",
+    "training_units",
+    "outer_evaluation_units",
+    "grouping_unit"
+  ],
+  "title": "SplitContract",
+  "type": "object"
+}

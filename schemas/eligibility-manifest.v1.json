@@ -1,0 +1,49 @@
+{
+  "$id": "https://credo.local/schemas/eligibility-manifest.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "abundance_eligible_units": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Abundance Eligible Units",
+      "type": "array"
+    },
+    "endpoint_existence_used_for_abundance": {
+      "const": false,
+      "default": false,
+      "title": "Endpoint Existence Used For Abundance",
+      "type": "boolean"
+    },
+    "manifest_id": {
+      "title": "Manifest Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "source_information_set_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Information Set Hash",
+      "type": "string"
+    },
+    "state_evaluable_units": {
+      "items": {
+        "type": "string"
+      },
+      "title": "State Evaluable Units",
+      "type": "array"
+    }
+  },
+  "required": [
+    "manifest_id",
+    "abundance_eligible_units",
+    "state_evaluable_units",
+    "source_information_set_hash"
+  ],
+  "title": "EligibilityManifest",
+  "type": "object"
+}

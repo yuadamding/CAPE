@@ -1,0 +1,6 @@
+CREDO count-SDE v4
+Copyright (C) 2026 Yu Adam Ding
+
+This package is an independent AGPL-3.0-only successor to CREDO. Algorithms
+adapted from CREDO retain their provenance in source docstrings and ADRs. The
+frozen CREDO compatibility artifact is used without modifying its source tree.

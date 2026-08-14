@@ -1,0 +1,68 @@
+name: Release archive
+
+on:
+  push:
+    tags: ["v4.*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: yuadamding/CREDO
+          ref: 6f4f57c114606476cb6e93c6d52dc34628173a4d
+          path: CREDO
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e '.[test]'
+      - name: Full CPU release suite
+        env:
+          CREDO_V4_WORKSPACE_ROOT: ${{ github.workspace }}
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: pytest -q -p no:cacheprovider --cov=credo_count_sde_v4 --cov-fail-under=85
+      - name: Sealed synthetic receipt
+        env:
+          CREDO_V4_WORKSPACE_ROOT: ${{ github.workspace }}
+        run: |
+          credo-v4 synthetic --output /tmp/release-v4 --updates 8
+          credo-v4 run-all /tmp/release-v4/config.yaml --device cpu
+          credo-v4 verify /tmp/release-v4/work/sealed --level full > sealed-run-receipt.json
+      - name: Reproducible double build
+        env:
+          SOURCE_DATE_EPOCH: "1786507200"
+        run: |
+          python -m build --outdir raw-a
+          python -m build --outdir raw-b
+          mkdir dist-a dist-b
+          cp raw-a/*.whl dist-a/
+          cp raw-b/*.whl dist-b/
+          python scripts/normalize_sdist.py raw-a/*.tar.gz dist-a/credo_count_sde_v4-${GITHUB_REF_NAME#v}.tar.gz
+          python scripts/normalize_sdist.py raw-b/*.tar.gz dist-b/credo_count_sde_v4-${GITHUB_REF_NAME#v}.tar.gz
+          cmp dist-a/* dist-b/*
+      - run: python scripts/audit_package.py dist-a/*.whl
+      - name: Stable-only discovery and legacy gates
+        run: |
+          if [ "${GITHUB_REF_NAME}" = "v4.0.0" ]; then
+            test -f receipts/legacy-replay.json
+            python -c 'from importlib.metadata import entry_points; assert any(ep.name == "credo.count_sde_v4__4.0" for ep in entry_points(group="credo.recipes"))'
+          fi
+      - run: sha256sum dist-a/* schemas/* locks/* vendor/SHA256SUMS > RELEASE_MANIFEST.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: credo-count-sde-v4-release
+          path: |
+            dist-a/
+            schemas/
+            locks/
+            vendor/SHA256SUMS
+            RELEASE_MANIFEST.sha256
+            sealed-run-receipt.json
+            LICENSE
+            NOTICE
+            CITATION.cff

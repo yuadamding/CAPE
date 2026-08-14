@@ -1,0 +1,73 @@
+{
+  "$defs": {
+    "PoolContributor": {
+      "additionalProperties": false,
+      "properties": {
+        "contributor_role": {
+          "default": "modeled",
+          "enum": [
+            "modeled",
+            "background"
+          ],
+          "title": "Contributor Role",
+          "type": "string"
+        },
+        "pool_id": {
+          "title": "Pool Id",
+          "type": "string"
+        },
+        "series_id": {
+          "title": "Series Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pool_id",
+        "series_id"
+      ],
+      "title": "PoolContributor",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/pool-contract.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "complete_contributor_policy": {
+      "const": true,
+      "default": true,
+      "title": "Complete Contributor Policy",
+      "type": "boolean"
+    },
+    "contributors": {
+      "items": {
+        "$ref": "#/$defs/PoolContributor"
+      },
+      "title": "Contributors",
+      "type": "array"
+    },
+    "physical_pool_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Physical Pool Ids",
+      "type": "array"
+    },
+    "pool_contract_id": {
+      "title": "Pool Contract Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "pool_contract_id",
+    "physical_pool_ids",
+    "contributors"
+  ],
+  "title": "PoolContract",
+  "type": "object"
+}

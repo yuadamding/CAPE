@@ -1,0 +1,56 @@
+{
+  "$id": "https://credo.local/schemas/implementation-capabilities.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "canonical_loader": {
+      "const": "credo-v4 open-run",
+      "default": "credo-v4 open-run",
+      "title": "Canonical Loader",
+      "type": "string"
+    },
+    "count_context": {
+      "const": true,
+      "default": true,
+      "title": "Count Context",
+      "type": "boolean"
+    },
+    "count_measure": {
+      "const": true,
+      "default": true,
+      "title": "Count Measure",
+      "type": "boolean"
+    },
+    "count_state": {
+      "const": true,
+      "default": true,
+      "title": "Count State",
+      "type": "boolean"
+    },
+    "exact_complete_block_dm": {
+      "const": true,
+      "default": true,
+      "title": "Exact Complete Block Dm",
+      "type": "boolean"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "sparse_count_store": {
+      "const": true,
+      "default": true,
+      "title": "Sparse Count Store",
+      "type": "boolean"
+    },
+    "typed_resume": {
+      "const": true,
+      "default": true,
+      "title": "Typed Resume",
+      "type": "boolean"
+    }
+  },
+  "title": "ImplementationCapabilities",
+  "type": "object"
+}

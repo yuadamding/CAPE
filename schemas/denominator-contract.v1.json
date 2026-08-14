@@ -1,0 +1,78 @@
+{
+  "$defs": {
+    "DenominatorBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {
+          "title": "Block Id",
+          "type": "string"
+        },
+        "category_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Category Ids",
+          "type": "array"
+        },
+        "explicit_zero_categories": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Explicit Zero Categories",
+          "type": "array"
+        }
+      },
+      "required": [
+        "block_id",
+        "category_ids"
+      ],
+      "title": "DenominatorBlock",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/denominator-contract.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "blocks": {
+      "items": {
+        "$ref": "#/$defs/DenominatorBlock"
+      },
+      "title": "Blocks",
+      "type": "array"
+    },
+    "complete_categories": {
+      "const": true,
+      "default": true,
+      "title": "Complete Categories",
+      "type": "boolean"
+    },
+    "denominator_id": {
+      "title": "Denominator Id",
+      "type": "string"
+    },
+    "relative_within_group": {
+      "const": true,
+      "default": true,
+      "title": "Relative Within Group",
+      "type": "boolean"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "source_smoothing": {
+      "default": 0.5,
+      "title": "Source Smoothing",
+      "type": "number"
+    }
+  },
+  "required": [
+    "denominator_id",
+    "blocks"
+  ],
+  "title": "DenominatorContract",
+  "type": "object"
+}

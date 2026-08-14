@@ -1,0 +1,59 @@
+{
+  "$defs": {
+    "FeatureKey": {
+      "additionalProperties": false,
+      "properties": {
+        "feature_id": {
+          "minLength": 1,
+          "title": "Feature Id",
+          "type": "string"
+        },
+        "namespace": {
+          "minLength": 1,
+          "title": "Namespace",
+          "type": "string"
+        },
+        "namespace_version": {
+          "minLength": 1,
+          "title": "Namespace Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "namespace",
+        "feature_id",
+        "namespace_version"
+      ],
+      "title": "FeatureKey",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/feature-index.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "features": {
+      "items": {
+        "$ref": "#/$defs/FeatureKey"
+      },
+      "title": "Features",
+      "type": "array"
+    },
+    "ordered_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Ordered Hash",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "features",
+    "ordered_hash"
+  ],
+  "title": "FeatureIndex",
+  "type": "object"
+}

@@ -1,0 +1,46 @@
+{
+  "$id": "https://credo.local/schemas/physical-grid.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "axis_unit": {
+      "minLength": 1,
+      "title": "Axis Unit",
+      "type": "string"
+    },
+    "duration": {
+      "exclusiveMinimum": 0,
+      "title": "Duration",
+      "type": "number"
+    },
+    "maximum_step": {
+      "exclusiveMinimum": 0,
+      "title": "Maximum Step",
+      "type": "number"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "step_size": {
+      "exclusiveMinimum": 0,
+      "title": "Step Size",
+      "type": "number"
+    },
+    "steps": {
+      "exclusiveMinimum": 0,
+      "title": "Steps",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "axis_unit",
+    "duration",
+    "maximum_step",
+    "steps",
+    "step_size"
+  ],
+  "title": "PhysicalGrid",
+  "type": "object"
+}

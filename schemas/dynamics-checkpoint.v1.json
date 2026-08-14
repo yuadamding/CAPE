@@ -1,0 +1,124 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/dynamics-checkpoint.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "bank_state": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "brownian_plan_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Brownian Plan Hash",
+      "type": "string"
+    },
+    "compiled_run_id": {
+      "title": "Compiled Run Id",
+      "type": "string"
+    },
+    "compute_used": {
+      "minimum": 0,
+      "title": "Compute Used",
+      "type": "number"
+    },
+    "exact_count_cursor": {
+      "minimum": 0,
+      "title": "Exact Count Cursor",
+      "type": "integer"
+    },
+    "model": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "optimizer": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "output_bytes_used": {
+      "minimum": 0,
+      "title": "Output Bytes Used",
+      "type": "integer"
+    },
+    "rng": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "series_sampler_cursor": {
+      "minimum": 0,
+      "title": "Series Sampler Cursor",
+      "type": "integer"
+    },
+    "update": {
+      "minimum": 0,
+      "title": "Update",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "compiled_run_id",
+    "update",
+    "model",
+    "optimizer",
+    "rng",
+    "series_sampler_cursor",
+    "exact_count_cursor",
+    "brownian_plan_hash",
+    "compute_used",
+    "output_bytes_used"
+  ],
+  "title": "DynamicsCheckpoint",
+  "type": "object"
+}

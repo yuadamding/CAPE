@@ -1,0 +1,40 @@
+{
+  "$id": "https://credo.local/schemas/row-index.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "dtype": {
+      "const": "int64",
+      "default": "int64",
+      "title": "Dtype",
+      "type": "string"
+    },
+    "row_count": {
+      "exclusiveMinimum": 0,
+      "title": "Row Count",
+      "type": "integer"
+    },
+    "row_ids_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Row Ids Hash",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "unique": {
+      "const": true,
+      "default": true,
+      "title": "Unique",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "row_ids_hash",
+    "row_count"
+  ],
+  "title": "RowIndex",
+  "type": "object"
+}

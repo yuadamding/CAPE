@@ -1,0 +1,19 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.2
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+  - repo: local
+    hooks:
+      - id: generated-schemas
+        name: generated schemas are current
+        entry: python scripts/check_generated_schemas.py
+        language: system
+        pass_filenames: false
+      - id: documentation-links
+        name: local documentation links resolve
+        entry: python scripts/check_docs.py
+        language: system
+        pass_filenames: false

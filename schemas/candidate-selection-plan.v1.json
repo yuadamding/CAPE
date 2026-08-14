@@ -1,0 +1,64 @@
+{
+  "$id": "https://credo.local/schemas/candidate-selection-plan.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "direction": {
+      "enum": [
+        "higher",
+        "lower"
+      ],
+      "title": "Direction",
+      "type": "string"
+    },
+    "information_set_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Information Set Hash",
+      "type": "string"
+    },
+    "maximum_candidates": {
+      "exclusiveMinimum": 0,
+      "title": "Maximum Candidates",
+      "type": "integer"
+    },
+    "minimum_support": {
+      "minimum": 1,
+      "title": "Minimum Support",
+      "type": "integer"
+    },
+    "plan_id": {
+      "title": "Plan Id",
+      "type": "string"
+    },
+    "protected_endpoint_selection": {
+      "const": false,
+      "default": false,
+      "title": "Protected Endpoint Selection",
+      "type": "boolean"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "score": {
+      "title": "Score",
+      "type": "string"
+    },
+    "tie_rule": {
+      "title": "Tie Rule",
+      "type": "string"
+    }
+  },
+  "required": [
+    "plan_id",
+    "information_set_hash",
+    "score",
+    "direction",
+    "tie_rule",
+    "maximum_candidates",
+    "minimum_support"
+  ],
+  "title": "CandidateSelectionPlan",
+  "type": "object"
+}

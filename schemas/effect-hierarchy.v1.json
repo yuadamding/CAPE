@@ -1,0 +1,86 @@
+{
+  "$defs": {
+    "EffectHierarchyRow": {
+      "additionalProperties": false,
+      "properties": {
+        "is_control": {
+          "default": false,
+          "title": "Is Control",
+          "type": "boolean"
+        },
+        "perturbation_id": {
+          "title": "Perturbation Id",
+          "type": "string"
+        },
+        "source_efficacy": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Efficacy"
+        },
+        "target_id": {
+          "title": "Target Id",
+          "type": "string"
+        },
+        "target_index": {
+          "minimum": 0,
+          "title": "Target Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "perturbation_id",
+        "target_id",
+        "target_index"
+      ],
+      "title": "EffectHierarchyRow",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/effect-hierarchy.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "guide_specific_diffusion": {
+      "const": false,
+      "default": false,
+      "title": "Guide Specific Diffusion",
+      "type": "boolean"
+    },
+    "guide_specific_drift": {
+      "const": false,
+      "default": false,
+      "title": "Guide Specific Drift",
+      "type": "boolean"
+    },
+    "hierarchy_id": {
+      "title": "Hierarchy Id",
+      "type": "string"
+    },
+    "rows": {
+      "items": {
+        "$ref": "#/$defs/EffectHierarchyRow"
+      },
+      "title": "Rows",
+      "type": "array"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "hierarchy_id",
+    "rows"
+  ],
+  "title": "EffectHierarchyContract",
+  "type": "object"
+}

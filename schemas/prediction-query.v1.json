@@ -1,0 +1,97 @@
+{
+  "$defs": {
+    "PhysicalGrid": {
+      "additionalProperties": false,
+      "properties": {
+        "axis_unit": {
+          "minLength": 1,
+          "title": "Axis Unit",
+          "type": "string"
+        },
+        "duration": {
+          "exclusiveMinimum": 0,
+          "title": "Duration",
+          "type": "number"
+        },
+        "maximum_step": {
+          "exclusiveMinimum": 0,
+          "title": "Maximum Step",
+          "type": "number"
+        },
+        "schema_version": {
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "step_size": {
+          "exclusiveMinimum": 0,
+          "title": "Step Size",
+          "type": "number"
+        },
+        "steps": {
+          "exclusiveMinimum": 0,
+          "title": "Steps",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "axis_unit",
+        "duration",
+        "maximum_step",
+        "steps",
+        "step_size"
+      ],
+      "title": "PhysicalGrid",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/prediction-query.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "include_terminal_particles": {
+      "default": false,
+      "title": "Include Terminal Particles",
+      "type": "boolean"
+    },
+    "output_bytes_limit": {
+      "exclusiveMinimum": 0,
+      "title": "Output Bytes Limit",
+      "type": "integer"
+    },
+    "particles": {
+      "exclusiveMinimum": 0,
+      "title": "Particles",
+      "type": "integer"
+    },
+    "physical_grid": {
+      "$ref": "#/$defs/PhysicalGrid"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "seed": {
+      "minimum": 0,
+      "title": "Seed",
+      "type": "integer"
+    },
+    "series_indices": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Series Indices",
+      "type": "array"
+    }
+  },
+  "required": [
+    "series_indices",
+    "particles",
+    "physical_grid",
+    "seed",
+    "output_bytes_limit"
+  ],
+  "title": "PredictionQuery",
+  "type": "object"
+}

@@ -1,0 +1,292 @@
+{
+  "$defs": {
+    "ResolvedRunCapabilities": {
+      "additionalProperties": false,
+      "properties": {
+        "decode_gene_composition": {
+          "default": false,
+          "title": "Decode Gene Composition",
+          "type": "boolean"
+        },
+        "dynamic_context_counterfactual": {
+          "default": false,
+          "title": "Dynamic Context Counterfactual",
+          "type": "boolean"
+        },
+        "fixed_context_counterfactual": {
+          "default": false,
+          "title": "Fixed Context Counterfactual",
+          "type": "boolean"
+        },
+        "predict_relative_mass": {
+          "default": false,
+          "title": "Predict Relative Mass",
+          "type": "boolean"
+        },
+        "predict_state": {
+          "default": true,
+          "title": "Predict State",
+          "type": "boolean"
+        },
+        "resume_training": {
+          "default": true,
+          "title": "Resume Training",
+          "type": "boolean"
+        },
+        "stream_terminal_particles": {
+          "default": true,
+          "title": "Stream Terminal Particles",
+          "type": "boolean"
+        },
+        "target_reference_counterfactual": {
+          "default": true,
+          "title": "Target Reference Counterfactual",
+          "type": "boolean"
+        }
+      },
+      "title": "ResolvedRunCapabilities",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/compiled-run.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "baseline_registry_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Baseline Registry Hash",
+      "type": "string"
+    },
+    "candidate_selection_plan_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Candidate Selection Plan Hash",
+      "type": "string"
+    },
+    "capabilities": {
+      "$ref": "#/$defs/ResolvedRunCapabilities"
+    },
+    "compiled_problem_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Compiled Problem Hash",
+      "type": "string"
+    },
+    "compiled_run_id": {
+      "title": "Compiled Run Id",
+      "type": "string"
+    },
+    "compute_budget_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Compute Budget Hash",
+      "type": "string"
+    },
+    "correction_contract_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Correction Contract Hash",
+      "type": "string"
+    },
+    "count_estimator_contract_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Count Estimator Contract Hash"
+    },
+    "count_store_merkle_root": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Count Store Merkle Root",
+      "type": "string"
+    },
+    "denominator_manifest_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Denominator Manifest Hash"
+    },
+    "eligibility_manifest_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Eligibility Manifest Hash",
+      "type": "string"
+    },
+    "environment_lock_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Environment Lock Hash",
+      "type": "string"
+    },
+    "experimental_topology_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Experimental Topology Hash",
+      "type": "string"
+    },
+    "exposure_registry_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Exposure Registry Hash",
+      "type": "string"
+    },
+    "feature_index_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Feature Index Hash",
+      "type": "string"
+    },
+    "feature_permutation_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Feature Permutation Hash",
+      "type": "string"
+    },
+    "frozen_credo_artifact_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Frozen Credo Artifact Hash",
+      "type": "string"
+    },
+    "implementation_tree_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Implementation Tree Hash",
+      "type": "string"
+    },
+    "information_set_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Information Set Hash",
+      "type": "string"
+    },
+    "latent_cache_index_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Latent Cache Index Hash",
+      "type": "string"
+    },
+    "loss_scale_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Loss Scale Hash",
+      "type": "string"
+    },
+    "mathematical_contract_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Mathematical Contract Hash",
+      "type": "string"
+    },
+    "multiplicity_plan_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Multiplicity Plan Hash",
+      "type": "string"
+    },
+    "output_quota_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Output Quota Hash",
+      "type": "string"
+    },
+    "physical_pool_manifest_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Physical Pool Manifest Hash"
+    },
+    "preregistration_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Preregistration Hash",
+      "type": "string"
+    },
+    "recipe_id": {
+      "const": "credo.count_sde_v4",
+      "default": "credo.count_sde_v4",
+      "title": "Recipe Id",
+      "type": "string"
+    },
+    "recipe_version": {
+      "const": "4.0.dev14",
+      "default": "4.0.dev14",
+      "title": "Recipe Version",
+      "type": "string"
+    },
+    "recipe_wheel_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Recipe Wheel Hash",
+      "type": "string"
+    },
+    "representation_id": {
+      "title": "Representation Id",
+      "type": "string"
+    },
+    "resolved_config_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Resolved Config Hash",
+      "type": "string"
+    },
+    "row_universe_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Row Universe Hash",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "source_manifest_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Manifest Hash",
+      "type": "string"
+    },
+    "split_manifest_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Split Manifest Hash",
+      "type": "string"
+    },
+    "target_hierarchy_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Target Hierarchy Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "compiled_run_id",
+    "recipe_wheel_hash",
+    "frozen_credo_artifact_hash",
+    "environment_lock_hash",
+    "source_manifest_hash",
+    "count_store_merkle_root",
+    "row_universe_hash",
+    "feature_index_hash",
+    "feature_permutation_hash",
+    "exposure_registry_hash",
+    "split_manifest_hash",
+    "information_set_hash",
+    "eligibility_manifest_hash",
+    "target_hierarchy_hash",
+    "denominator_manifest_hash",
+    "experimental_topology_hash",
+    "physical_pool_manifest_hash",
+    "preregistration_hash",
+    "multiplicity_plan_hash",
+    "candidate_selection_plan_hash",
+    "correction_contract_hash",
+    "representation_id",
+    "latent_cache_index_hash",
+    "compiled_problem_hash",
+    "resolved_config_hash",
+    "mathematical_contract_hash",
+    "count_estimator_contract_hash",
+    "loss_scale_hash",
+    "baseline_registry_hash",
+    "compute_budget_hash",
+    "output_quota_hash",
+    "implementation_tree_hash",
+    "capabilities"
+  ],
+  "title": "CompiledRunContract",
+  "type": "object"
+}
