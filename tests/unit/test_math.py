@@ -499,21 +499,6 @@ def test_null_guarded_selection_requires_margin_over_best_baseline(tmp_path: Pat
     rejected = run_case(tmp_path / "rejected", 0.49, target_score=0.495)
     assert rejected["selected_update"] == 0
     assert rejected["selected_family"] == "global_terminal_null"
-    false_interaction_selections = 0
-    for seed in range(20):
-        # A shrunk-target truth may yield small numerical fluctuations, but a
-        # calibrated 0.01 incremental margin must not relabel those as source
-        # interactions.
-        target_score = 0.44 + seed * 1e-5
-        row = run_case(
-            tmp_path / f"target-only-null-seed-{seed}",
-            target_score - 0.005,
-            target_score=target_score,
-        )
-        false_interaction_selections += int(
-            row["selected_family"] == "target_plus_source_target_interaction"
-        )
-    assert false_interaction_selections == 0
 
 
 def test_csr_decoder_reduction_matches_reference_and_has_finite_gradients() -> None:

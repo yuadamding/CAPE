@@ -5,6 +5,7 @@ from scipy import sparse
 
 from credo_count_sde_v4.contracts import FeatureKey, SeriesRecord
 from credo_count_sde_v4.evaluation.evaluator import (
+    _independent_shrunk_target_prediction,
     _interaction_advancement_pass,
     _observed_gene_compositions,
     _target_balanced_bootstrap_differences,
@@ -27,8 +28,10 @@ def test_target_bootstrap_preserves_equal_target_weighting() -> None:
 
 def test_interaction_advancement_requires_interaction_family_and_effect_floor() -> None:
     common = {
-        "bootstrap_upper": -0.02,
-        "required_negative_improvement": 0.01,
+        "interaction_bootstrap_upper": -0.02,
+        "overall_bootstrap_upper": -0.03,
+        "required_interaction_improvement": 0.01,
+        "required_overall_improvement": 0.02,
         "interaction_displacement_rms": 0.2,
         "minimum_interaction_displacement_rms": 0.1,
     }
@@ -42,6 +45,30 @@ def test_interaction_advancement_requires_interaction_family_and_effect_floor() 
         selected_family="target_plus_source_target_interaction",
         **{**common, "interaction_displacement_rms": 0.05},
     )
+    assert not _interaction_advancement_pass(
+        selected_family="target_plus_source_target_interaction",
+        **{**common, "overall_bootstrap_upper": -0.01},
+    )
+
+
+def test_shrunk_target_baseline_is_materialized_independently() -> None:
+    train_terminal = np.asarray([[0.0], [0.0], [1.0], [1.2], [2.0], [2.2]], dtype=np.float32)
+    train_target = np.asarray([0, 0, 1, 1, 2, 2], dtype=np.int64)
+    train_control = np.asarray([True, True, False, False, False, False])
+    prediction, alpha = _independent_shrunk_target_prediction(
+        train_terminal=train_terminal,
+        train_target=train_target,
+        train_control=train_control,
+        evaluation_target=np.asarray([0, 1, 2], dtype=np.int64),
+        evaluation_control=np.asarray([True, False, False]),
+        maximum_weight=1.0,
+        scalar_ridge=1.0,
+    )
+    global_terminal = float(train_terminal.mean())
+    assert 0.0 < alpha < 1.0
+    assert prediction[0, 0] == global_terminal
+    assert prediction[1, 0] != global_terminal
+    assert prediction[2, 0] != global_terminal
 
 
 def test_observed_gene_compositions_aggregate_terminal_cells(tmp_path) -> None:

@@ -51,6 +51,12 @@ def build_parser() -> argparse.ArgumentParser:
     fork.add_argument("config", type=_path)
     fork.add_argument("--from", dest="from_checkpoint", type=_path, required=True)
     fork.add_argument("--device", default=None)
+    calibrate = sub.add_parser("calibrate-state")
+    calibrate.add_argument("config", type=_path)
+    calibrate.add_argument("--output", type=_path, required=True)
+    calibrate.add_argument("--seed-start", type=int, default=100_000)
+    calibrate.add_argument("--repeats", type=int, default=100)
+    calibrate.add_argument("--device", default="cpu")
     open_parser = sub.add_parser("open-run")
     open_parser.add_argument("run", type=_path)
     open_parser.add_argument("--device", default="cpu")
@@ -97,6 +103,15 @@ def main(argv: list[str] | None = None) -> int:
         result = api.resume(args.config, device=args.device)
     elif command == "fork":
         result = api.fork(args.config, from_checkpoint=args.from_checkpoint, device=args.device)
+    elif command == "calibrate-state":
+        results, calibration = api.calibrate_state_selection(
+            args.config,
+            args.output,
+            seed_start=args.seed_start,
+            repeats=args.repeats,
+            device=args.device,
+        )
+        result = {"results": str(results), "calibration": str(calibration)}
     elif command == "finalize":
         result = api.finalize(args.config)
     elif command == "evaluate":

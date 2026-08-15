@@ -1,0 +1,209 @@
+{
+  "$defs": {
+    "StateSelectionCalibrationRow": {
+      "additionalProperties": false,
+      "description": "One genuinely fitted null replicate in the calibration result table.",
+      "properties": {
+        "false_interaction_selected": {
+          "title": "False Interaction Selected",
+          "type": "boolean"
+        },
+        "global_null_score": {
+          "minimum": 0.0,
+          "title": "Global Null Score",
+          "type": "number"
+        },
+        "interaction_score": {
+          "minimum": 0.0,
+          "title": "Interaction Score",
+          "type": "number"
+        },
+        "replicate_index": {
+          "minimum": 0,
+          "title": "Replicate Index",
+          "type": "integer"
+        },
+        "seed": {
+          "minimum": 0,
+          "title": "Seed",
+          "type": "integer"
+        },
+        "selected_family": {
+          "enum": [
+            "global_terminal_null",
+            "shrunk_sister_guide_target_terminal",
+            "target_plus_source_target_interaction"
+          ],
+          "title": "Selected Family",
+          "type": "string"
+        },
+        "selected_update": {
+          "minimum": 0,
+          "title": "Selected Update",
+          "type": "integer"
+        },
+        "shrunk_target_only_score": {
+          "minimum": 0.0,
+          "title": "Shrunk Target Only Score",
+          "type": "number"
+        }
+      },
+      "required": [
+        "replicate_index",
+        "seed",
+        "selected_update",
+        "selected_family",
+        "global_null_score",
+        "shrunk_target_only_score",
+        "interaction_score",
+        "false_interaction_selected"
+      ],
+      "title": "StateSelectionCalibrationRow",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/state-selection-calibration-results.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Row-level evidence and exact execution surface for null calibration.",
+  "properties": {
+    "calibration_code_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Calibration Code Hash",
+      "type": "string"
+    },
+    "calibration_id": {
+      "title": "Calibration Id",
+      "type": "string"
+    },
+    "checkpoint_updates": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Checkpoint Updates",
+      "type": "array"
+    },
+    "compiled_problem_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Compiled Problem Hash",
+      "type": "string"
+    },
+    "guide_per_target_distribution_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Guide Per Target Distribution Hash",
+      "type": "string"
+    },
+    "implementation_tree_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Implementation Tree Hash",
+      "type": "string"
+    },
+    "interaction_minimum_improvement": {
+      "exclusiveMinimum": 0.0,
+      "title": "Interaction Minimum Improvement",
+      "type": "number"
+    },
+    "interaction_rank": {
+      "maximum": 8,
+      "minimum": 1,
+      "title": "Interaction Rank",
+      "type": "integer"
+    },
+    "interaction_scale": {
+      "exclusiveMinimum": 0.0,
+      "title": "Interaction Scale",
+      "type": "number"
+    },
+    "learning_rate": {
+      "exclusiveMinimum": 0.0,
+      "title": "Learning Rate",
+      "type": "number"
+    },
+    "method": {
+      "enum": [
+        "target_label_permutation",
+        "conditional_source_permutation",
+        "synthetic_null_repeats"
+      ],
+      "title": "Method",
+      "type": "string"
+    },
+    "representation_id": {
+      "title": "Representation Id",
+      "type": "string"
+    },
+    "rows": {
+      "items": {
+        "$ref": "#/$defs/StateSelectionCalibrationRow"
+      },
+      "title": "Rows",
+      "type": "array"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "seeds": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Seeds",
+      "type": "array"
+    },
+    "source_target_interaction_penalty": {
+      "exclusiveMinimum": 0.0,
+      "title": "Source Target Interaction Penalty",
+      "type": "number"
+    },
+    "source_target_main_penalty": {
+      "exclusiveMinimum": 0.0,
+      "title": "Source Target Main Penalty",
+      "type": "number"
+    },
+    "split_manifest_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Split Manifest Hash",
+      "type": "string"
+    },
+    "state_batch_size": {
+      "exclusiveMinimum": 0,
+      "title": "State Batch Size",
+      "type": "integer"
+    },
+    "support_distribution_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Support Distribution Hash",
+      "type": "string"
+    },
+    "target_minimum_improvement": {
+      "exclusiveMinimum": 0.0,
+      "title": "Target Minimum Improvement",
+      "type": "number"
+    }
+  },
+  "required": [
+    "calibration_id",
+    "method",
+    "implementation_tree_hash",
+    "calibration_code_hash",
+    "representation_id",
+    "split_manifest_hash",
+    "compiled_problem_hash",
+    "interaction_rank",
+    "interaction_scale",
+    "learning_rate",
+    "state_batch_size",
+    "source_target_main_penalty",
+    "source_target_interaction_penalty",
+    "target_minimum_improvement",
+    "interaction_minimum_improvement",
+    "checkpoint_updates",
+    "guide_per_target_distribution_hash",
+    "support_distribution_hash",
+    "seeds",
+    "rows"
+  ],
+  "title": "StateSelectionCalibrationResults",
+  "type": "object"
+}

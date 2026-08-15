@@ -665,6 +665,115 @@ def _support_reliability(
     return support.pow(config.training.support_weight_power)
 
 
+def _state_objective(
+    model: CountSDEModel,
+    problem: dict[str, torch.Tensor],
+    config: ResolvedConfig,
+    indices: torch.Tensor,
+    prediction: torch.Tensor,
+    *,
+    train_state: bool,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return empirical target-balanced MSE and the exact optimization objective.
+
+    This is the single state-objective implementation used by minibatch
+    training, complete-fit diagnostics, and post-selection refitting.  The
+    analytic target-main coefficient uses scalar ridge, so the configured
+    target-main penalty is applied to that same scalar here.
+    """
+
+    source = problem["source_z"][indices]
+    duration = problem["duration"][indices]
+    target = problem["target_index"][indices].long()
+    pool = problem["pool_index"][indices].long()
+    control = problem["is_control"][indices].bool()
+    error = prediction - problem["terminal_z"][indices]
+    empirical = _target_balanced_mse(
+        error,
+        target,
+        _support_reliability(problem, indices, config),
+    )
+    state_parameters: list[torch.Tensor] = [
+        model.base_drift,
+        model.target_drift,
+        model.target_selection,
+    ]
+    if model.config.source_conditioned_anchor and train_state:
+        assert model.source_anchor_hidden is not None
+        assert model.source_anchor_output is not None
+        state_parameters.extend(
+            [
+                model.source_anchor_hidden.weight,
+                model.source_anchor_hidden.bias,
+                model.source_anchor_output.weight,
+            ]
+        )
+    if model.config.source_target_interaction_rank and train_state:
+        assert model.source_interaction_projection is not None
+        assert model.target_interaction_embedding is not None
+        assert model.source_target_output is not None
+        state_parameters.extend(
+            [
+                model.source_interaction_projection.weight,
+                model.target_interaction_embedding,
+                model.source_target_output.weight,
+            ]
+        )
+    if model.config.state_dependent_drift:
+        state_parameters.extend([model.state_drift_hidden.weight, model.state_drift_output.weight])
+    if model.config.shared_diffusion:
+        state_parameters.append(model.log_diffusion)
+    if config.intent is RunIntent.COUNT_CONTEXT:
+        state_parameters.extend(
+            [model.state_pool_projection, model.state_mass_context, model.context_to_state]
+        )
+    generic_regularization = 1e-4 * sum(parameter.square().mean() for parameter in state_parameters)
+    objective = empirical + generic_regularization
+    if config.training.target_drift_penalty:
+        noncontrol_targets = torch.unique(target[~control])
+        if len(noncontrol_targets):
+            displacement = duration.mean() * model.target_drift[noncontrol_targets]
+            objective = (
+                objective + config.training.target_drift_penalty * displacement.square().mean()
+            )
+    if config.training.source_drift_penalty and model.config.state_dependent_drift:
+        displacement = duration[:, None] * model.state_drift_output(
+            torch.tanh(model.state_drift_hidden(source))
+        )
+        objective = objective + config.training.source_drift_penalty * displacement.square().mean()
+    if (
+        config.training.source_drift_penalty
+        and model.config.source_conditioned_anchor
+        and train_state
+    ):
+        assert model.source_anchor_hidden is not None
+        assert model.source_anchor_output is not None
+        displacement = model.config.source_anchor_residual_scale * torch.tanh(
+            model.source_anchor_output(torch.tanh(model.source_anchor_hidden(source)))
+        )
+        objective = objective + config.training.source_drift_penalty * displacement.square().mean()
+    if model.config.source_target_interaction_rank and train_state:
+        assert model.source_target_main_weight is not None
+        target_only = _deterministic_prediction(
+            model,
+            source,
+            duration,
+            target,
+            pool,
+            control,
+            problem["grid_steps"][indices].long(),
+            effect_mode="target_only",
+        )
+        interaction_displacement = prediction - target_only
+        objective = (
+            objective
+            + config.training.source_target_main_penalty * model.source_target_main_weight.square()
+            + config.training.source_target_interaction_penalty
+            * interaction_displacement.square().mean()
+        )
+    return empirical, objective
+
+
 @torch.no_grad()
 def _training_diagnostics(
     model: CountSDEModel,
@@ -708,11 +817,21 @@ def _training_diagnostics(
             problem["grid_steps"][local_indices].long(),
         )
         local_error = local_prediction - problem["terminal_z"][local_indices]
-        local_mse = _target_balanced_mse(
-            local_error,
-            problem["target_index"][local_indices].long(),
+        local_mse, local_objective = _state_objective(
+            model,
+            problem,
+            config,
+            local_indices,
+            local_prediction,
+            train_state=True,
         )
         diagnostics[f"state_{label}_target_balanced_rmse"] = float(torch.sqrt(local_mse).cpu())
+        diagnostics[f"state_{label}_unregularized_target_balanced_state_mse"] = float(
+            local_mse.cpu()
+        )
+        diagnostics[f"state_{label}_regularized_optimization_objective"] = float(
+            local_objective.cpu()
+        )
         diagnostics[f"state_{label}_series"] = float(len(local_indices))
         local_control = problem["is_control"][local_indices].bool()
         if torch.any(~local_control):
@@ -794,11 +913,6 @@ def _write_selection(
             and (
                 checkpoint.update == 0
                 or checkpoint.update in config.training.state_checkpoint_updates
-                or (
-                    not config.training.state_checkpoint_updates
-                    and checkpoint.update % config.training.checkpoint_every == 0
-                )
-                or checkpoint.update == config.training.max_updates
             )
         )
         or (
@@ -810,6 +924,14 @@ def _write_selection(
             )
         )
     ]
+    if null_guarded:
+        expected_candidates = (0, *config.training.state_checkpoint_updates)
+        actual_candidates = tuple(item.update for item in eligible_checkpoints)
+        if actual_candidates != expected_candidates:
+            raise RuntimeError(
+                "Null-guarded selection candidates differ from the calibrated schedule: "
+                f"expected {expected_candidates}, observed {actual_candidates}."
+            )
     if config.training.checkpoint_selection in {
         "minimum_gene_decoder_validation",
         "minimum_state_validation",
@@ -982,115 +1104,20 @@ def _loss(
         prediction = _deterministic_prediction(
             model, source, duration, target, pool, control, problem["grid_steps"][indices]
         )
-    state_error = prediction - problem["terminal_z"][indices]
-    state_loss = _target_balanced_mse(
-        state_error,
-        target.long(),
-        _support_reliability(problem, indices, config),
-    )
     if phase == "state":
         train_state = decoder_data is None or config.training.train_state_with_gene_decoder
-        state_parameters: list[torch.Tensor] = [
-            model.base_drift,
-            model.target_drift,
-            model.target_selection,
-        ]
-        if config.model.source_conditioned_anchor and train_state:
-            assert model.source_anchor_hidden is not None
-            assert model.source_anchor_output is not None
-            state_parameters.extend(
-                [
-                    model.source_anchor_hidden.weight,
-                    model.source_anchor_hidden.bias,
-                    model.source_anchor_output.weight,
-                ]
-            )
-        if config.model.source_target_interaction_rank and train_state:
-            assert model.source_target_main_weight is not None
-            assert model.source_interaction_projection is not None
-            assert model.target_interaction_embedding is not None
-            assert model.source_target_output is not None
-            state_parameters.extend(
-                [
-                    model.source_interaction_projection.weight,
-                    model.target_interaction_embedding,
-                    model.source_target_output.weight,
-                ]
-            )
-        if config.model.state_dependent_drift:
-            state_parameters.extend(
-                [model.state_drift_hidden.weight, model.state_drift_output.weight]
-            )
-        if config.model.shared_diffusion:
-            state_parameters.append(model.log_diffusion)
-        if config.intent is RunIntent.COUNT_CONTEXT:
-            state_parameters.extend(
-                [
-                    model.state_pool_projection,
-                    model.state_mass_context,
-                    model.context_to_state,
-                ]
-            )
-        state_objective = (
-            state_loss.detach()
-            if (config.model.terminal_anchor_drift and not train_state)
-            else state_loss
+        empirical, optimization = _state_objective(
+            model,
+            problem,
+            config,
+            indices,
+            prediction,
+            train_state=train_state,
         )
-        loss = state_objective + 1e-4 * sum(
-            parameter.square().mean() for parameter in state_parameters
-        )
-        if config.training.target_drift_penalty:
-            noncontrol_targets = torch.unique(target[~control].long())
-            if len(noncontrol_targets):
-                target_displacement = duration.mean() * model.target_drift[noncontrol_targets]
-                loss = loss + (
-                    config.training.target_drift_penalty * target_displacement.square().mean()
-                )
-        if config.training.source_drift_penalty and config.model.state_dependent_drift:
-            source_displacement = duration[:, None] * model.state_drift_output(
-                torch.tanh(model.state_drift_hidden(source))
-            )
-            loss = loss + config.training.source_drift_penalty * source_displacement.square().mean()
-        if (
-            config.training.source_drift_penalty
-            and config.model.source_conditioned_anchor
-            and train_state
-        ):
-            assert model.source_anchor_hidden is not None
-            assert model.source_anchor_output is not None
-            source_displacement = config.model.source_anchor_residual_scale * torch.tanh(
-                model.source_anchor_output(torch.tanh(model.source_anchor_hidden(source)))
-            )
-            loss = loss + config.training.source_drift_penalty * source_displacement.square().mean()
-        if config.model.source_target_interaction_rank and train_state:
-            assert model.source_target_main_weight is not None
-            assert model.source_interaction_projection is not None
-            assert model.target_interaction_embedding is not None
-            assert model.source_target_output is not None
-            whitened = (source - model.source_interaction_center) @ (
-                model.source_interaction_whitener.T
-            )
-            source_score = model.source_interaction_projection(whitened)
-            target_embedding = torch.nn.functional.normalize(
-                model.target_interaction_embedding[target.long()], dim=-1, eps=1e-8
-            )
-            interaction = source_score * target_embedding
-            interaction_displacement = (
-                config.model.source_target_interaction_scale
-                * torch.tanh(model.source_target_output(interaction))
-                * model._mask(control, 2)
-            )
-            main_displacement = (
-                model.source_target_main_weight
-                * model.source_target_main_offset[target.long()]
-                * model._mask(control, 2)
-            )
-            loss = (
-                loss
-                + config.training.source_target_main_penalty * main_displacement.square().mean()
-                + config.training.source_target_interaction_penalty
-                * interaction_displacement.square().mean()
-            )
+        # Decoder-only training must leave the state channel completely absent
+        # from the optimizer graph. A zero state gradient is insufficient
+        # because AdamW still decays a parameter once its gradient is materialized.
+        loss = optimization if train_state else empirical.detach()
         if decoder_data is not None:
             decoder_loss = _gene_decoder_loss(
                 model, decoder_data, config, update, problem["source_z"].device
@@ -1163,12 +1190,12 @@ def _should_checkpoint(update: int, end: int, config: ResolvedConfig) -> bool:
 
 
 @torch.no_grad()
-def _exact_refit_state_objective(
+def _complete_state_objective_values(
     model: CountSDEModel,
     problem: dict[str, torch.Tensor],
     state_split: _StateSplit,
     config: ResolvedConfig,
-) -> float:
+) -> tuple[float, float]:
     indices = state_split.fit_indices
     prediction = _deterministic_prediction(
         model,
@@ -1179,26 +1206,27 @@ def _exact_refit_state_objective(
         problem["is_control"][indices].bool(),
         problem["grid_steps"][indices].long(),
     )
-    error = prediction - problem["terminal_z"][indices]
-    loss = _target_balanced_mse(error, problem["target_index"][indices].long())
-    if model.config.source_target_interaction_rank:
-        target_only = _deterministic_prediction(
-            model,
-            problem["source_z"][indices],
-            problem["duration"][indices],
-            problem["target_index"][indices].long(),
-            problem["pool_index"][indices].long(),
-            problem["is_control"][indices].bool(),
-            problem["grid_steps"][indices].long(),
-            effect_mode="target_only",
-        )
-        interaction = prediction - target_only
-        target_main = target_only - model.terminal_anchor
-        loss = loss + config.training.source_target_main_penalty * target_main.square().mean()
-        loss = (
-            loss + config.training.source_target_interaction_penalty * interaction.square().mean()
-        )
-    return float(loss.cpu())
+    empirical, optimization = _state_objective(
+        model,
+        problem,
+        config,
+        indices,
+        prediction,
+        train_state=True,
+    )
+    return float(empirical.cpu()), float(optimization.cpu())
+
+
+@torch.no_grad()
+def _exact_refit_state_objective(
+    model: CountSDEModel,
+    problem: dict[str, torch.Tensor],
+    state_split: _StateSplit,
+    config: ResolvedConfig,
+) -> float:
+    """Compatibility helper returning the canonical regularized objective."""
+
+    return _complete_state_objective_values(model, problem, state_split, config)[1]
 
 
 def _post_selection_refit(
@@ -1276,7 +1304,9 @@ def _post_selection_refit(
                         raise FloatingPointError(f"Non-finite refit loss at update {update}.")
                     loss.backward()  # type: ignore[no-untyped-call]
                     optimizer.step()
-            loss_value = _exact_refit_state_objective(model, problem, state_split, config)
+            empirical_value, loss_value = _complete_state_objective_values(
+                model, problem, state_split, config
+            )
             diagnostics = {
                 **initialization,
                 **_training_diagnostics(model, problem, state_split, config, None),
@@ -1307,7 +1337,8 @@ def _post_selection_refit(
                 "refit_checkpoint_id": checkpoint.checkpoint_id,
                 "refit_series_hash": state_split.fit_series_hash,
                 "refit_series": int(len(state_split.fit_indices)),
-                "exact_refit_objective": loss_value,
+                "unregularized_target_balanced_state_mse": empirical_value,
+                "regularized_optimization_objective": loss_value,
             }
             (temp / "refit.json").write_bytes(canonical_json_bytes(refit_receipt) + b"\n")
 
@@ -1356,6 +1387,10 @@ def train_model(
     from ..prepare.pipeline import load_config
 
     requested_config = load_config(config_path)
+    if initial_checkpoint is not None and requested_config.model.source_target_interaction_rank:
+        raise ResumeMismatchError(
+            "Null-guarded source-target pilots cannot fork from a checkpoint."
+        )
     root = config_path.parent.resolve()
     workspace = (root / requested_config.workspace).resolve()
     verify_directory(workspace / "compiled")

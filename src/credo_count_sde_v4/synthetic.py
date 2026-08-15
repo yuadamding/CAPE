@@ -32,7 +32,6 @@ from .contracts import (
     SemanticStudySnapshot,
     SeriesRecord,
     SplitContract,
-    StateSelectionCalibration,
     TopologySupport,
     TransportTopologyContract,
 )
@@ -263,24 +262,6 @@ def create_synthetic_project(
     baseline_registry = BaselineRegistry(
         registry_id="synthetic-baselines-v1", baselines=(baseline,)
     )
-    calibration = StateSelectionCalibration(
-        calibration_id="synthetic-null-calibration-v1",
-        method="synthetic_null_repeats",
-        repeated_seeds=20,
-        false_interaction_rate_upper_bound=0.05,
-        target_minimum_improvement=0.01,
-        interaction_minimum_improvement=0.01,
-        checkpoint_updates=tuple(range(1, updates + 1)),
-        calibration_data_hash=sha256_bytes(
-            canonical_json_bytes(
-                {
-                    "fixture": "synthetic_nested_state_families",
-                    "seed": seed,
-                    "repeated_seeds": 20,
-                }
-            )
-        ),
-    )
 
     def write_contract(name: str, value: object) -> None:
         assert hasattr(value, "model_dump")
@@ -296,7 +277,6 @@ def create_synthetic_project(
     write_contract("multiplicity.json", multiplicity)
     write_contract("candidate-selection.json", candidates)
     write_contract("baseline-registry.json", baseline_registry)
-    write_contract("state-selection-calibration.json", calibration)
     (input_root / "source-manifest.json").write_bytes(
         canonical_json_bytes(
             {"schema_version": 1, "source": "generated_synthetic_fixture", "seed": seed}
@@ -330,7 +310,7 @@ def create_synthetic_project(
         "preregistration": "work/input/preregistration.json",
         "multiplicity_plan": "work/input/multiplicity.json",
         "candidate_selection_plan": "work/input/candidate-selection.json",
-        "state_selection_calibration": "work/input/state-selection-calibration.json",
+        "state_selection_calibration": None,
         "baseline_registry": "work/input/baseline-registry.json",
         "intent": intent.value,
         "model": {

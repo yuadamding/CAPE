@@ -55,8 +55,10 @@ def _training_row_order(records: tuple[SeriesRecord, ...]) -> tuple[int, ...]:
 def _interaction_advancement_pass(
     *,
     selected_family: str,
-    bootstrap_upper: float,
-    required_negative_improvement: float,
+    interaction_bootstrap_upper: float,
+    overall_bootstrap_upper: float,
+    required_interaction_improvement: float,
+    required_overall_improvement: float,
     interaction_displacement_rms: float,
     minimum_interaction_displacement_rms: float,
 ) -> bool:
@@ -64,7 +66,8 @@ def _interaction_advancement_pass(
 
     return bool(
         selected_family == "target_plus_source_target_interaction"
-        and bootstrap_upper < -required_negative_improvement
+        and interaction_bootstrap_upper < -required_interaction_improvement
+        and overall_bootstrap_upper < -required_overall_improvement
         and interaction_displacement_rms >= minimum_interaction_displacement_rms
     )
 
@@ -177,6 +180,61 @@ def _target_balanced_bootstrap_differences(
     )
 
 
+def _target_balanced_rms(displacement: np.ndarray, target_indices: np.ndarray) -> float:
+    target_mse = [
+        float(np.mean(np.square(displacement[target_indices == value])))
+        for value in np.unique(target_indices)
+    ]
+    return float(np.sqrt(np.mean(target_mse)))
+
+
+def _independent_shrunk_target_prediction(
+    *,
+    train_terminal: np.ndarray,
+    train_target: np.ndarray,
+    train_control: np.ndarray,
+    evaluation_target: np.ndarray,
+    evaluation_control: np.ndarray,
+    maximum_weight: float,
+    scalar_ridge: float,
+) -> tuple[np.ndarray, float]:
+    """Materialize M1 independently of whichever family was deployed."""
+
+    global_terminal = train_terminal.mean(axis=0)
+    numerators: list[float] = []
+    denominators: list[float] = []
+    offsets: dict[int, np.ndarray] = {}
+    for target_value in np.unique(train_target[~train_control]):
+        local = (train_target == target_value) & ~train_control
+        local_terminal = train_terminal[local]
+        offsets[int(target_value)] = local_terminal.mean(axis=0) - global_terminal
+        if len(local_terminal) < 2:
+            continue
+        residual = local_terminal - global_terminal
+        other_mean = (local_terminal.sum(axis=0) - local_terminal) / (len(local_terminal) - 1)
+        candidate = other_mean - global_terminal
+        numerators.append(float(np.mean(residual * candidate)))
+        denominators.append(float(np.mean(np.square(candidate))))
+    alpha = (
+        float(
+            np.clip(
+                np.mean(numerators) / (np.mean(denominators) + scalar_ridge),
+                0,
+                maximum_weight,
+            )
+        )
+        if numerators
+        else 0.0
+    )
+    prediction = np.broadcast_to(
+        global_terminal, (len(evaluation_target), len(global_terminal))
+    ).copy()
+    for index, target_value in enumerate(evaluation_target):
+        if not evaluation_control[index] and int(target_value) in offsets:
+            prediction[index] += alpha * offsets[int(target_value)]
+    return prediction.astype(np.float32), alpha
+
+
 def _evaluate_bound_outer(
     workspace: Path, run: Any, destination: Path
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], pd.DataFrame]:
@@ -259,6 +317,22 @@ def _evaluate_bound_outer(
         "global_terminal": np.broadcast_to(global_terminal, terminal.shape).copy(),
         "target_terminal": np.asarray(target_terminal_rows, dtype=np.float32),
     }
+    interaction_pilot = bool(run.config.model.source_target_interaction_rank)
+    shrunk_target_alpha: float | None = None
+    if interaction_pilot:
+        predictions["shrunk_target_only"], shrunk_target_alpha = (
+            _independent_shrunk_target_prediction(
+                train_terminal=train_terminal,
+                train_target=train_target,
+                train_control=train_control,
+                evaluation_target=target_indices,
+                evaluation_control=np.asarray(
+                    [record.is_control for record in records], dtype=bool
+                ),
+                maximum_weight=run.config.model.source_target_main_max_weight,
+                scalar_ridge=run.config.training.source_target_main_penalty,
+            )
+        )
     device = run.device
     source_tensor = torch.from_numpy(source).to(device)
     target_tensor = torch.from_numpy(target_indices).to(device)
@@ -275,23 +349,6 @@ def _evaluate_bound_outer(
         steps=run.config.evaluation.steps,
         seed=run.config.evaluation.seed,
     )
-    if run.config.model.source_target_interaction_rank:
-        target_only_states, target_only_weights, _ = rollout(
-            run.model,
-            source_tensor,
-            torch.tensor([record.duration for record in records], device=device),
-            target_tensor,
-            torch.zeros_like(target_tensor),
-            control_tensor,
-            torch.tensor([record.source_count + 0.5 for record in records], device=device),
-            particles=run.config.evaluation.particles,
-            steps=run.config.evaluation.steps,
-            seed=run.config.evaluation.seed,
-            effect_mode="target_only",
-        )
-        predictions["shrunk_target_only"] = (
-            (target_only_states * target_only_weights.unsqueeze(-1)).sum(dim=1).cpu().numpy()
-        )
     if device.type == "cuda":
         torch.cuda.synchronize(device)
     predictions["v4"] = (states * weights.unsqueeze(-1)).sum(dim=1).cpu().numpy()
@@ -357,7 +414,6 @@ def _evaluate_bound_outer(
         )
         metrics["gene_composition_diagnostic"] = gene_metrics
     primary = str(frozen_plan["primary_baseline"])
-    interaction_pilot = bool(run.config.model.source_target_interaction_rank)
     if interaction_pilot and primary != "shrunk_target_only":
         raise ContractError(
             "Source-target interaction evaluation requires shrunk_target_only as primary baseline."
@@ -417,26 +473,69 @@ def _evaluate_bound_outer(
             "Source-target interaction evaluation requires a positive frozen effect-size floor."
         )
     targeting_interaction_rms = (
-        float(
-            np.sqrt(
-                np.mean(
-                    np.square(
-                        predictions["v4"][targeting] - predictions["shrunk_target_only"][targeting]
-                    )
-                )
-            )
+        _target_balanced_rms(
+            predictions["v4"][targeting] - predictions["shrunk_target_only"][targeting],
+            target_indices[targeting],
         )
         if interaction_pilot and targeting.any()
         else 0.0
     )
     family_eligible = run.manifest.selected_family == "target_plus_source_target_interaction"
-    scientific_gate_pass = _interaction_advancement_pass(
-        selected_family=run.manifest.selected_family,
-        bootstrap_upper=interval[1],
-        required_negative_improvement=scientific_threshold,
-        interaction_displacement_rms=targeting_interaction_rms,
-        minimum_interaction_displacement_rms=minimum_interaction_rms,
-    )
+    overall_interval: list[float] | None = None
+    if interaction_pilot:
+        if (
+            "interaction_scientific_minimum_improvement" not in frozen_plan
+            or "overall_scientific_minimum_improvement" not in frozen_plan
+        ):
+            raise ContractError(
+                "Interaction evaluation requires separate frozen M2-vs-M1 and M2-vs-M0 margins."
+            )
+        overall_differences = _target_balanced_bootstrap_differences(
+            predictions["v4"][population_masks[primary_population]],
+            predictions["global_terminal"][population_masks[primary_population]],
+            terminal[population_masks[primary_population]],
+            target_indices[population_masks[primary_population]],
+            seed=int(frozen_plan["bootstrap_seed"]),
+            draws=int(frozen_plan["bootstrap_draws"]),
+        )
+        overall_interval = [
+            float(value) for value in np.quantile(overall_differences, [0.025, 0.975])
+        ]
+        interaction_threshold = (
+            float(frozen_plan["interaction_scientific_minimum_improvement"]) + numerical_tolerance
+        )
+        overall_threshold = (
+            float(frozen_plan["overall_scientific_minimum_improvement"]) + numerical_tolerance
+        )
+        metrics["interaction_outer_gate"] = {
+            "m2_minus_m1_interval_95": interval,
+            "m2_minus_m0_interval_95": overall_interval,
+            "m1_alpha": shrunk_target_alpha,
+            "m0_global_null_rmse": primary_metrics[f"global_terminal_{primary_metric}"],
+            "m1_shrunk_target_rmse": primary_metrics[f"shrunk_target_only_{primary_metric}"],
+            "m2_interaction_rmse": primary_metrics[model_key],
+            "m1_minus_m0": (
+                primary_metrics[f"shrunk_target_only_{primary_metric}"]
+                - primary_metrics[f"global_terminal_{primary_metric}"]
+            ),
+            "interaction_threshold_including_numerical_tolerance": interaction_threshold,
+            "overall_threshold_including_numerical_tolerance": overall_threshold,
+            "aggregation": "target_balanced_RMSE",
+        }
+        scientific_gate_pass = bool(
+            numerical_pass
+            and _interaction_advancement_pass(
+                selected_family=run.manifest.selected_family,
+                interaction_bootstrap_upper=interval[1],
+                overall_bootstrap_upper=overall_interval[1],
+                required_interaction_improvement=interaction_threshold,
+                required_overall_improvement=overall_threshold,
+                interaction_displacement_rms=targeting_interaction_rms,
+                minimum_interaction_displacement_rms=minimum_interaction_rms,
+            )
+        )
+    else:
+        scientific_gate_pass = bool(numerical_pass and interval[1] < -scientific_threshold)
     audit = {
         "schema_version": 1,
         "status": "engineering_complete" if numerical_pass else "numerical_failure",
@@ -447,7 +546,14 @@ def _evaluate_bound_outer(
         "interaction_family_eligible": family_eligible,
         "interaction_displacement_rms": targeting_interaction_rms,
         "minimum_interaction_displacement_rms": minimum_interaction_rms,
-        "scientific_gate": "conditional_target_bootstrap_upper_below_negative_minimum",
+        "scientific_gate": (
+            "nested_M2_beats_M1_and_M0_with_target_bootstrap"
+            if interaction_pilot
+            else "conditional_target_bootstrap_upper_below_negative_minimum"
+        ),
+        "interaction_vs_target_only_interval_95": interval if interaction_pilot else None,
+        "interaction_vs_global_null_interval_95": overall_interval,
+        "shrunk_target_main_weight": shrunk_target_alpha,
         "scientific_minimum_improvement": scientific_minimum,
         "scientific_improvement_threshold_including_numerical_tolerance": scientific_threshold,
         "outer_evaluation_access": (

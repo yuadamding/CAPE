@@ -1,5 +1,25 @@
 # Changelog
 
+## 4.0.0.dev17 — 2026-08-15
+
+- replace the self-attested selection calibration with a verified row-level
+  artifact containing at least 59 genuine independent null fits, exact seeds,
+  protocol/configuration hashes, target multiplicity, support structure, and an
+  exact one-sided zero-failure confidence bound;
+- restrict null-guarded selection to update 0 plus the calibrated checkpoint
+  grid, excluding an implicit final checkpoint;
+- require the deployed interaction family to beat both its independent
+  shrunk-target comparator and the global-terminal null under target-balanced
+  bootstrap intervals and frozen margins;
+- unify minibatch, complete-fit, and post-selection state objectives, align the
+  analytic scalar ridge, freeze support weighting at zero for this pilot, and
+  persist empirical and regularized objectives separately;
+- preserve the generic non-interaction advancement gate and fail closed on
+  diffusion, selection, alternative drift, analytic fit, decoder fields, and
+  checkpoint forks in the interaction pilot;
+- generate `REPOSITORY.sha256` exclusively from regular files in the Git index
+  and verify it in clean-checkout CI.
+
 ## 4.0.0.dev16 — 2026-08-15
 
 - separate target shrinkage from source × target learning by analytically

@@ -31,6 +31,10 @@ jobs:
         env:
           CREDO_V4_WORKSPACE_ROOT: ${{ github.workspace }}
         run: credo-v4 audit
+      - name: Clean-index repository integrity
+        run: |
+          python scripts/generate_repository_manifest.py --check
+          sha256sum --check REPOSITORY.sha256
       - run: ruff format --check src tests scripts
       - run: ruff check src tests scripts
       - run: mypy src/credo_count_sde_v4

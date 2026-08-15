@@ -39,6 +39,7 @@ from credo_count_sde_v4.contracts import (
     ShardBuildCheckpoint,
     SplitContract,
     StateSelectionCalibration,
+    StateSelectionCalibrationResults,
     TransportTopologyContract,
 )
 
@@ -64,6 +65,7 @@ MODELS = {
     "multiplicity-plan.v1.json": MultiplicityPlan,
     "candidate-selection-plan.v1.json": CandidateSelectionPlan,
     "state-selection-calibration.v1.json": StateSelectionCalibration,
+    "state-selection-calibration-results.v1.json": StateSelectionCalibrationResults,
     "selection-manifest.v1.json": SelectionManifest,
     "baseline-information-set.v1.json": BaselineInformationSet,
     "baseline-registry.v1.json": BaselineRegistry,

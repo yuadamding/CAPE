@@ -1,6 +1,6 @@
 # Architecture
 
-Status: implemented engineering architecture for `4.0.0.dev16`.
+Status: implemented engineering architecture for `4.0.0.dev17`.
 
 The package is a sibling distribution. It owns the count-native numerical
 recipe and never writes into the frozen CREDO checkout. Numerical modules can
@@ -25,7 +25,7 @@ qualified `4.0.0` release.
 No cohort adapter, biological claim, filesystem location, or real input is
 embedded in this repository.
 
-The optional dev16 terminal-anchor pilot separates three nested families:
+The optional dev17 terminal-anchor pilot separates three nested families:
 
 ```text
 M0 = global training-terminal centroid
@@ -37,7 +37,10 @@ M1 uses leave-one-guide-out sister-target predictions on state-fit rows and is
 frozen before M2 optimization. The
 source is centered and ridge-whitened with `(C + lambda I)^-1/2`; target
 interaction embeddings are normalized to remove a scaling gauge. Every
-checkpoint is scored both factual and interaction-off. Separate calibrated
-margins guard M0→M1 and M1→M2. Update 0 remains the deployable null, controls
+checkpoint is scored both factual and interaction-off. A verified row-level
+calibration receipt binds at least 59 genuine null fits, their exact seeds,
+implementation, representation, split, support structure, optimizer settings,
+and calibrated checkpoint grid. Separate calibrated margins guard M0→M1 and
+M1→M2; the outer gate requires M2 to beat both M1 and M0. Update 0 remains the deployable null, controls
 and reference mode have exact-zero target effects, and transactional refit uses
 all outer-training series after selection.

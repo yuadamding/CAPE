@@ -10,8 +10,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import torch
+from generate_repository_manifest import write_manifest
 
-from credo_count_sde_v4.canonical import atomic_json, path_manifest, sha256_file
+from credo_count_sde_v4.canonical import atomic_json, sha256_file
 from credo_count_sde_v4.compat.credo3 import verify_frozen_credo
 from credo_count_sde_v4.runtime_identity import (
     environment_lock_hash,
@@ -87,25 +88,7 @@ def main() -> None:
     }
     (root / "receipts").mkdir(exist_ok=True)
     atomic_json(root / "receipts/local-validation.json", receipt)
-    ignored = frozenset(
-        {
-            ".git",
-            ".ruff_cache",
-            ".pytest_cache",
-            "__pycache__",
-            ".mypy_cache",
-            "build",
-            "dist",
-            "dist-dev13",
-            "dist-dev13-raw",
-            "dist-raw",
-            "REPOSITORY.sha256",
-            "credo_count_sde_v4.egg-info",
-        }
-    )
-    rows = path_manifest(root, ignore=ignored)
-    payload = "".join(f"{row['sha256']}  {row['path']}\n" for row in rows)
-    (root / "REPOSITORY.sha256").write_text(payload)
+    write_manifest(root)
     print(json.dumps(receipt, indent=2, sort_keys=True))
 
 

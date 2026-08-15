@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic import BaseModel
 
 from .canonical import sha256_file
 from .compat.credo3 import verify_frozen_credo
@@ -23,15 +24,17 @@ from .contracts import (
     SelectionManifest,
     SemanticStudySnapshot,
     StateSelectionCalibration,
+    StateSelectionCalibrationResults,
     VerifyLevel,
 )
-from .errors import IntegrityError
+from .errors import ContractError, IntegrityError
 from .evaluation import evaluate_run, seal_run
 from .inference import V4Run, finalize_inference, open_inference_run
 from .persistence import LifecycleLedger, verify_directory
 from .prepare import prepare_representation
 from .store import CountStore
 from .training import resume_training, train_model
+from .training.calibration import run_state_selection_calibration
 
 
 def _supported_preflight() -> None:
@@ -59,18 +62,22 @@ def validate_contract(path: Path) -> dict[str, Any]:
     if not isinstance(payload, dict) or "schema_version" not in payload:
         raise ValueError("A contract must be a JSON object with schema_version.")
     canonical_json_bytes(payload)
-    discriminators = (
-        ("compiled_run_id", CompiledRunContract),
-        ("prepared_id", PreparedRepresentation),
-        ("evaluation_id", EvaluationBundleManifest),
-        ("run_id", InferenceBundleManifest),
-        ("sealed_id", SealedRunManifest),
-        ("selection_id", SelectionManifest),
-        ("calibration_id", StateSelectionCalibration),
-        ("store_id", CountStoreManifest),
-        ("study_id", SemanticStudySnapshot),
-    )
-    selected = next((model for field, model in discriminators if field in payload), None)
+    selected: type[BaseModel] | None
+    if "calibration_id" in payload and "rows" in payload:
+        selected = StateSelectionCalibrationResults
+    else:
+        discriminators = (
+            ("compiled_run_id", CompiledRunContract),
+            ("prepared_id", PreparedRepresentation),
+            ("evaluation_id", EvaluationBundleManifest),
+            ("run_id", InferenceBundleManifest),
+            ("sealed_id", SealedRunManifest),
+            ("selection_id", SelectionManifest),
+            ("calibration_id", StateSelectionCalibration),
+            ("store_id", CountStoreManifest),
+            ("study_id", SemanticStudySnapshot),
+        )
+        selected = next((model for field, model in discriminators if field in payload), None)
     if selected is None:
         raise ValueError("Unknown contract discriminator.")
     selected.model_validate(payload)
@@ -142,6 +149,26 @@ def compile_run(config_path: Path) -> Path:
     return result
 
 
+def calibrate_state_selection(
+    config_path: Path,
+    output_root: Path,
+    *,
+    seed_start: int,
+    repeats: int,
+    device: str = "cpu",
+) -> tuple[Path, Path]:
+    """Run and publish genuine null fits before interaction-pilot compilation."""
+
+    _supported_preflight()
+    seeds = tuple(range(seed_start, seed_start + repeats))
+    return run_state_selection_calibration(
+        config_path,
+        output_root,
+        seeds=seeds,
+        device=device,
+    )
+
+
 def train(config_path: Path, *, device: str | None = None) -> Path:
     _supported_preflight()
     result = train_model(config_path, device=device)
@@ -155,6 +182,13 @@ def fork(config_path: Path, *, from_checkpoint: Path, device: str | None = None)
     """Start a new compiled attempt from compatible inference weights only."""
 
     _supported_preflight()
+    from .prepare.pipeline import load_config
+
+    if load_config(config_path).model.source_target_interaction_rank:
+        raise ContractError(
+            "Null-guarded source-target pilots prohibit checkpoint forking; "
+            "update 0 must be a fresh exact null."
+        )
     result = train_model(config_path, device=device, initial_checkpoint=from_checkpoint)
     _ledger(config_path).transition(
         LifecycleState.TRAINED,

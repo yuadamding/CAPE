@@ -665,6 +665,23 @@ class ResolvedConfig(StrictModel):
                 raise ValueError("Source-target pilot checkpointing must begin by update 10.")
             if self.state_selection_calibration is None:
                 raise ValueError("Source-target pilots require a bound selection calibration.")
+            forbidden_channels = {
+                "shared_diffusion": self.model.shared_diffusion,
+                "centered_selection": self.model.centered_selection,
+                "state_dependent_drift": self.model.state_dependent_drift,
+                "source_conditioned_anchor": self.model.source_conditioned_anchor,
+                "analytic_fit": self.training.analytic_fit,
+            }
+            enabled = sorted(name for name, value in forbidden_channels.items() if value)
+            if enabled:
+                raise ValueError(
+                    "Source-target pilots forbid uncalibrated channels: " + ", ".join(enabled)
+                )
+            if self.training.support_weight_power != 0.0:
+                raise ValueError(
+                    "Source-target pilots freeze support_weight_power=0 until weighted "
+                    "calibration is implemented."
+                )
             if any(
                 (
                     self.model.gene_decoder_features,
@@ -684,7 +701,7 @@ class CompiledRunContract(StrictModel):
     schema_version: int = 1
     compiled_run_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev16"] = "4.0.dev16"
+    recipe_version: Literal["4.0.dev17"] = "4.0.dev17"
     recipe_wheel_hash: Sha256
     frozen_credo_artifact_hash: Sha256
     environment_lock_hash: Sha256
@@ -750,7 +767,7 @@ class InferenceBundleManifest(StrictModel):
     compiled_run_id: str
     selected_checkpoint_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev16"] = "4.0.dev16"
+    recipe_version: Literal["4.0.dev17"] = "4.0.dev17"
     selected_family: Literal[
         "configured_checkpoint",
         "gene_decoder_selected",
@@ -862,13 +879,21 @@ class StateSelectionCalibration(StrictModel):
 
     schema_version: int = 1
     calibration_id: str
-    method: Literal["target_label_permutation", "synthetic_null_repeats"]
-    repeated_seeds: int = Field(ge=20)
+    method: Literal[
+        "target_label_permutation",
+        "conditional_source_permutation",
+        "synthetic_null_repeats",
+    ]
+    repeated_seeds: int = Field(ge=59)
+    false_interaction_count: Literal[0] = 0
+    confidence_level: float = Field(default=0.95, ge=0.95, le=0.95)
+    confidence_method: Literal["clopper_pearson_one_sided"] = "clopper_pearson_one_sided"
     false_interaction_rate_upper_bound: float = Field(ge=0.0, le=0.05)
     target_minimum_improvement: float = Field(gt=0.0)
     interaction_minimum_improvement: float = Field(gt=0.0)
     checkpoint_updates: tuple[int, ...]
-    calibration_data_hash: Sha256
+    results_artifact: ArtifactRef
+    calibration_protocol_hash: Sha256
 
     @model_validator(mode="after")
     def valid_schedule(self) -> StateSelectionCalibration:
@@ -876,6 +901,85 @@ class StateSelectionCalibration(StrictModel):
             raise ValueError("Calibration must bind a nonempty checkpoint schedule.")
         if tuple(sorted(set(self.checkpoint_updates))) != self.checkpoint_updates:
             raise ValueError("Calibration checkpoint updates must be increasing and unique.")
+        exact_upper = 1.0 - (1.0 - self.confidence_level) ** (1.0 / self.repeated_seeds)
+        if not math.isclose(
+            self.false_interaction_rate_upper_bound,
+            exact_upper,
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        ):
+            raise ValueError(
+                "False-interaction upper bound is inconsistent with zero-failure "
+                "one-sided Clopper-Pearson calibration."
+            )
+        return self
+
+
+class StateSelectionCalibrationRow(StrictModel):
+    """One genuinely fitted null replicate in the calibration result table."""
+
+    replicate_index: int = Field(ge=0)
+    seed: int = Field(ge=0)
+    selected_update: int = Field(ge=0)
+    selected_family: Literal[
+        "global_terminal_null",
+        "shrunk_sister_guide_target_terminal",
+        "target_plus_source_target_interaction",
+    ]
+    global_null_score: float = Field(ge=0.0)
+    shrunk_target_only_score: float = Field(ge=0.0)
+    interaction_score: float = Field(ge=0.0)
+    false_interaction_selected: bool
+
+    @model_validator(mode="after")
+    def exact_false_selection_label(self) -> StateSelectionCalibrationRow:
+        expected = self.selected_family == "target_plus_source_target_interaction"
+        if self.false_interaction_selected != expected:
+            raise ValueError("Calibration false-selection label disagrees with selected family.")
+        return self
+
+
+class StateSelectionCalibrationResults(StrictModel):
+    """Row-level evidence and exact execution surface for null calibration."""
+
+    schema_version: int = 1
+    calibration_id: str
+    method: Literal[
+        "target_label_permutation",
+        "conditional_source_permutation",
+        "synthetic_null_repeats",
+    ]
+    implementation_tree_hash: Sha256
+    calibration_code_hash: Sha256
+    representation_id: str
+    split_manifest_hash: Sha256
+    compiled_problem_hash: Sha256
+    interaction_rank: int = Field(ge=1, le=8)
+    interaction_scale: float = Field(gt=0.0)
+    learning_rate: float = Field(gt=0.0)
+    state_batch_size: int = Field(gt=0)
+    source_target_main_penalty: float = Field(gt=0.0)
+    source_target_interaction_penalty: float = Field(gt=0.0)
+    target_minimum_improvement: float = Field(gt=0.0)
+    interaction_minimum_improvement: float = Field(gt=0.0)
+    checkpoint_updates: tuple[int, ...]
+    guide_per_target_distribution_hash: Sha256
+    support_distribution_hash: Sha256
+    seeds: tuple[int, ...]
+    rows: tuple[StateSelectionCalibrationRow, ...]
+
+    @model_validator(mode="after")
+    def complete_rows(self) -> StateSelectionCalibrationResults:
+        if tuple(sorted(set(self.checkpoint_updates))) != self.checkpoint_updates:
+            raise ValueError("Result checkpoint updates must be increasing and unique.")
+        if len(set(self.seeds)) != len(self.seeds):
+            raise ValueError("Calibration seeds must be unique.")
+        if len(self.rows) != len(self.seeds):
+            raise ValueError("Every calibration seed must have exactly one result row.")
+        if tuple(row.replicate_index for row in self.rows) != tuple(range(len(self.rows))):
+            raise ValueError("Calibration replicate indices must be contiguous and ordered.")
+        if tuple(row.seed for row in self.rows) != self.seeds:
+            raise ValueError("Calibration row seeds differ from the frozen seed list.")
         return self
 
 

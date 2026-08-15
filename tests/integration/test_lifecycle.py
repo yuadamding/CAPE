@@ -19,28 +19,39 @@ from credo_count_sde_v4.prepare.pipeline import load_config
 from credo_count_sde_v4.store import CountStore
 from credo_count_sde_v4.synthetic import create_synthetic_project
 from credo_count_sde_v4.training import load_training_state
+from credo_count_sde_v4.training.calibration import run_state_selection_calibration
 from credo_count_sde_v4.training.trainer import (
     _all_state_split,
-    _exact_refit_state_objective,
+    _complete_state_objective_values,
     _post_selection_refit,
     _tensor_problem,
     train_model,
 )
 
 
-def _set_pilot_calibration(
+def _configure_pilot_calibration(
     config: Path,
     *,
     updates: list[int],
     target_margin: float,
     interaction_margin: float,
 ) -> None:
-    path = config.parent / "work/input/state-selection-calibration.json"
-    payload = json.loads(path.read_text())
-    payload["checkpoint_updates"] = updates
-    payload["target_minimum_improvement"] = target_margin
-    payload["interaction_minimum_improvement"] = interaction_margin
-    path.write_text(json.dumps(payload, sort_keys=True) + "\n")
+    payload = yaml.safe_load(config.read_text())
+    payload["state_selection_calibration"] = (
+        "work/input/state-calibration/state-selection-calibration.json"
+    )
+    payload["training"]["state_checkpoint_updates"] = updates
+    payload["training"]["state_validation_target_minimum_improvement"] = target_margin
+    payload["training"]["state_validation_interaction_minimum_improvement"] = interaction_margin
+    config.write_text(yaml.safe_dump(payload, sort_keys=False))
+
+
+def _run_pilot_calibration(config: Path) -> None:
+    run_state_selection_calibration(
+        config,
+        config.parent / "work/input/state-calibration",
+        seeds=tuple(range(100_000, 100_059)),
+    )
 
 
 @pytest.mark.parametrize("intent", list(RunIntent))
@@ -213,7 +224,7 @@ def test_null_guarded_interaction_persists_zero_and_refits_selected_null(
     payload["training"].update(
         {
             "checkpoint_every": 2,
-            "state_checkpoint_updates": [1, 2, 4],
+            "state_checkpoint_updates": [1, 2],
             "selected_update": None,
             "state_validation_fraction": 0.34,
             "state_validation_max_per_target": 1,
@@ -226,15 +237,30 @@ def test_null_guarded_interaction_persists_zero_and_refits_selected_null(
         }
     )
     config.write_text(yaml.safe_dump(payload, sort_keys=False))
-    _set_pilot_calibration(
-        config, updates=[1, 2, 4], target_margin=1_000.0, interaction_margin=1_000.0
+    _configure_pilot_calibration(
+        config, updates=[1, 2], target_margin=1_000.0, interaction_margin=1_000.0
     )
     api.prepare(config)
+    _run_pilot_calibration(config)
+    calibration = json.loads(
+        (
+            config.parent / "work/input/state-calibration/state-selection-calibration.json"
+        ).read_text()
+    )
+    results = json.loads(
+        (
+            config.parent / "work/input/state-calibration/state-selection-calibration-results.json"
+        ).read_text()
+    )
+    assert calibration["repeated_seeds"] == len(results["rows"]) == 59
+    assert calibration["false_interaction_count"] == 0
+    assert calibration["false_interaction_rate_upper_bound"] < 0.05
+    assert all(not row["false_interaction_selected"] for row in results["rows"])
     api.compile_run(config)
     api.train(config, device="cpu")
     training = config.parent / "work/training"
     selection = json.loads((training / "selection.json").read_text())
-    assert selection["candidate_updates"] == [0, 1, 2, 4]
+    assert selection["candidate_updates"] == [0, 1, 2]
     assert selection["inner_selected_checkpoint_id"] != selection["selected_checkpoint_id"]
     assert selection["selected_update"] == 0
     assert selection["selected_family"] == "global_terminal_null"
@@ -283,6 +309,7 @@ def test_source_target_pilot_requires_a_positive_selection_margin(tmp_path: Path
             "trainable_target_anchor": False,
         }
     )
+    payload["state_selection_calibration"] = "work/input/unused-calibration.json"
     payload["training"].update(
         {
             "selected_update": None,
@@ -317,6 +344,7 @@ def test_source_target_pilot_rejects_untrained_decoder_architecture(tmp_path: Pa
             "gene_decoder_hidden_dim": 8,
         }
     )
+    payload["state_selection_calibration"] = "work/input/unused-calibration.json"
     payload["training"].update(
         {
             "selected_update": None,
@@ -332,6 +360,63 @@ def test_source_target_pilot_rejects_untrained_decoder_architecture(tmp_path: Pa
     )
     config.write_text(yaml.safe_dump(payload, sort_keys=False))
     with pytest.raises(ValueError, match="disable the gene decoder entirely"):
+        api.prepare(config)
+
+
+@pytest.mark.parametrize(
+    ("section", "changes", "message"),
+    [
+        (
+            "model",
+            {"shared_diffusion": True, "shared_diffusion_inner_validation_pass": True},
+            "forbid uncalibrated channels",
+        ),
+        (
+            "model",
+            {"centered_selection": True, "selection_inner_validation_pass": True},
+            "forbid uncalibrated channels",
+        ),
+        ("training", {"support_weight_power": 0.5}, "support_weight_power=0"),
+    ],
+)
+def test_source_target_pilot_rejects_uncalibrated_channels(
+    tmp_path: Path,
+    section: str,
+    changes: dict[str, object],
+    message: str,
+) -> None:
+    config = create_synthetic_project(
+        tmp_path / f"forbidden-{next(iter(changes))}",
+        intent=RunIntent.COUNT_STATE,
+        updates=2,
+    )
+    payload = yaml.safe_load(config.read_text())
+    payload["state_selection_calibration"] = "work/input/unused-calibration.json"
+    payload["model"].update(
+        {
+            "terminal_anchor_drift": True,
+            "source_carryover_alpha": 0.0,
+            "source_target_interaction_rank": 2,
+            "trainable_terminal_anchor": False,
+            "trainable_target_anchor": False,
+        }
+    )
+    payload["training"].update(
+        {
+            "selected_update": None,
+            "state_validation_fraction": 0.34,
+            "state_checkpoint_updates": [1, 2],
+            "source_target_main_penalty": 1.0,
+            "source_target_interaction_penalty": 1.0,
+            "state_validation_target_minimum_improvement": 0.01,
+            "state_validation_interaction_minimum_improvement": 0.01,
+            "post_selection_state_refit": True,
+            "checkpoint_selection": "minimum_state_validation_null_guarded",
+        }
+    )
+    payload[section].update(changes)
+    config.write_text(yaml.safe_dump(payload, sort_keys=False))
+    with pytest.raises(ValueError, match=message):
         api.prepare(config)
 
 
@@ -363,7 +448,14 @@ def test_source_target_pilot_rejects_margin_not_bound_by_calibration(tmp_path: P
         }
     )
     config.write_text(yaml.safe_dump(payload, sort_keys=False))
+    _configure_pilot_calibration(
+        config, updates=[1, 2], target_margin=1_000.0, interaction_margin=1_000.0
+    )
     api.prepare(config)
+    _run_pilot_calibration(config)
+    payload = yaml.safe_load(config.read_text())
+    payload["training"]["state_validation_interaction_minimum_improvement"] = 1_001.0
+    config.write_text(yaml.safe_dump(payload, sort_keys=False))
     with pytest.raises(ContractError, match="Interaction selection margin differs"):
         api.compile_run(config)
 
@@ -396,7 +488,11 @@ def test_target_only_candidate_is_materialized_by_post_selection_refit(tmp_path:
         }
     )
     config.write_text(yaml.safe_dump(payload, sort_keys=False))
+    _configure_pilot_calibration(
+        config, updates=[1, 2], target_margin=1_000.0, interaction_margin=1_000.0
+    )
     api.prepare(config)
+    _run_pilot_calibration(config)
     api.compile_run(config)
     workspace = config.parent / "work"
     contract, arrays = load_compiled_problem(workspace)
@@ -419,8 +515,8 @@ def test_target_only_candidate_is_materialized_by_post_selection_refit(tmp_path:
         "interaction_score": 0.5,
         "interaction_incremental_gain": 0.0,
         "target_incremental_gain": 0.1,
-        "target_minimum_required_improvement": 0.01,
-        "interaction_minimum_required_improvement": 0.01,
+        "target_minimum_required_improvement": 1_000.0,
+        "interaction_minimum_required_improvement": 1_000.0,
         "selection_calibration_hash": contract.state_selection_calibration_hash,
     }
     _post_selection_refit(
@@ -444,5 +540,10 @@ def test_target_only_candidate_is_materialized_by_post_selection_refit(tmp_path:
     refit_model.load_state_dict(state)
     tensor_problem = _tensor_problem(arrays, torch.device("cpu"))
     refit_split = _all_state_split(arrays, resolved, torch.device("cpu"))
-    expected_loss = _exact_refit_state_objective(refit_model, tensor_problem, refit_split, resolved)
-    assert training_state["loss"] == pytest.approx(expected_loss)
+    empirical, regularized = _complete_state_objective_values(
+        refit_model, tensor_problem, refit_split, resolved
+    )
+    assert training_state["loss"] == pytest.approx(regularized)
+    refit = json.loads((training / "refit/refit.json").read_text())
+    assert refit["unregularized_target_balanced_state_mse"] == pytest.approx(empirical)
+    assert refit["regularized_optimization_objective"] == pytest.approx(regularized)

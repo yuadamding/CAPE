@@ -1,16 +1,60 @@
 {
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    }
+  },
   "$id": "https://credo.local/schemas/state-selection-calibration.v1.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Frozen training-only calibration for nested state-family selection.",
   "properties": {
-    "calibration_data_hash": {
-      "pattern": "^[0-9a-f]{64}$",
-      "title": "Calibration Data Hash",
-      "type": "string"
-    },
     "calibration_id": {
       "title": "Calibration Id",
+      "type": "string"
+    },
+    "calibration_protocol_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Calibration Protocol Hash",
       "type": "string"
     },
     "checkpoint_updates": {
@@ -19,6 +63,25 @@
       },
       "title": "Checkpoint Updates",
       "type": "array"
+    },
+    "confidence_level": {
+      "default": 0.95,
+      "maximum": 0.95,
+      "minimum": 0.95,
+      "title": "Confidence Level",
+      "type": "number"
+    },
+    "confidence_method": {
+      "const": "clopper_pearson_one_sided",
+      "default": "clopper_pearson_one_sided",
+      "title": "Confidence Method",
+      "type": "string"
+    },
+    "false_interaction_count": {
+      "const": 0,
+      "default": 0,
+      "title": "False Interaction Count",
+      "type": "integer"
     },
     "false_interaction_rate_upper_bound": {
       "maximum": 0.05,
@@ -34,15 +97,19 @@
     "method": {
       "enum": [
         "target_label_permutation",
+        "conditional_source_permutation",
         "synthetic_null_repeats"
       ],
       "title": "Method",
       "type": "string"
     },
     "repeated_seeds": {
-      "minimum": 20,
+      "minimum": 59,
       "title": "Repeated Seeds",
       "type": "integer"
+    },
+    "results_artifact": {
+      "$ref": "#/$defs/ArtifactRef"
     },
     "schema_version": {
       "default": 1,
@@ -63,7 +130,8 @@
     "target_minimum_improvement",
     "interaction_minimum_improvement",
     "checkpoint_updates",
-    "calibration_data_hash"
+    "results_artifact",
+    "calibration_protocol_hash"
   ],
   "title": "StateSelectionCalibration",
   "type": "object"

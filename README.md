@@ -8,7 +8,7 @@ count_state → count_measure → count_context
 ```
 
 It is a sibling of, not a modification to, the frozen CREDO checkout. Version
-`4.0.0.dev16` is engineering software; it is not a biological result and cannot
+`4.0.0.dev17` is engineering software; it is not a biological result and cannot
 be relabeled as stable `4.0`.
 
 Implemented surfaces include strict hash-bound contracts, sparse count storage,
@@ -17,13 +17,15 @@ likelihood, separate state/fitness/context channels, immutable checkpoint and
 resume, streaming inference, four-branch contrasts, one-shot evaluation, and a
 sealed aggregate. The repository contains no cohort adapter or biological data.
 
-Dev16 repairs the dev15 family confounding. It fits a bounded sister-guide
+Dev17 repairs the remaining dev16 calibration and outer-gate defects. It fits a bounded sister-guide
 target-shrinkage coefficient from leave-one-guide-out training targets without an interaction, freezes it, then trains a
 low-rank source × target increment. Selection compares genuinely nested global,
-shrunk-target, and interaction families using separate margins from a bound
-training-only calibration artifact. Every checkpoint records its interaction-off
+shrunk-target, and interaction families using separate margins from a verified
+row-level null-calibration artifact with at least 59 genuine fits. Only update 0
+and the calibrated checkpoint grid are selectable. Every checkpoint records its interaction-off
 ablation; the inference and evaluation bundles bind the selected family. Refit
-is transactional and resumable. This contract does not turn pooled guide
+is transactional and resumable, and outer advancement requires M2 to beat both
+M1 and M0 under target-bootstrap intervals. This contract does not turn pooled guide
 centroids into finite-measure or biological-replicate evidence.
 
 ## Quick start

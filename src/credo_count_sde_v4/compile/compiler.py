@@ -28,6 +28,7 @@ from ..contracts import (
     SemanticStudySnapshot,
     SplitContract,
     StateSelectionCalibration,
+    StateSelectionCalibrationResults,
     TransportTopologyContract,
 )
 from ..errors import ContractError
@@ -60,6 +61,99 @@ def _problem_hash(arrays: dict[str, np.ndarray]) -> str:
             }
         )
     return _hash({"schema_version": 1, "arrays": rows})
+
+
+def _calibration_protocol_payload(results: StateSelectionCalibrationResults) -> dict[str, Any]:
+    return results.model_dump(mode="json", exclude={"rows"})
+
+
+def _verify_selection_calibration(
+    *,
+    calibration: StateSelectionCalibration,
+    calibration_path: Path,
+    prepared_id: str,
+    split_hash: str,
+    problem_hash: str,
+    implementation_hash: str,
+    config: Any,
+    snapshot: SemanticStudySnapshot,
+) -> None:
+    artifact_path = (calibration_path.parent / calibration.results_artifact.relative_uri).resolve()
+    try:
+        artifact_path.relative_to(calibration_path.parent.resolve())
+    except ValueError as error:
+        raise ContractError("Calibration result artifact escapes its contract root.") from error
+    if artifact_path.is_symlink() or not artifact_path.is_file():
+        raise ContractError("Calibration result artifact is absent or not a regular file.")
+    if (
+        artifact_path.stat().st_size != calibration.results_artifact.size_bytes
+        or sha256_file(artifact_path) != calibration.results_artifact.sha256
+    ):
+        raise ContractError("Calibration result artifact bytes differ from the receipt.")
+    results = StateSelectionCalibrationResults.model_validate_json(artifact_path.read_text())
+    calibration_code = Path(__file__).parents[1] / "training" / "calibration.py"
+    guide_distribution_hash = _hash(
+        {
+            "guide_counts_per_target": sorted(
+                sum(
+                    int(series.target_index == target and not series.is_control)
+                    for series in snapshot.series
+                )
+                for target in sorted(
+                    {series.target_index for series in snapshot.series if not series.is_control}
+                )
+            )
+        }
+    )
+    support_distribution_hash = _hash(
+        {
+            "rows": [
+                {
+                    "series_id": series.series_id,
+                    "target_index": series.target_index,
+                    "is_control": series.is_control,
+                    "source_count": series.source_count,
+                    "terminal_count": series.terminal_count,
+                }
+                for series in sorted(snapshot.series, key=lambda item: item.series_id)
+            ]
+        }
+    )
+    expected = {
+        "calibration_id": calibration.calibration_id,
+        "method": calibration.method,
+        "implementation_tree_hash": implementation_hash,
+        "calibration_code_hash": sha256_file(calibration_code),
+        "representation_id": prepared_id,
+        "split_manifest_hash": split_hash,
+        "compiled_problem_hash": problem_hash,
+        "interaction_rank": config.model.source_target_interaction_rank,
+        "interaction_scale": config.model.source_target_interaction_scale,
+        "learning_rate": config.training.learning_rate,
+        "state_batch_size": config.training.state_batch_size,
+        "source_target_main_penalty": config.training.source_target_main_penalty,
+        "source_target_interaction_penalty": (config.training.source_target_interaction_penalty),
+        "target_minimum_improvement": (config.training.state_validation_target_minimum_improvement),
+        "interaction_minimum_improvement": (
+            config.training.state_validation_interaction_minimum_improvement
+        ),
+        "checkpoint_updates": config.training.state_checkpoint_updates,
+        "guide_per_target_distribution_hash": guide_distribution_hash,
+        "support_distribution_hash": support_distribution_hash,
+    }
+    actual = results.model_dump(mode="python")
+    for field, value in expected.items():
+        if actual[field] != value:
+            raise ContractError(f"Calibration execution surface differs at {field}.")
+    if results.seeds != tuple(row.seed for row in results.rows):
+        raise ContractError("Calibration seed list and row results differ.")
+    if len(results.rows) != calibration.repeated_seeds:
+        raise ContractError("Calibration repeat count differs from row-level results.")
+    false_count = sum(row.false_interaction_selected for row in results.rows)
+    if false_count != calibration.false_interaction_count:
+        raise ContractError("Calibration false-selection count differs from row outcomes.")
+    if _hash(_calibration_protocol_payload(results)) != calibration.calibration_protocol_hash:
+        raise ContractError("Calibration protocol hash differs from row-level evidence.")
 
 
 def _lookup_means(
@@ -278,6 +372,18 @@ def compile_problem(config_path: Path) -> Path:
         "terminal_counts": terminal_counts,
         "series_ids": np.asarray([series.series_id for series in snapshot.series]),
     }
+    problem_hash = _problem_hash(problem_arrays)
+    if calibration is not None and calibration_path is not None:
+        _verify_selection_calibration(
+            calibration=calibration,
+            calibration_path=calibration_path,
+            prepared_id=prepared.prepared_id,
+            split_hash=split_hash,
+            problem_hash=problem_hash,
+            implementation_hash=implementation_hash,
+            config=config,
+            snapshot=snapshot,
+        )
     payload = {
         "schema_version": 1,
         "compiled_run_id": "pending",
@@ -308,7 +414,7 @@ def compile_problem(config_path: Path) -> Path:
         "correction_contract_hash": prepared.input_view.sha256,
         "representation_id": prepared.prepared_id,
         "latent_cache_index_hash": prepared.latent_cache.sha256,
-        "compiled_problem_hash": _problem_hash(problem_arrays),
+        "compiled_problem_hash": problem_hash,
         "resolved_config_hash": config_hash,
         "mathematical_contract_hash": _hash(
             {

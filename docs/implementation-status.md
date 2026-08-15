@@ -44,23 +44,28 @@ primary-population definition consistently to both point metrics and target
 bootstraps. Local acceptance establishes contracts and CPU behavior; the
 completed dev14 H100 run below establishes the external development result.
 
-Dev16 supersedes dev15 before cohort execution. It estimates a bounded scalar
+Dev17 supersedes dev16 before cohort execution. It estimates a bounded scalar
 target-main shrinkage model from leave-one-guide-out sister-target predictions
 without an interaction, freezes that model, and
 tests the source × target term only through the full-versus-interaction-off
 increment. The selector uses separate target and interaction margins from a
-hash-bound training-only calibration, requires an explicit early checkpoint
-schedule, and records all three scores and displacement magnitudes. A typed
+byte-verified row-level calibration with at least 59 genuine independent null
+fits. It admits exactly update 0 and the calibrated checkpoint schedule, and
+records all three scores and displacement magnitudes. A typed
 selection manifest is embedded in inference and reported by evaluation; only a
-deployed interaction family can pass the interaction advancement gate. The
+deployed interaction family that beats both M1 and M0 can pass the interaction
+advancement gate. The
 gene decoder is structurally absent. Post-selection refit publishes through
 `REFIT_PLANNED → REFIT_RUNNING → REFIT_COMMITTED`, resumes after interruption,
-uses no false state-parent edge, and records its exact final objective. Local
+uses no false state-parent edge, and records empirical and complete regularized
+objectives separately. Local
 acceptance covers global-only, shrunk-target, full-target, and interaction truth
-regimes plus 20 target-only null repetitions with zero false interaction
-selections. No real-cohort dev15 or dev16 performance result exists.
+regimes plus a 59-fit evidence-bearing null-calibration lifecycle. The pilot
+also forbids diffusion, selection, alternative drift, analytic fitting,
+decoder training, support weighting, and checkpoint forks. No real-cohort
+dev15, dev16, or dev17 performance result exists.
 
-Deliberately not asserted complete in `4.0.0.dev16`:
+Deliberately not asserted complete in `4.0.0.dev17`:
 
 - stable CREDO entry-point discovery;
 - in-repository real-cohort adapters, biological thresholds, or biological claims;
@@ -106,5 +111,5 @@ authority.
 
 Exact future use depends on the branch commit, `REPOSITORY.sha256`, the
 wheel/sdist bytes, generated schemas, and the local validation receipt. A clean
-dev16 commit and release receipt remain required before any pilot deployment or
-stable promotion.
+dev17 commit and release receipt are necessary—but not sufficient—before any
+pilot deployment or stable promotion.

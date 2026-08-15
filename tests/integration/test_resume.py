@@ -15,6 +15,22 @@ from credo_count_sde_v4.prepare import prepare_representation
 from credo_count_sde_v4.synthetic import create_synthetic_project
 from credo_count_sde_v4.training import resume_training, train_model
 from credo_count_sde_v4.training import trainer as trainer_module
+from credo_count_sde_v4.training.calibration import run_state_selection_calibration
+
+
+def _bind_real_calibration(config: Path, updates: list[int]) -> None:
+    payload = yaml.safe_load(config.read_text())
+    payload["state_selection_calibration"] = (
+        "work/input/state-calibration/state-selection-calibration.json"
+    )
+    payload["training"]["state_checkpoint_updates"] = updates
+    config.write_text(yaml.safe_dump(payload, sort_keys=False))
+    prepare_representation(config)
+    run_state_selection_calibration(
+        config,
+        config.parent / "work/input/state-calibration",
+        seeds=tuple(range(200_000, 200_059)),
+    )
 
 
 def _latest_model(config: Path) -> dict[str, torch.Tensor]:
@@ -89,13 +105,7 @@ def test_null_guarded_selection_survives_interrupted_training(tmp_path: Path) ->
         }
     )
     config.write_text(yaml.safe_dump(payload, sort_keys=False))
-    calibration_path = config.parent / "work/input/state-selection-calibration.json"
-    calibration = json.loads(calibration_path.read_text())
-    calibration["checkpoint_updates"] = [1, 2, 4]
-    calibration["target_minimum_improvement"] = 1_000.0
-    calibration["interaction_minimum_improvement"] = 1_000.0
-    calibration_path.write_text(json.dumps(calibration, sort_keys=True) + "\n")
-    prepare_representation(config)
+    _bind_real_calibration(config, [1, 2, 4])
     compile_problem(config)
     train_model(config, device="cpu", stop_after=2)
     resume_training(config, device="cpu")
@@ -141,17 +151,7 @@ def test_interrupted_post_selection_refit_resumes_to_identical_model(
             }
         )
         config.write_text(yaml.safe_dump(payload, sort_keys=False))
-        calibration_path = config.parent / "work/input/state-selection-calibration.json"
-        calibration = json.loads(calibration_path.read_text())
-        calibration.update(
-            {
-                "checkpoint_updates": [1, 2],
-                "target_minimum_improvement": 1_000.0,
-                "interaction_minimum_improvement": 1_000.0,
-            }
-        )
-        calibration_path.write_text(json.dumps(calibration, sort_keys=True) + "\n")
-        prepare_representation(config)
+        _bind_real_calibration(config, [1, 2])
         compile_problem(config)
 
     train_model(configs[0], device="cpu")
