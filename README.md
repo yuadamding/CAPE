@@ -39,7 +39,8 @@ credo-v4 verify /tmp/credo-v4-demo/work/sealed --level full
 
 See [architecture](docs/architecture.md), [contracts](docs/contracts.md),
 [lifecycle](docs/lifecycle.md),
-[component qualification](docs/component-qualification.md), and
+[component qualification](docs/component-qualification.md),
+[the detailed T01 record](docs/t01-representation-qualification.md), and
 [release policy](docs/release.md).
 
 Current verification status is recorded in

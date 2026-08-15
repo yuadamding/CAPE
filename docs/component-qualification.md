@@ -126,14 +126,15 @@ was selectable and won every fold. The learned candidates were worse by
 blocked. The failure receipt is retained outside the package in
 `credo_v4_renz_t01_representation_20260815/`.
 
-The preregistered centered successor represented the global square-root gene
+The separately frozen centered successor represented the global square-root gene
 frequency explicitly and fit only residual Hellinger structure. It also
 selected dimension 0 in every fold: learned dimensions 8, 16, 32, and 48 were
 0.178–0.238 nats per count worse than the global gene-frequency decoder. T01
 v2 is also `fail_retired`; no post-selection refit or P60-support diagnostic
 was eligible. The two immutable failures block T02. Changing the loss,
 threshold, or candidate family would be a new T01 protocol, not continuation
-of either failed test.
+of either failed test. See the
+[detailed T01 implementation and result record](t01-representation-qualification.md).
 
 Synthetic values reported outside a committed component directory are useful
 design evidence but are not promotion evidence. Every subsequent stage must
