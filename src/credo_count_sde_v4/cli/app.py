@@ -74,6 +74,21 @@ def build_parser() -> argparse.ArgumentParser:
     pool.add_argument("--terminal-checkpoint", required=True)
     pool.add_argument("--minimum-source-cells", type=int, default=1)
     pool.add_argument("--mass-pseudocount", type=float, default=0.5)
+    representation = sub.add_parser(
+        "qualify-representation", help="fit and adjudicate the independent T01 component"
+    )
+    representation.add_argument("--pooled-bundle", type=_path, required=True)
+    representation.add_argument("--count-store", type=_path, required=True)
+    representation.add_argument("--outer-folds", type=_path, required=True)
+    representation.add_argument("--output", type=_path, required=True)
+    representation.add_argument("--dimensions", type=int, nargs="+", default=[8, 16, 32, 48])
+    representation.add_argument("--fit-max-rows", type=int, default=20_000)
+    representation.add_argument("--inner-validation-max-rows", type=int, default=8_192)
+    representation.add_argument("--support-max-rows", type=int, default=8_192)
+    representation.add_argument("--nll-max-cells-per-guide", type=int, default=32)
+    representation.add_argument("--bootstrap-draws", type=int, default=2_000)
+    representation.add_argument("--null-repeats", type=int, default=20)
+    representation.add_argument("--seed", type=int, default=20_260_815)
     open_parser = sub.add_parser("open-run")
     open_parser.add_argument("run", type=_path)
     open_parser.add_argument("--device", default="cpu")
@@ -146,6 +161,21 @@ def main(argv: list[str] | None = None) -> int:
             feature_order_hashes=feature_hashes,
             minimum_source_cells=args.minimum_source_cells,
             mass_pseudocount=args.mass_pseudocount,
+        )
+    elif command == "qualify-representation":
+        result = api.qualify_representation(
+            args.output,
+            pooled_bundle=args.pooled_bundle,
+            count_store=args.count_store,
+            outer_folds=pd.read_parquet(args.outer_folds),
+            dimensions=tuple(args.dimensions),
+            fit_max_rows=args.fit_max_rows,
+            inner_validation_max_rows=args.inner_validation_max_rows,
+            support_max_rows=args.support_max_rows,
+            nll_max_cells_per_guide=args.nll_max_cells_per_guide,
+            bootstrap_draws=args.bootstrap_draws,
+            null_repeats=args.null_repeats,
+            seed=args.seed,
         )
     elif command == "finalize":
         result = api.finalize(args.config)

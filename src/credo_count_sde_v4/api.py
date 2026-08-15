@@ -18,6 +18,7 @@ from .contracts import (
     CompiledRunContract,
     ComponentTestContract,
     ComponentTestReceipt,
+    CountRepresentationBundle,
     CountStoreManifest,
     EvaluationBundleManifest,
     InferenceBundleManifest,
@@ -38,6 +39,7 @@ from .evaluation import evaluate_run, seal_run
 from .inference import V4Run, finalize_inference, open_inference_run
 from .persistence import LifecycleLedger, verify_directory
 from .prepare import prepare_representation
+from .representation import qualify_count_representation, verify_count_representation
 from .store import CountStore
 from .training import resume_training, train_model
 from .training.calibration import run_state_selection_calibration
@@ -86,6 +88,28 @@ def pool_finite_measures(
     return result
 
 
+def qualify_representation(
+    destination: Path,
+    *,
+    pooled_bundle: Path,
+    count_store: Path,
+    outer_folds: pd.DataFrame,
+    **settings: Any,
+) -> Path:
+    """Fit, adjudicate, and fully verify the independent T01 component."""
+
+    _supported_preflight()
+    result = qualify_count_representation(
+        destination,
+        pooled_bundle=pooled_bundle,
+        count_store=count_store,
+        outer_folds=outer_folds,
+        **settings,
+    )
+    verify_count_representation(result, pooled_bundle=pooled_bundle, count_store=count_store)
+    return result
+
+
 def validate_contract(path: Path) -> dict[str, Any]:
     """Validate canonical JSON syntax and reject non-object contracts."""
 
@@ -101,10 +125,11 @@ def validate_contract(path: Path) -> dict[str, Any]:
         selected = StateSelectionCalibrationResults
     else:
         discriminators = (
+            ("compiled_run_id", CompiledRunContract),
+            ("representation_id", CountRepresentationBundle),
             ("pooled_data_id", PooledFiniteMeasureBundle),
             ("test_contract_id", ComponentTestContract),
             ("receipt_id", ComponentTestReceipt),
-            ("compiled_run_id", CompiledRunContract),
             ("prepared_id", PreparedRepresentation),
             ("evaluation_id", EvaluationBundleManifest),
             ("run_id", InferenceBundleManifest),

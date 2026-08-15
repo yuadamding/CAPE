@@ -17,6 +17,8 @@
   and strongest preregistered noninteraction comparators;
 - prohibit scale-out and target-VRAM selection until prerequisite component
   receipts pass.
+- add the fail-closed T01 count-native representation gate; the first external
+  multinomial/Hellinger candidate was retired after dimension 0 won all folds.
 
 ## 4.0.0.dev17 — 2026-08-15
 

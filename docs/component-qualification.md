@@ -107,7 +107,7 @@ model; its null calibration and bootstrap entries are explicitly
 | Stage | Package status | Pooled real-data status | Promotion |
 |---|---|---|---|
 | T00 | implemented; eight focused tests pass | external Renz receipt passes | T00 only |
-| T01 | preparation infrastructure exists; count-native qualification absent | not run | blocked |
+| T01 | v1 count-native gate implemented | v1 failed; dimension 0 in 4/4 folds | blocked |
 | T02 | baseline primitives exist; complete noise-floor receipt absent | not run | blocked |
 | T03 | dev18 identifiability/null hardening is under engineering validation | not run under this ladder | blocked |
 | T04–T13 | partial numerical/model primitives exist | not run under this ladder | blocked |
@@ -117,6 +117,14 @@ targeting and 50 controls), 150 perturbation targets, and 277,200 cells. Both
 checkpoint mass sums are exactly one. This establishes only data semantics.
 It does not qualify representation, transport, mass reaction, ecology,
 counterfactuals, decoding, or biological claims.
+
+The first T01 candidate used multinomial/Hellinger low-rank factors with
+dimensions 8, 16, 32, and 48. The global gene-frequency decoder (dimension 0)
+was selectable and won every fold. The learned candidates were worse by
+0.204–0.256 nats per count on P4-only inner validation. T01 v1 is therefore
+`fail_retired`; it was not refit, P60 support was not inspected, and T02 remains
+blocked. The failure receipt is retained outside the package in
+`credo_v4_renz_t01_representation_20260815/`.
 
 Synthetic values reported outside a committed component directory are useful
 design evidence but are not promotion evidence. Every subsequent stage must

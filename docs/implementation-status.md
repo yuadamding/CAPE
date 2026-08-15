@@ -21,6 +21,12 @@ eight focused invariants. The external pooled Renz adapter passed T00 with 495
 guides and 277,200 cells, but no T01–T13 component is promoted. See
 [component qualification](component-qualification.md).
 
+T01 v1 is implemented fail-closed and has been exercised on the pooled Renz
+population. It correctly retained the global decoder in all four folds because
+every low-rank candidate worsened source-only count likelihood. This is a
+retired candidate, not a representation qualification; downstream tests remain
+blocked.
+
 Local acceptance result: see `receipts/local-validation.json` for the current
 test count and coverage; one CUDA
 test was skipped because the validation environment exposed no CUDA device. Ruff,

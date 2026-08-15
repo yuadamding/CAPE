@@ -174,6 +174,50 @@ class PooledFiniteMeasureBundle(StrictModel):
         return self
 
 
+class CountRepresentationBundle(StrictModel):
+    """Immutable T01 count-native representation qualification bundle."""
+
+    schema_version: int = 1
+    representation_id: str
+    pooled_data_id: str
+    method: Literal["multinomial_hellinger_pca_v1"]
+    feature_index_hash: Sha256
+    count_store_sha256: Sha256
+    dimensions: tuple[int, ...]
+    selected_dimensions: dict[str, int]
+    outer_folds: tuple[str, ...]
+    selection_uses_terminal_outcomes: Literal[False] = False
+    dynamics_gradients_enabled: Literal[False] = False
+    fit_checkpoint: str
+    protected_checkpoint: str
+    fold_index: ArtifactRef
+    encoder_state: ArtifactRef
+    candidate_metrics: ArtifactRef
+    per_guide_metrics: ArtifactRef
+    per_target_metrics: ArtifactRef
+    support_metrics: ArtifactRef
+    null_calibration: ArtifactRef
+    selected_model: ArtifactRef
+    test_receipt: ArtifactRef
+
+    @model_validator(mode="after")
+    def validate_representation(self) -> CountRepresentationBundle:
+        expected = self.identity(id_field="representation_id")
+        if self.representation_id != expected:
+            raise ValueError(f"representation_id mismatch: expected {expected}.")
+        if not self.dimensions or tuple(sorted(set(self.dimensions))) != self.dimensions:
+            raise ValueError("Representation dimensions must be unique and increasing.")
+        if any(value <= 0 for value in self.dimensions):
+            raise ValueError("Representation dimensions must be positive.")
+        if set(self.selected_dimensions) != set(self.outer_folds):
+            raise ValueError("Every outer fold must have exactly one selected dimension.")
+        if any(value not in {0, *self.dimensions} for value in self.selected_dimensions.values()):
+            raise ValueError("A selected dimension is outside the frozen candidate set.")
+        if self.fit_checkpoint == self.protected_checkpoint:
+            raise ValueError("Fit and protected checkpoints must differ.")
+        return self
+
+
 class ComponentTestContract(StrictModel):
     """Frozen component-wise qualification contract."""
 
