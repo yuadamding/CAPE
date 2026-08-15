@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 from ..contracts import ModelConfig, RunIntent
 
@@ -54,7 +55,11 @@ class CountSDEModel(nn.Module):
         self.source_interaction_whitener: torch.Tensor
         if config.source_target_interaction_rank:
             rank = config.source_target_interaction_rank
-            self.source_target_main_weight = nn.Parameter(torch.zeros(()))
+            # The target-only shrinkage coefficient is fitted analytically on
+            # the training information set and then frozen while the source ×
+            # target interaction is optimized.  Keeping it in the state dict
+            # makes the deployed ablation exact and auditable.
+            self.source_target_main_weight = nn.Parameter(torch.zeros(()), requires_grad=False)
             self.register_buffer("source_target_main_offset", torch.zeros(targets, d))
             self.source_interaction_projection: nn.Linear | None = nn.Linear(d, rank, bias=False)
             self.target_interaction_embedding = nn.Parameter(torch.empty(targets, rank))
@@ -167,7 +172,7 @@ class CountSDEModel(nn.Module):
         z: torch.Tensor | None = None,
     ) -> torch.Tensor:
         result = self.base_drift.expand(target_index.shape[0], -1)
-        if effect_mode == "factual":
+        if effect_mode in {"factual", "target_only"}:
             result = result + self.target_drift[target_index] * self._mask(is_control, 2)
         if self.intent is RunIntent.COUNT_CONTEXT and context_mode != "source_fixed":
             if pool_state_mean is None or pool_log_mass is None:
@@ -203,7 +208,7 @@ class CountSDEModel(nn.Module):
         source_z: torch.Tensor | None = None,
     ) -> torch.Tensor:
         result = self.terminal_anchor.expand(target_index.shape[0], -1)
-        if effect_mode == "factual":
+        if effect_mode in {"factual", "target_only"}:
             result = result + self.target_anchor_offset[target_index] * self._mask(is_control, 2)
         if self.config.source_conditioned_anchor:
             if source_z is None:
@@ -212,7 +217,10 @@ class CountSDEModel(nn.Module):
             assert self.source_anchor_output is not None
             residual = self.source_anchor_output(torch.tanh(self.source_anchor_hidden(source_z)))
             result = result + self.config.source_anchor_residual_scale * torch.tanh(residual)
-        if self.config.source_target_interaction_rank and effect_mode == "factual":
+        if self.config.source_target_interaction_rank and effect_mode in {
+            "factual",
+            "target_only",
+        }:
             if source_z is None:
                 raise ValueError("A source-target interaction requires the original source state.")
             assert self.source_interaction_projection is not None
@@ -223,15 +231,19 @@ class CountSDEModel(nn.Module):
             result = result + (
                 self.source_target_main_weight * self.source_target_main_offset[target_index] * mask
             )
-            whitened = (source_z - self.source_interaction_center) @ (
-                self.source_interaction_whitener.T
-            )
-            source_score = self.source_interaction_projection(whitened)
-            interaction = source_score * self.target_interaction_embedding[target_index]
-            residual = self.source_target_output(interaction)
-            result = result + (
-                self.config.source_target_interaction_scale * torch.tanh(residual) * mask
-            )
+            if effect_mode == "factual":
+                whitened = (source_z - self.source_interaction_center) @ (
+                    self.source_interaction_whitener.T
+                )
+                source_score = self.source_interaction_projection(whitened)
+                target_embedding = F.normalize(
+                    self.target_interaction_embedding[target_index], dim=-1, eps=1e-8
+                )
+                interaction = source_score * target_embedding
+                residual = self.source_target_output(interaction)
+                result = result + (
+                    self.config.source_target_interaction_scale * torch.tanh(residual) * mask
+                )
         return result
 
     def state_step(

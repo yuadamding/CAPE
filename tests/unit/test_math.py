@@ -25,6 +25,7 @@ from credo_count_sde_v4.numerics import rollout
 from credo_count_sde_v4.objectives import count_probabilities, dirichlet_multinomial_log_prob
 from credo_count_sde_v4.training.trainer import (
     _csr_selected_logit_sum,
+    _fit_shrunk_target_main_weight,
     _initialize_state_channels,
     _state_split,
     _target_balanced_mse,
@@ -380,7 +381,71 @@ def test_source_target_interaction_can_learn_a_sign_controlled_signal() -> None:
         loss.backward()
         optimizer.step()
     final = torch.mean((model.anchor(target, control, source_z=source) - expected) ** 2)
+    interaction_off = torch.mean(
+        (model.anchor(target, control, source_z=source, effect_mode="target_only") - expected) ** 2
+    )
     assert final < initial * 0.05
+    assert final < interaction_off * 0.05
+
+
+def test_sister_guide_target_weight_is_leave_one_out_bounded_and_shrunk() -> None:
+    model_config = ModelConfig(
+        state_dim=2,
+        target_count=3,
+        terminal_anchor_drift=True,
+        source_carryover_alpha=0.0,
+        source_target_interaction_rank=2,
+        trainable_terminal_anchor=False,
+        trainable_target_anchor=False,
+    )
+    problem = {
+        "source_z": torch.zeros(8, 2),
+        "terminal_z": torch.tensor(
+            [
+                [0.0, 0.0],
+                [0.0, 0.0],
+                [1.0, 0.0],
+                [1.2, 0.0],
+                [0.8, 0.0],
+                [-1.0, 0.0],
+                [-0.8, 0.0],
+                [-1.2, 0.0],
+            ]
+        ),
+        "target_index": torch.tensor([0, 0, 1, 1, 1, 2, 2, 2]),
+        "pool_index": torch.zeros(8, dtype=torch.long),
+        "is_control": torch.tensor([1, 1, 0, 0, 0, 0, 0, 0], dtype=torch.uint8),
+        "duration": torch.ones(8),
+        "grid_steps": torch.ones(8, dtype=torch.long),
+        "source_counts": torch.full((8,), 100),
+        "terminal_counts": torch.full((8,), 100),
+    }
+
+    def fitted(penalty: float) -> float:
+        model = CountSDEModel(model_config, RunIntent.COUNT_STATE)
+        runtime = SimpleNamespace(
+            training=TrainingConfig(
+                source_target_main_penalty=penalty,
+                source_target_interaction_penalty=1.0,
+            )
+        )
+        _initialize_state_channels(
+            model,
+            problem,
+            torch.arange(8),
+            runtime,  # type: ignore[arg-type]
+        )
+        return _fit_shrunk_target_main_weight(
+            model,
+            problem,
+            torch.arange(8),
+            runtime,  # type: ignore[arg-type]
+            materialize=True,
+        )
+
+    weakly_regularized = fitted(1e-6)
+    strongly_regularized = fitted(10.0)
+    assert 0.0 <= strongly_regularized < weakly_regularized <= 1.0
 
 
 def test_null_guarded_selection_requires_margin_over_best_baseline(tmp_path: Path) -> None:
@@ -388,11 +453,14 @@ def test_null_guarded_selection_requires_margin_over_best_baseline(tmp_path: Pat
         for update, score in ((0, 0.5), (5, trained_score)):
             generation = root / "checkpoints" / f"generation-{update:09d}"
             generation.mkdir(parents=True)
-            diagnostics = {"state_validation_targeting_target_balanced_rmse": score}
-            if update == 0:
-                diagnostics["state_validation_target_terminal_targeting_target_balanced_rmse"] = (
-                    target_score
-                )
+            diagnostics = {
+                "state_validation_full_interaction_rmse": score,
+                "state_validation_global_null_rmse": 0.5,
+                "state_validation_shrunk_target_only_rmse": target_score,
+                "state_validation_interaction_incremental_gain": target_score - score,
+                "interaction_displacement_rms": abs(target_score - score),
+                "target_main_displacement_rms": 0.1,
+            }
             (generation / "training-state.json").write_text(
                 json.dumps({"diagnostics": diagnostics})
             )
@@ -401,7 +469,8 @@ def test_null_guarded_selection_requires_margin_over_best_baseline(tmp_path: Pat
             checkpoint_every=5,
             state_checkpoint_updates=(5,),
             max_updates=5,
-            state_validation_minimum_improvement=0.01,
+            state_validation_target_minimum_improvement=0.01,
+            state_validation_interaction_minimum_improvement=0.01,
             selected_update=None,
         )
         config = SimpleNamespace(training=training)
@@ -411,7 +480,10 @@ def test_null_guarded_selection_requires_margin_over_best_baseline(tmp_path: Pat
         ]
         return _write_selection(
             root,
-            SimpleNamespace(compiled_run_id="compiled"),
+            SimpleNamespace(
+                compiled_run_id="compiled",
+                state_selection_calibration_hash="0" * 64,
+            ),
             config,  # type: ignore[arg-type]
             checkpoints,  # type: ignore[arg-type]
         )
@@ -419,15 +491,29 @@ def test_null_guarded_selection_requires_margin_over_best_baseline(tmp_path: Pat
     selected = run_case(tmp_path / "selected", 0.40)
     assert selected["selected_update"] == 5
     assert selected["selected_family"] == "target_plus_source_target_interaction"
-    assert selected["null_selected"] is False
     target = run_case(tmp_path / "target", 0.445)
     assert target["selected_update"] == 0
-    assert target["selected_family"] == "sister_guide_target_terminal"
-    assert target["null_selected"] is False
+    assert target["selected_family"] == "shrunk_sister_guide_target_terminal"
+    full_target = run_case(tmp_path / "full-target", 0.35, target_score=0.35)
+    assert full_target["selected_family"] == "shrunk_sister_guide_target_terminal"
     rejected = run_case(tmp_path / "rejected", 0.49, target_score=0.495)
     assert rejected["selected_update"] == 0
     assert rejected["selected_family"] == "global_terminal_null"
-    assert rejected["null_selected"] is True
+    false_interaction_selections = 0
+    for seed in range(20):
+        # A shrunk-target truth may yield small numerical fluctuations, but a
+        # calibrated 0.01 incremental margin must not relabel those as source
+        # interactions.
+        target_score = 0.44 + seed * 1e-5
+        row = run_case(
+            tmp_path / f"target-only-null-seed-{seed}",
+            target_score - 0.005,
+            target_score=target_score,
+        )
+        false_interaction_selections += int(
+            row["selected_family"] == "target_plus_source_target_interaction"
+        )
+    assert false_interaction_selections == 0
 
 
 def test_csr_decoder_reduction_matches_reference_and_has_finite_gradients() -> None:

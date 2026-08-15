@@ -5,6 +5,7 @@ from scipy import sparse
 
 from credo_count_sde_v4.contracts import FeatureKey, SeriesRecord
 from credo_count_sde_v4.evaluation.evaluator import (
+    _interaction_advancement_pass,
     _observed_gene_compositions,
     _target_balanced_bootstrap_differences,
 )
@@ -22,6 +23,25 @@ def test_target_bootstrap_preserves_equal_target_weighting() -> None:
     middle = np.sqrt((1.0 + 9.0) / 2.0) - 2.0
     expected = 0.25 * (-1.0) + 0.5 * middle + 0.25 * 1.0
     assert abs(float(values.mean()) - expected) < 0.04
+
+
+def test_interaction_advancement_requires_interaction_family_and_effect_floor() -> None:
+    common = {
+        "bootstrap_upper": -0.02,
+        "required_negative_improvement": 0.01,
+        "interaction_displacement_rms": 0.2,
+        "minimum_interaction_displacement_rms": 0.1,
+    }
+    assert _interaction_advancement_pass(
+        selected_family="target_plus_source_target_interaction", **common
+    )
+    assert not _interaction_advancement_pass(
+        selected_family="shrunk_sister_guide_target_terminal", **common
+    )
+    assert not _interaction_advancement_pass(
+        selected_family="target_plus_source_target_interaction",
+        **{**common, "interaction_displacement_rms": 0.05},
+    )
 
 
 def test_observed_gene_compositions_aggregate_terminal_cells(tmp_path) -> None:

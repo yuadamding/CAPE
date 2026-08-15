@@ -20,7 +20,9 @@ from .contracts import (
     PreparedRepresentation,
     ResolvedConfig,
     SealedRunManifest,
+    SelectionManifest,
     SemanticStudySnapshot,
+    StateSelectionCalibration,
     VerifyLevel,
 )
 from .errors import IntegrityError
@@ -63,6 +65,8 @@ def validate_contract(path: Path) -> dict[str, Any]:
         ("evaluation_id", EvaluationBundleManifest),
         ("run_id", InferenceBundleManifest),
         ("sealed_id", SealedRunManifest),
+        ("selection_id", SelectionManifest),
+        ("calibration_id", StateSelectionCalibration),
         ("store_id", CountStoreManifest),
         ("study_id", SemanticStudySnapshot),
     )

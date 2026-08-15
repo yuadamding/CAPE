@@ -207,8 +207,8 @@
       "type": "string"
     },
     "recipe_version": {
-      "const": "4.0.dev15",
-      "default": "4.0.dev15",
+      "const": "4.0.dev16",
+      "default": "4.0.dev16",
       "title": "Recipe Version",
       "type": "string"
     },
@@ -246,6 +246,18 @@
       "title": "Split Manifest Hash",
       "type": "string"
     },
+    "state_selection_calibration_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "State Selection Calibration Hash"
+    },
     "target_hierarchy_hash": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Target Hierarchy Hash",
@@ -273,6 +285,7 @@
     "preregistration_hash",
     "multiplicity_plan_hash",
     "candidate_selection_plan_hash",
+    "state_selection_calibration_hash",
     "correction_contract_hash",
     "representation_id",
     "latent_cache_index_hash",

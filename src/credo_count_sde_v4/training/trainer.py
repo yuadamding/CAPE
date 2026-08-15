@@ -22,6 +22,7 @@ from ..contracts import (
     CompiledRunContract,
     ResolvedConfig,
     RunIntent,
+    SelectionManifest,
     SemanticStudySnapshot,
 )
 from ..errors import ResumeMismatchError
@@ -320,8 +321,12 @@ def _checkpoint(
     loss: float,
     diagnostics: dict[str, float | str] | None,
     parent_checkpoint_id: str | None,
+    selection_source_checkpoint_id: str | None = None,
+    artifact_training_root: Path | None = None,
 ) -> CheckpointManifest:
     generation_root = training_root / "checkpoints" / f"generation-{update:09d}"
+    reference_training_root = artifact_training_root or training_root
+    reference_generation_root = reference_training_root / "checkpoints" / f"generation-{update:09d}"
     manifest_holder: dict[str, CheckpointManifest] = {}
 
     def writer(temp: Path) -> None:
@@ -349,7 +354,6 @@ def _checkpoint(
             "diagnostics": diagnostics or {},
         }
         (temp / "training-state.json").write_bytes(canonical_json_bytes(training_state) + b"\n")
-        final = generation_root
 
         def future(name: str, schema: str, media: str) -> ArtifactRef:
             path = temp / name
@@ -359,7 +363,7 @@ def _checkpoint(
                 sha256=__import__("hashlib").sha256(path.read_bytes()).hexdigest(),
                 size_bytes=path.stat().st_size,
                 media_type=media,
-                relative_uri=(final / name).relative_to(workspace).as_posix(),
+                relative_uri=(reference_generation_root / name).relative_to(workspace).as_posix(),
             )
 
         payload = {
@@ -370,6 +374,7 @@ def _checkpoint(
             "update": update,
             "stage": "joint",
             "parent_checkpoint_id": parent_checkpoint_id,
+            "selection_source_checkpoint_id": selection_source_checkpoint_id,
             "model": future(
                 "model.safetensors", "credo.model_state", "application/x-safetensors"
             ).model_dump(mode="json"),
@@ -415,6 +420,8 @@ def _deterministic_prediction(
     pool: torch.Tensor,
     control: torch.Tensor,
     grid_steps: torch.Tensor,
+    *,
+    effect_mode: str = "factual",
 ) -> torch.Tensor:
     """Use the same physical Euler grid as deterministic inference."""
 
@@ -432,6 +439,7 @@ def _deterministic_prediction(
                 control[local],
                 total_steps=int(steps_value),
                 source_z=source[local],
+                effect_mode=effect_mode,
             )
         prediction[local] = z
     return prediction
@@ -520,7 +528,8 @@ def _initialize_state_channels(
             average_variance = torch.diagonal(covariance).mean().clamp_min(1e-6)
             ridge = model.config.source_target_whitening_ridge * average_variance
             eigenvalues, eigenvectors = torch.linalg.eigh(covariance)
-            inverse_root = torch.rsqrt(eigenvalues.clamp_min(ridge))
+            # Conventional ridge whitening, not an eigenvalue floor.
+            inverse_root = torch.rsqrt(eigenvalues.clamp_min(0.0) + ridge)
             whitener = (eigenvectors * inverse_root.unsqueeze(0)) @ eigenvectors.T
             model.source_interaction_center.copy_(center)
             model.source_interaction_whitener.copy_(whitener)
@@ -572,6 +581,57 @@ def _initialize_state_channels(
     return {"closed_form_initial_rmse": float(rmse.cpu())}
 
 
+@torch.no_grad()
+def _fit_shrunk_target_main_weight(
+    model: CountSDEModel,
+    problem: dict[str, torch.Tensor],
+    fit_indices: torch.Tensor,
+    config: ResolvedConfig,
+    *,
+    materialize: bool,
+) -> float:
+    """Fit one bounded target-main coefficient without interaction parameters.
+
+    The objective is targeting-only and target-balanced.  The positive ridge
+    penalty is applied to the scalar coefficient, and the result is bounded to
+    the preregistered interpolation interval.  No validation endpoint is used.
+    """
+
+    if model.source_target_main_weight is None:
+        raise RuntimeError("Shrunk target fitting requires a source-target model.")
+    terminal = problem["terminal_z"][fit_indices]
+    target = problem["target_index"][fit_indices].long()
+    control = problem["is_control"][fit_indices].bool()
+    numerators: list[torch.Tensor] = []
+    denominators: list[torch.Tensor] = []
+    for target_value in torch.unique(target[~control]).tolist():
+        local = (target == int(target_value)) & ~control
+        local_terminal = terminal[local]
+        if len(local_terminal) < 2:
+            continue
+        residual = local_terminal - model.terminal_anchor
+        # Fit shrinkage on sister-guide leave-one-out target means.  Using the
+        # same row in its target mean would force alpha toward one and would
+        # not estimate generalization to another guide of the known target.
+        other_mean = (local_terminal.sum(dim=0) - local_terminal) / (len(local_terminal) - 1)
+        candidate = other_mean - model.terminal_anchor
+        numerators.append((residual * candidate).mean())
+        denominators.append(candidate.square().mean())
+    if not numerators:
+        alpha = torch.zeros((), device=terminal.device)
+    else:
+        numerator = torch.stack(numerators).mean()
+        denominator = torch.stack(denominators).mean()
+        alpha = torch.clamp(
+            numerator / (denominator + config.training.source_target_main_penalty),
+            min=0.0,
+            max=model.config.source_target_main_max_weight,
+        )
+    if materialize:
+        model.source_target_main_weight.copy_(alpha)
+    return float(alpha.cpu())
+
+
 def _target_balanced_mse(
     error: torch.Tensor,
     target: torch.Tensor,
@@ -610,6 +670,7 @@ def _training_diagnostics(
     model: CountSDEModel,
     problem: dict[str, torch.Tensor],
     state_split: _StateSplit,
+    config: ResolvedConfig,
     decoder_data: _GeneDecoderData | None = None,
 ) -> dict[str, float | str]:
     evaluable = torch.isfinite(problem["terminal_z"]).all(dim=1)
@@ -665,26 +726,56 @@ def _training_diagnostics(
         fit = state_split.fit_indices
         validation = state_split.validation_indices
         fit_terminal = problem["terminal_z"][fit]
-        fit_target = problem["target_index"][fit].long()
         validation_target = problem["target_index"][validation].long()
         validation_control = problem["is_control"][validation].bool()
         global_terminal = fit_terminal.mean(dim=0)
-        target_prediction = global_terminal.expand(len(validation), -1).clone()
-        for target_value in torch.unique(validation_target[~validation_control]).tolist():
-            local_fit = fit_target == int(target_value)
-            if torch.any(local_fit):
-                target_prediction[validation_target == int(target_value)] = fit_terminal[
-                    local_fit
-                ].mean(dim=0)
+        global_prediction = global_terminal.expand(len(validation), -1)
         targeting = ~validation_control
         if torch.any(targeting):
-            target_error = (
-                target_prediction[targeting] - problem["terminal_z"][validation][targeting]
-            )
-            target_mse = _target_balanced_mse(target_error, validation_target[targeting])
-            diagnostics["state_validation_target_terminal_targeting_target_balanced_rmse"] = float(
-                torch.sqrt(target_mse).cpu()
-            )
+            validation_terminal = problem["terminal_z"][validation]
+            global_error = global_prediction[targeting] - validation_terminal[targeting]
+            global_mse = _target_balanced_mse(global_error, validation_target[targeting])
+            diagnostics["state_validation_global_null_rmse"] = float(torch.sqrt(global_mse).cpu())
+            if model.config.source_target_interaction_rank:
+                alpha = _fit_shrunk_target_main_weight(
+                    model, problem, fit, config, materialize=False
+                )
+                target_displacement = (
+                    alpha
+                    * model.source_target_main_offset[validation_target]
+                    * model._mask(validation_control, 2)
+                )
+                target_prediction = global_prediction + target_displacement
+                target_error = target_prediction[targeting] - validation_terminal[targeting]
+                target_mse = _target_balanced_mse(target_error, validation_target[targeting])
+                target_rmse = float(torch.sqrt(target_mse).cpu())
+                diagnostics["state_validation_shrunk_target_only_rmse"] = target_rmse
+                full_prediction = _deterministic_prediction(
+                    model,
+                    problem["source_z"][validation],
+                    problem["duration"][validation],
+                    validation_target,
+                    problem["pool_index"][validation].long(),
+                    validation_control,
+                    problem["grid_steps"][validation].long(),
+                )
+                full_error = full_prediction[targeting] - validation_terminal[targeting]
+                full_mse = _target_balanced_mse(full_error, validation_target[targeting])
+                full_rmse = float(torch.sqrt(full_mse).cpu())
+                interaction_displacement = full_prediction - target_prediction
+                diagnostics.update(
+                    {
+                        "state_validation_full_interaction_rmse": full_rmse,
+                        "state_validation_interaction_incremental_gain": target_rmse - full_rmse,
+                        "interaction_displacement_rms": float(
+                            torch.sqrt(interaction_displacement[targeting].square().mean()).cpu()
+                        ),
+                        "target_main_displacement_rms": float(
+                            torch.sqrt(target_displacement[targeting].square().mean()).cpu()
+                        ),
+                        "state_fit_shrunk_target_main_weight": alpha,
+                    }
+                )
     return diagnostics
 
 
@@ -728,7 +819,7 @@ def _write_selection(
             "gene_decoder_validation_cross_entropy"
             if config.training.checkpoint_selection == "minimum_gene_decoder_validation"
             else (
-                "state_validation_targeting_target_balanced_rmse"
+                "state_validation_full_interaction_rmse"
                 if null_guarded
                 else "state_validation_target_balanced_rmse"
             )
@@ -751,44 +842,57 @@ def _write_selection(
                 raise RuntimeError(
                     "Null-guarded selection requires update 0 and trained candidates."
                 )
-            null_score, _, null_checkpoint_id = null_rows[0]
-            best_trained_score, best_trained_update, best_trained_checkpoint_id = min(trained_rows)
             null_generation = training_root / "checkpoints/generation-000000000"
             null_state = json.loads((null_generation / "training-state.json").read_text())
-            target_score = null_state.get("diagnostics", {}).get(
-                "state_validation_target_terminal_targeting_target_balanced_rmse"
+            null_score_value = null_state.get("diagnostics", {}).get(
+                "state_validation_global_null_rmse"
+            )
+            if null_score_value is None:
+                raise RuntimeError("Null-guarded selection lacks the global-terminal null score.")
+            null_score = float(null_score_value)
+            _, _, null_checkpoint_id = null_rows[0]
+            best_trained_score, best_trained_update, best_trained_checkpoint_id = min(trained_rows)
+            best_generation = (
+                training_root / "checkpoints" / f"generation-{best_trained_update:09d}"
+            )
+            best_state = json.loads((best_generation / "training-state.json").read_text())
+            target_score = best_state.get("diagnostics", {}).get(
+                "state_validation_shrunk_target_only_rmse"
             )
             if target_score is None:
-                raise RuntimeError("Null-guarded selection lacks the target-terminal baseline.")
+                raise RuntimeError("Null-guarded selection lacks the shrunk target-only baseline.")
             target_score = float(target_score)
-            reference_score = min(null_score, target_score)
-            required = config.training.state_validation_minimum_improvement
-            interaction_improvement = reference_score - best_trained_score
+            target_required = config.training.state_validation_target_minimum_improvement
+            interaction_required = config.training.state_validation_interaction_minimum_improvement
+            interaction_improvement = target_score - best_trained_score
             target_improvement = null_score - target_score
-            if interaction_improvement >= required:
+            overall_interaction_improvement = null_score - best_trained_score
+            if (
+                interaction_improvement >= interaction_required
+                and overall_interaction_improvement >= target_required
+            ):
                 score, update, checkpoint_id = (
                     best_trained_score,
                     best_trained_update,
                     best_trained_checkpoint_id,
                 )
                 selected_family = "target_plus_source_target_interaction"
-            elif target_improvement >= required:
+            elif target_improvement >= target_required:
                 score, update, checkpoint_id = target_score, 0, null_checkpoint_id
-                selected_family = "sister_guide_target_terminal"
+                selected_family = "shrunk_sister_guide_target_terminal"
             else:
                 score, update, checkpoint_id = null_score, 0, null_checkpoint_id
                 selected_family = "global_terminal_null"
             selection_details = {
-                "null_score": null_score,
-                "target_terminal_score": target_score,
-                "reference_score": reference_score,
-                "best_trained_score": best_trained_score,
-                "best_trained_update": best_trained_update,
-                "interaction_improvement_over_best_baseline": interaction_improvement,
-                "target_improvement_over_null": target_improvement,
-                "minimum_required_improvement": required,
+                "global_null_score": null_score,
+                "shrunk_target_only_score": target_score,
+                "interaction_score": best_trained_score,
+                "interaction_incremental_gain": interaction_improvement,
+                "target_incremental_gain": target_improvement,
+                "target_minimum_required_improvement": target_required,
+                "interaction_minimum_required_improvement": interaction_required,
+                "selection_calibration_hash": contract.state_selection_calibration_hash,
                 "selected_family": selected_family,
-                "null_selected": selected_family == "global_terminal_null",
             }
         metric = diagnostic_key
     else:
@@ -802,9 +906,14 @@ def _write_selection(
             raise RuntimeError("The configured selected checkpoint was not persisted.")
         update, checkpoint_id = matches[0].update, matches[0].checkpoint_id
         score, metric = None, "configured_final_update"
-        selection_details = {}
+        selection_details = {"selected_family": "configured_checkpoint"}
+    if config.training.checkpoint_selection == "minimum_gene_decoder_validation":
+        selection_details = {**selection_details, "selected_family": "gene_decoder_selected"}
+    elif config.training.checkpoint_selection == "minimum_state_validation":
+        selection_details = {**selection_details, "selected_family": "state_validation_selected"}
     payload = {
         "schema_version": 1,
+        "selection_id": "pending",
         "compiled_run_id": contract.compiled_run_id,
         "policy": config.training.checkpoint_selection,
         "metric": metric,
@@ -812,11 +921,15 @@ def _write_selection(
         "selected_update": update,
         "selected_checkpoint_id": checkpoint_id,
         "selected_checkpoint_relative_uri": (f"training/checkpoints/generation-{update:09d}"),
-        "candidate_updates": [item.update for item in eligible_checkpoints],
+        "candidate_updates": tuple(item.update for item in eligible_checkpoints),
         **selection_details,
     }
-    atomic_json(training_root / "selection.json", payload)
-    return payload
+    normalized = SelectionManifest.model_construct(**payload).model_dump(mode="json")
+    normalized["selection_id"] = contract_id(normalized, id_field="selection_id")
+    selection = SelectionManifest.model_validate(normalized)
+    serialized = selection.model_dump(mode="json")
+    atomic_json(training_root / "selection.json", serialized)
+    return serialized
 
 
 def _loss(
@@ -899,7 +1012,6 @@ def _loss(
             assert model.source_target_output is not None
             state_parameters.extend(
                 [
-                    model.source_target_main_weight,
                     model.source_interaction_projection.weight,
                     model.target_interaction_embedding,
                     model.source_target_output.weight,
@@ -959,7 +1071,10 @@ def _loss(
                 model.source_interaction_whitener.T
             )
             source_score = model.source_interaction_projection(whitened)
-            interaction = source_score * model.target_interaction_embedding[target.long()]
+            target_embedding = torch.nn.functional.normalize(
+                model.target_interaction_embedding[target.long()], dim=-1, eps=1e-8
+            )
+            interaction = source_score * target_embedding
             interaction_displacement = (
                 config.model.source_target_interaction_scale
                 * torch.tanh(model.source_target_output(interaction))
@@ -970,8 +1085,11 @@ def _loss(
                 * model.source_target_main_offset[target.long()]
                 * model._mask(control, 2)
             )
-            loss = loss + config.training.source_target_interaction_penalty * (
-                interaction_displacement.square().mean() + main_displacement.square().mean()
+            loss = (
+                loss
+                + config.training.source_target_main_penalty * main_displacement.square().mean()
+                + config.training.source_target_interaction_penalty
+                * interaction_displacement.square().mean()
             )
         if decoder_data is not None:
             decoder_loss = _gene_decoder_loss(
@@ -1044,6 +1162,45 @@ def _should_checkpoint(update: int, end: int, config: ResolvedConfig) -> bool:
     )
 
 
+@torch.no_grad()
+def _exact_refit_state_objective(
+    model: CountSDEModel,
+    problem: dict[str, torch.Tensor],
+    state_split: _StateSplit,
+    config: ResolvedConfig,
+) -> float:
+    indices = state_split.fit_indices
+    prediction = _deterministic_prediction(
+        model,
+        problem["source_z"][indices],
+        problem["duration"][indices],
+        problem["target_index"][indices].long(),
+        problem["pool_index"][indices].long(),
+        problem["is_control"][indices].bool(),
+        problem["grid_steps"][indices].long(),
+    )
+    error = prediction - problem["terminal_z"][indices]
+    loss = _target_balanced_mse(error, problem["target_index"][indices].long())
+    if model.config.source_target_interaction_rank:
+        target_only = _deterministic_prediction(
+            model,
+            problem["source_z"][indices],
+            problem["duration"][indices],
+            problem["target_index"][indices].long(),
+            problem["pool_index"][indices].long(),
+            problem["is_control"][indices].bool(),
+            problem["grid_steps"][indices].long(),
+            effect_mode="target_only",
+        )
+        interaction = prediction - target_only
+        target_main = target_only - model.terminal_anchor
+        loss = loss + config.training.source_target_main_penalty * target_main.square().mean()
+        loss = (
+            loss + config.training.source_target_interaction_penalty * interaction.square().mean()
+        )
+    return float(loss.cpu())
+
+
 def _post_selection_refit(
     workspace: Path,
     training_root: Path,
@@ -1060,75 +1217,133 @@ def _post_selection_refit(
     if config.training.gene_decoder_batch_size:
         raise RuntimeError("Post-selection state refitting forbids decoder training.")
     refit_root = training_root / "refit"
-    if refit_root.exists():
-        raise FileExistsError("Post-selection refit already exists.")
-    (refit_root / "checkpoints").mkdir(parents=True)
-    model, optimizer = _new_model_optimizer(config, device)
-    problem = _tensor_problem(arrays, device)
-    state_split = _all_state_split(arrays, config, device)
-    initialization = _initialize_state_channels(model, problem, state_split.fit_indices, config)
+    state_path = training_root / "refit-state.json"
     selected_update = int(selection["selected_update"])
-    selected_family = str(selection.get("selected_family", "trained_checkpoint"))
-    checkpoint: CheckpointManifest | None = None
-    loss_value = float(initialization.get("analytic_terminal_anchor_rmse", 0.0)) ** 2
-    if selected_family == "sister_guide_target_terminal":
-        if model.source_target_main_weight is None:
-            raise RuntimeError("The selected target-only family is unavailable in this model.")
-        with torch.no_grad():
-            model.source_target_main_weight.fill_(1.0)
-    elif selected_family == "target_plus_source_target_interaction" and selected_update:
-        for update in range(1, selected_update + 1):
-            optimizer.zero_grad(set_to_none=True)
-            loss = _loss(model, problem, config, update, None, state_split)
-            if not torch.isfinite(loss):
-                raise FloatingPointError(f"Non-finite refit loss at update {update}.")
-            loss.backward()  # type: ignore[no-untyped-call]
-            optimizer.step()
-            loss_value = float(loss.detach().cpu())
-    diagnostics = {
-        **initialization,
-        **_training_diagnostics(model, problem, state_split, None),
-        "post_selection_refit": "all_outer_training_state_series",
-        "inner_selected_update": float(selected_update),
-        "selected_family": selected_family,
-    }
-    checkpoint = _checkpoint(
-        workspace,
-        refit_root,
-        contract,
-        model,
-        optimizer,
-        update=selected_update,
-        loss=loss_value,
-        diagnostics=diagnostics,
-        parent_checkpoint_id=str(selection["selected_checkpoint_id"]),
-    )
+    selected_family = str(selection["selected_family"])
     inner_checkpoint_id = str(selection["selected_checkpoint_id"])
-    selection = {
+    if refit_root.exists():
+        verify_directory(refit_root)
+        refit_receipt = json.loads((refit_root / "refit.json").read_text())
+        if (
+            refit_receipt.get("compiled_run_id") != contract.compiled_run_id
+            or refit_receipt.get("selection_source_checkpoint_id") != inner_checkpoint_id
+            or refit_receipt.get("selected_family") != selected_family
+        ):
+            raise ResumeMismatchError("Committed post-selection refit belongs to another decision.")
+    else:
+        atomic_json(
+            state_path,
+            {
+                "schema_version": 1,
+                "state": "REFIT_PLANNED",
+                "compiled_run_id": contract.compiled_run_id,
+                "selection_source_checkpoint_id": inner_checkpoint_id,
+                "selected_family": selected_family,
+                "selected_update": selected_update,
+            },
+        )
+        atomic_json(
+            state_path,
+            {
+                "schema_version": 1,
+                "state": "REFIT_RUNNING",
+                "compiled_run_id": contract.compiled_run_id,
+                "selection_source_checkpoint_id": inner_checkpoint_id,
+                "selected_family": selected_family,
+                "selected_update": selected_update,
+            },
+        )
+
+        def writer(temp: Path) -> None:
+            model, optimizer = _new_model_optimizer(config, device)
+            problem = _tensor_problem(arrays, device)
+            state_split = _all_state_split(arrays, config, device)
+            initialization = _initialize_state_channels(
+                model, problem, state_split.fit_indices, config
+            )
+            if selected_family in {
+                "shrunk_sister_guide_target_terminal",
+                "target_plus_source_target_interaction",
+            }:
+                _fit_shrunk_target_main_weight(
+                    model, problem, state_split.fit_indices, config, materialize=True
+                )
+            if selected_family == "target_plus_source_target_interaction" and selected_update:
+                for update in range(1, selected_update + 1):
+                    optimizer.zero_grad(set_to_none=True)
+                    loss = _loss(model, problem, config, update, None, state_split)
+                    if not torch.isfinite(loss):
+                        raise FloatingPointError(f"Non-finite refit loss at update {update}.")
+                    loss.backward()  # type: ignore[no-untyped-call]
+                    optimizer.step()
+            loss_value = _exact_refit_state_objective(model, problem, state_split, config)
+            diagnostics = {
+                **initialization,
+                **_training_diagnostics(model, problem, state_split, config, None),
+                "post_selection_refit": "all_outer_training_state_series",
+                "inner_selected_update": float(selected_update),
+                "selected_family": selected_family,
+            }
+            checkpoint = _checkpoint(
+                workspace,
+                temp,
+                contract,
+                model,
+                optimizer,
+                update=selected_update,
+                loss=loss_value,
+                diagnostics=diagnostics,
+                parent_checkpoint_id=None,
+                selection_source_checkpoint_id=inner_checkpoint_id,
+                artifact_training_root=refit_root,
+            )
+            refit_receipt = {
+                "schema_version": 1,
+                "state": "REFIT_COMMITTED",
+                "compiled_run_id": contract.compiled_run_id,
+                "selection_source_checkpoint_id": inner_checkpoint_id,
+                "inner_selected_update": selected_update,
+                "selected_family": selected_family,
+                "refit_checkpoint_id": checkpoint.checkpoint_id,
+                "refit_series_hash": state_split.fit_series_hash,
+                "refit_series": int(len(state_split.fit_indices)),
+                "exact_refit_objective": loss_value,
+            }
+            (temp / "refit.json").write_bytes(canonical_json_bytes(refit_receipt) + b"\n")
+
+        publish_directory(refit_root, writer)
+        refit_receipt = json.loads((refit_root / "refit.json").read_text())
+
+    updated = {
         **selection,
+        "selection_id": "pending",
+        "inner_selected_update": selected_update,
         "inner_selected_checkpoint_id": inner_checkpoint_id,
-        "selected_checkpoint_id": checkpoint.checkpoint_id,
+        "selected_checkpoint_id": str(refit_receipt["refit_checkpoint_id"]),
+        "refit_checkpoint_id": str(refit_receipt["refit_checkpoint_id"]),
         "selected_checkpoint_relative_uri": (
             f"training/refit/checkpoints/generation-{selected_update:09d}"
         ),
         "post_selection_refit": True,
-        "refit_series_hash": state_split.fit_series_hash,
+        "refit_series_hash": str(refit_receipt["refit_series_hash"]),
     }
+    updated["candidate_updates"] = tuple(updated["candidate_updates"])
+    normalized = SelectionManifest.model_construct(**updated).model_dump(mode="json")
+    normalized["selection_id"] = contract_id(normalized, id_field="selection_id")
+    manifest = SelectionManifest.model_validate(normalized)
+    serialized = manifest.model_dump(mode="json")
+    atomic_json(training_root / "selection.json", serialized)
     atomic_json(
-        refit_root / "refit.json",
+        state_path,
         {
             "schema_version": 1,
+            "state": "REFIT_COMMITTED",
             "compiled_run_id": contract.compiled_run_id,
-            "inner_selected_checkpoint_id": inner_checkpoint_id,
-            "inner_selected_update": selected_update,
-            "selected_family": selected_family,
-            "refit_checkpoint_id": checkpoint.checkpoint_id,
-            "refit_series_hash": state_split.fit_series_hash,
-            "refit_series": int(len(state_split.fit_indices)),
+            "selection_id": manifest.selection_id,
+            "refit_checkpoint_id": manifest.refit_checkpoint_id,
         },
     )
-    atomic_json(training_root / "selection.json", selection)
-    return selection
+    return serialized
 
 
 def train_model(
@@ -1193,9 +1408,9 @@ def train_model(
     if config.training.analytic_fit:
         diagnostics = {
             **initialization,
-            **_training_diagnostics(model, problem, state_split, decoder_data),
+            **_training_diagnostics(model, problem, state_split, config, decoder_data),
         }
-        _checkpoint(
+        checkpoint = _checkpoint(
             workspace,
             training_root,
             contract,
@@ -1206,12 +1421,13 @@ def train_model(
             diagnostics=diagnostics,
             parent_checkpoint_id=fork_parent,
         )
+        _write_selection(training_root, contract, config, [checkpoint])
         return training_root
     checkpoints: list[CheckpointManifest] = []
     if config.training.checkpoint_selection == "minimum_state_validation_null_guarded":
         diagnostics = {
             **initialization,
-            **_training_diagnostics(model, problem, state_split, decoder_data),
+            **_training_diagnostics(model, problem, state_split, config, decoder_data),
         }
         checkpoint = _checkpoint(
             workspace,
@@ -1225,6 +1441,10 @@ def train_model(
             parent_checkpoint_id=fork_parent,
         )
         checkpoints.append(checkpoint)
+        if config.model.source_target_interaction_rank:
+            _fit_shrunk_target_main_weight(
+                model, problem, state_split.fit_indices, config, materialize=True
+            )
     for update in range(1, end + 1):
         optimizer.zero_grad(set_to_none=True)
         loss = _loss(model, problem, config, update, decoder_data, state_split)
@@ -1236,7 +1456,7 @@ def train_model(
         if _should_checkpoint(update, end, config):
             diagnostics = {
                 **initialization,
-                **_training_diagnostics(model, problem, state_split, decoder_data),
+                **_training_diagnostics(model, problem, state_split, config, decoder_data),
             }
             checkpoint = _checkpoint(
                 workspace,
@@ -1345,6 +1565,10 @@ def resume_training(config_path: Path, *, device: str | torch.device | None = No
     problem = _tensor_problem(arrays, selected_device)
     state_split = _state_split(arrays, config, selected_device)
     decoder_data = _gene_decoder_data(root, workspace, config)
+    if config.model.source_target_interaction_rank and previous.update == 0:
+        _fit_shrunk_target_main_weight(
+            model, problem, state_split.fit_indices, config, materialize=True
+        )
     training_root = workspace / "training"
     checkpoint = previous
     checkpoints: list[CheckpointManifest] = []
@@ -1360,7 +1584,7 @@ def resume_training(config_path: Path, *, device: str | torch.device | None = No
         loss.backward()  # type: ignore[no-untyped-call]
         optimizer.step()
         if _should_checkpoint(update, config.training.max_updates, config):
-            diagnostics = _training_diagnostics(model, problem, state_split, decoder_data)
+            diagnostics = _training_diagnostics(model, problem, state_split, config, decoder_data)
             checkpoint = _checkpoint(
                 workspace,
                 training_root,
@@ -1400,8 +1624,11 @@ def load_training_state(
         "minimum_state_validation",
         "minimum_state_validation_null_guarded",
     }:
-        selection = json.loads((workspace / "training/selection.json").read_text())
-        if selection.get("compiled_run_id") != contract.compiled_run_id:
+        selection_manifest = SelectionManifest.model_validate_json(
+            (workspace / "training/selection.json").read_text()
+        )
+        selection = selection_manifest.model_dump(mode="json")
+        if selection_manifest.compiled_run_id != contract.compiled_run_id:
             raise ResumeMismatchError("Checkpoint selection belongs to another compiled run.")
         selected_update = int(selection["selected_update"])
         selected_checkpoint_id = str(selection["selected_checkpoint_id"])

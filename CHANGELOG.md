@@ -1,5 +1,24 @@
 # Changelog
 
+## 4.0.0.dev16 — 2026-08-15
+
+- separate target shrinkage from source × target learning by analytically
+  fitting and freezing a bounded target-main coefficient before interaction
+  optimization;
+- score every interaction checkpoint against its own interaction-off ablation
+  and require independent calibrated margins for target-only and interaction
+  advancement;
+- bind a typed selection manifest and selected family into inference and
+  evaluation, which now fail closed for interaction claims when another family
+  is deployed;
+- prohibit every decoder architecture/training field in this pilot and derive
+  decoder capability only from verified decoder training;
+- make post-selection refit transactional and resumable, remove the false
+  checkpoint-parent edge, and persist the exact refit objective;
+- require a bound training-only calibration artifact and explicit early
+  checkpoint schedule; normalize target interaction embeddings and use
+  conventional ridge whitening.
+
 ## 4.0.0.dev15 — 2026-08-14
 
 - add a rank-limited source × target terminal interaction with fit-only source

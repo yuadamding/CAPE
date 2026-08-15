@@ -161,7 +161,11 @@ def publish_directory(destination: Path, writer: Callable[[Path], None]) -> Path
     temporary.mkdir()
     try:
         writer(temporary)
-        manifest = path_manifest(temporary)
+        # Nested committed bundles retain their own manifest and COMMITTED
+        # marker.  Exclude those reserved names from the parent manifest just
+        # as verification does, while every nested payload byte remains bound
+        # by its own independently verified bundle.
+        manifest = path_manifest(temporary, ignore=frozenset({"artifacts.json", "COMMITTED"}))
         artifacts_path = temporary / "artifacts.json"
         artifacts_path.write_bytes(
             canonical_json_bytes({"schema_version": 1, "files": manifest}) + b"\n"

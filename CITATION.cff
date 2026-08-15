@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use CREDO count-SDE v4, cite this software release."
 title: "CREDO count-SDE v4"
 type: software
-version: 4.0.0.dev15
+version: 4.0.0.dev16
 authors:
   - family-names: Ding
     given-names: Yu Adam

@@ -400,6 +400,7 @@ class ModelConfig(StrictModel):
     source_target_interaction_rank: int = Field(default=0, ge=0, le=8)
     source_target_interaction_scale: float = Field(default=0.25, gt=0.0)
     source_target_whitening_ridge: float = Field(default=1e-3, gt=0.0)
+    source_target_main_max_weight: float = Field(default=1.0, gt=0.0, le=1.0)
     trainable_terminal_anchor: bool = True
     trainable_target_anchor: bool = True
     target_anchor_weight: float = Field(default=0.0, ge=0.0, le=1.0)
@@ -480,9 +481,11 @@ class TrainingConfig(StrictModel):
     support_weight_cap: int = Field(default=1_000, gt=0)
     target_drift_penalty: float = Field(default=0.0, ge=0.0)
     source_drift_penalty: float = Field(default=0.0, ge=0.0)
+    source_target_main_penalty: float = Field(default=0.0, ge=0.0)
     source_target_interaction_penalty: float = Field(default=0.0, ge=0.0)
     state_checkpoint_updates: tuple[int, ...] = ()
-    state_validation_minimum_improvement: float = Field(default=0.0, ge=0.0)
+    state_validation_target_minimum_improvement: float = Field(default=0.0, ge=0.0)
+    state_validation_interaction_minimum_improvement: float = Field(default=0.0, ge=0.0)
     post_selection_state_refit: bool = False
     checkpoint_selection: Literal[
         "final",
@@ -595,6 +598,7 @@ class ResolvedConfig(StrictModel):
     preregistration: str
     multiplicity_plan: str
     candidate_selection_plan: str
+    state_selection_calibration: str | None = None
     baseline_registry: str
     intent: RunIntent
     model: ModelConfig
@@ -641,14 +645,38 @@ class ResolvedConfig(StrictModel):
                 or self.model.adaptive_target_anchor
             ):
                 raise ValueError("Source-target pilots require frozen null and target anchors.")
+            if self.training.source_target_main_penalty <= 0.0:
+                raise ValueError("Source-target pilots require positive target-main shrinkage.")
             if self.training.source_target_interaction_penalty <= 0.0:
-                raise ValueError("Source-target interactions require positive shrinkage.")
-            if self.training.state_validation_minimum_improvement <= 0.0:
-                raise ValueError("Source-target interactions require a positive selection margin.")
+                raise ValueError(
+                    "Source-target interactions require positive interaction shrinkage."
+                )
+            if self.training.state_validation_target_minimum_improvement <= 0.0:
+                raise ValueError("Source-target pilots require a positive target-only margin.")
+            if self.training.state_validation_interaction_minimum_improvement <= 0.0:
+                raise ValueError("Source-target pilots require a positive interaction margin.")
             if self.training.checkpoint_selection != "minimum_state_validation_null_guarded":
                 raise ValueError("Source-target interactions require null-guarded selection.")
-            if self.training.gene_decoder_batch_size:
-                raise ValueError("Source-target state pilots must disable decoder training.")
+            if not self.training.state_checkpoint_updates:
+                raise ValueError(
+                    "Source-target pilots require an explicit early checkpoint schedule."
+                )
+            if self.training.state_checkpoint_updates[0] > 10:
+                raise ValueError("Source-target pilot checkpointing must begin by update 10.")
+            if self.state_selection_calibration is None:
+                raise ValueError("Source-target pilots require a bound selection calibration.")
+            if any(
+                (
+                    self.model.gene_decoder_features,
+                    self.model.gene_decoder_hidden_dim,
+                    self.training.gene_decoder_batch_size,
+                    self.training.gene_decoder_loss_weight,
+                    self.training.gene_decoder_validation_fraction,
+                )
+            ):
+                raise ValueError(
+                    "Source-target state pilots must disable the gene decoder entirely."
+                )
         return self
 
 
@@ -656,7 +684,7 @@ class CompiledRunContract(StrictModel):
     schema_version: int = 1
     compiled_run_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev15"] = "4.0.dev15"
+    recipe_version: Literal["4.0.dev16"] = "4.0.dev16"
     recipe_wheel_hash: Sha256
     frozen_credo_artifact_hash: Sha256
     environment_lock_hash: Sha256
@@ -676,6 +704,7 @@ class CompiledRunContract(StrictModel):
     preregistration_hash: Sha256
     multiplicity_plan_hash: Sha256
     candidate_selection_plan_hash: Sha256
+    state_selection_calibration_hash: Sha256 | None
     correction_contract_hash: Sha256
     representation_id: str
     latent_cache_index_hash: Sha256
@@ -706,6 +735,7 @@ class CheckpointManifest(StrictModel):
     update: int = Field(ge=0)
     stage: str
     parent_checkpoint_id: str | None = None
+    selection_source_checkpoint_id: str | None = None
     model: ArtifactRef
     optimizer: ArtifactRef
     optimizer_tree: ArtifactRef
@@ -720,7 +750,16 @@ class InferenceBundleManifest(StrictModel):
     compiled_run_id: str
     selected_checkpoint_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev15"] = "4.0.dev15"
+    recipe_version: Literal["4.0.dev16"] = "4.0.dev16"
+    selected_family: Literal[
+        "configured_checkpoint",
+        "gene_decoder_selected",
+        "state_validation_selected",
+        "global_terminal_null",
+        "shrunk_sister_guide_target_terminal",
+        "target_plus_source_target_interaction",
+    ]
+    selection: ArtifactRef
     model: ArtifactRef
     run_contract: ArtifactRef
     evaluation_seed_plan: ArtifactRef
@@ -816,6 +855,89 @@ class CandidateSelectionPlan(StrictModel):
     maximum_candidates: int = Field(gt=0)
     minimum_support: int = Field(ge=1)
     protected_endpoint_selection: Literal[False] = False
+
+
+class StateSelectionCalibration(StrictModel):
+    """Frozen training-only calibration for nested state-family selection."""
+
+    schema_version: int = 1
+    calibration_id: str
+    method: Literal["target_label_permutation", "synthetic_null_repeats"]
+    repeated_seeds: int = Field(ge=20)
+    false_interaction_rate_upper_bound: float = Field(ge=0.0, le=0.05)
+    target_minimum_improvement: float = Field(gt=0.0)
+    interaction_minimum_improvement: float = Field(gt=0.0)
+    checkpoint_updates: tuple[int, ...]
+    calibration_data_hash: Sha256
+
+    @model_validator(mode="after")
+    def valid_schedule(self) -> StateSelectionCalibration:
+        if not self.checkpoint_updates:
+            raise ValueError("Calibration must bind a nonempty checkpoint schedule.")
+        if tuple(sorted(set(self.checkpoint_updates))) != self.checkpoint_updates:
+            raise ValueError("Calibration checkpoint updates must be increasing and unique.")
+        return self
+
+
+class SelectionManifest(StrictModel):
+    """Immutable nested-family decision and post-selection refit binding."""
+
+    schema_version: int = 1
+    selection_id: str
+    compiled_run_id: str
+    policy: str
+    metric: str
+    score: float | None
+    selected_update: int = Field(ge=0)
+    selected_checkpoint_id: str
+    selected_checkpoint_relative_uri: str
+    candidate_updates: tuple[int, ...]
+    selected_family: Literal[
+        "configured_checkpoint",
+        "gene_decoder_selected",
+        "state_validation_selected",
+        "global_terminal_null",
+        "shrunk_sister_guide_target_terminal",
+        "target_plus_source_target_interaction",
+    ]
+    inner_selected_update: int | None = Field(default=None, ge=0)
+    inner_selected_checkpoint_id: str | None = None
+    refit_checkpoint_id: str | None = None
+    post_selection_refit: bool = False
+    refit_series_hash: Sha256 | None = None
+    global_null_score: float | None = None
+    shrunk_target_only_score: float | None = None
+    interaction_score: float | None = None
+    interaction_incremental_gain: float | None = None
+    target_incremental_gain: float | None = None
+    target_minimum_required_improvement: float | None = None
+    interaction_minimum_required_improvement: float | None = None
+    selection_calibration_hash: Sha256 | None = None
+
+    @model_validator(mode="after")
+    def validate_selection(self) -> SelectionManifest:
+        expected = self.identity(id_field="selection_id")
+        if self.selection_id != expected:
+            raise ValueError(f"selection_id mismatch: expected {expected}.")
+        if self.policy == "minimum_state_validation_null_guarded":
+            required = (
+                self.global_null_score,
+                self.shrunk_target_only_score,
+                self.interaction_score,
+                self.interaction_incremental_gain,
+                self.target_incremental_gain,
+                self.target_minimum_required_improvement,
+                self.interaction_minimum_required_improvement,
+                self.selection_calibration_hash,
+            )
+            if any(value is None for value in required):
+                raise ValueError("Null-guarded selections require complete nested-family evidence.")
+        if self.post_selection_refit:
+            if self.inner_selected_checkpoint_id is None or self.refit_checkpoint_id is None:
+                raise ValueError("Refit selections must bind inner and refit checkpoint IDs.")
+            if self.selected_checkpoint_id != self.refit_checkpoint_id:
+                raise ValueError("Selected checkpoint must be the committed refit checkpoint.")
+        return self
 
 
 class BaselineInformationSet(StrictModel):

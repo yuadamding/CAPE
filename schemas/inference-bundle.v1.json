@@ -117,8 +117,8 @@
       "type": "string"
     },
     "recipe_version": {
-      "const": "4.0.dev15",
-      "default": "4.0.dev15",
+      "const": "4.0.dev16",
+      "default": "4.0.dev16",
       "title": "Recipe Version",
       "type": "string"
     },
@@ -137,12 +137,29 @@
     "selected_checkpoint_id": {
       "title": "Selected Checkpoint Id",
       "type": "string"
+    },
+    "selected_family": {
+      "enum": [
+        "configured_checkpoint",
+        "gene_decoder_selected",
+        "state_validation_selected",
+        "global_terminal_null",
+        "shrunk_sister_guide_target_terminal",
+        "target_plus_source_target_interaction"
+      ],
+      "title": "Selected Family",
+      "type": "string"
+    },
+    "selection": {
+      "$ref": "#/$defs/ArtifactRef"
     }
   },
   "required": [
     "run_id",
     "compiled_run_id",
     "selected_checkpoint_id",
+    "selected_family",
+    "selection",
     "model",
     "run_contract",
     "evaluation_seed_plan",

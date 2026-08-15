@@ -52,6 +52,23 @@ def _training_row_order(records: tuple[SeriesRecord, ...]) -> tuple[int, ...]:
     return source + terminal
 
 
+def _interaction_advancement_pass(
+    *,
+    selected_family: str,
+    bootstrap_upper: float,
+    required_negative_improvement: float,
+    interaction_displacement_rms: float,
+    minimum_interaction_displacement_rms: float,
+) -> bool:
+    """Fail closed unless the deployed family and both outer gates pass."""
+
+    return bool(
+        selected_family == "target_plus_source_target_interaction"
+        and bootstrap_upper < -required_negative_improvement
+        and interaction_displacement_rms >= minimum_interaction_displacement_rms
+    )
+
+
 def _series_means(
     records: tuple[SeriesRecord, ...], row_ids: np.ndarray, latents: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -258,6 +275,23 @@ def _evaluate_bound_outer(
         steps=run.config.evaluation.steps,
         seed=run.config.evaluation.seed,
     )
+    if run.config.model.source_target_interaction_rank:
+        target_only_states, target_only_weights, _ = rollout(
+            run.model,
+            source_tensor,
+            torch.tensor([record.duration for record in records], device=device),
+            target_tensor,
+            torch.zeros_like(target_tensor),
+            control_tensor,
+            torch.tensor([record.source_count + 0.5 for record in records], device=device),
+            particles=run.config.evaluation.particles,
+            steps=run.config.evaluation.steps,
+            seed=run.config.evaluation.seed,
+            effect_mode="target_only",
+        )
+        predictions["shrunk_target_only"] = (
+            (target_only_states * target_only_weights.unsqueeze(-1)).sum(dim=1).cpu().numpy()
+        )
     if device.type == "cuda":
         torch.cuda.synchronize(device)
     predictions["v4"] = (states * weights.unsqueeze(-1)).sum(dim=1).cpu().numpy()
@@ -323,6 +357,11 @@ def _evaluate_bound_outer(
         )
         metrics["gene_composition_diagnostic"] = gene_metrics
     primary = str(frozen_plan["primary_baseline"])
+    interaction_pilot = bool(run.config.model.source_target_interaction_rank)
+    if interaction_pilot and primary != "shrunk_target_only":
+        raise ContractError(
+            "Source-target interaction evaluation requires shrunk_target_only as primary baseline."
+        )
     primary_metric = str(frozen_plan.get("primary_metric", "target_balanced_rmse"))
     key = f"{primary}_{primary_metric}"
     model_key = f"v4_{primary_metric}"
@@ -372,13 +411,42 @@ def _evaluate_bound_outer(
         "one_shot": bool(not frozen_plan.get("historically_exposed", False)),
     }
     scientific_threshold = scientific_minimum + numerical_tolerance
-    scientific_gate_pass = bool(interval[1] < -scientific_threshold)
+    minimum_interaction_rms = float(frozen_plan.get("minimum_interaction_displacement_rms", 0.0))
+    if interaction_pilot and minimum_interaction_rms <= 0.0:
+        raise ContractError(
+            "Source-target interaction evaluation requires a positive frozen effect-size floor."
+        )
+    targeting_interaction_rms = (
+        float(
+            np.sqrt(
+                np.mean(
+                    np.square(
+                        predictions["v4"][targeting] - predictions["shrunk_target_only"][targeting]
+                    )
+                )
+            )
+        )
+        if interaction_pilot and targeting.any()
+        else 0.0
+    )
+    family_eligible = run.manifest.selected_family == "target_plus_source_target_interaction"
+    scientific_gate_pass = _interaction_advancement_pass(
+        selected_family=run.manifest.selected_family,
+        bootstrap_upper=interval[1],
+        required_negative_improvement=scientific_threshold,
+        interaction_displacement_rms=targeting_interaction_rms,
+        minimum_interaction_displacement_rms=minimum_interaction_rms,
+    )
     audit = {
         "schema_version": 1,
         "status": "engineering_complete" if numerical_pass else "numerical_failure",
         "qualified": False,
         "numerical_pass": numerical_pass,
         "scientific_gate_pass": scientific_gate_pass,
+        "selected_family": run.manifest.selected_family,
+        "interaction_family_eligible": family_eligible,
+        "interaction_displacement_rms": targeting_interaction_rms,
+        "minimum_interaction_displacement_rms": minimum_interaction_rms,
         "scientific_gate": "conditional_target_bootstrap_upper_below_negative_minimum",
         "scientific_minimum_improvement": scientific_minimum,
         "scientific_improvement_threshold_including_numerical_tolerance": scientific_threshold,
@@ -452,6 +520,7 @@ def evaluate_run(config_path: Path, *, device: str = "cpu") -> Path:
             "one_shot": True,
             "baseline_registry_hash": run.contract.baseline_registry_hash,
             "multiplicity_plan_hash": run.contract.multiplicity_plan_hash,
+            "selected_family": run.manifest.selected_family,
         }
         audit = {
             "schema_version": 1,
@@ -459,6 +528,9 @@ def evaluate_run(config_path: Path, *, device: str = "cpu") -> Path:
             "checkpoint_selected_before_evaluation": True,
             "endpoint_used_for_eligibility": False,
             "claim_status": "engineering_only",
+            "selected_family": run.manifest.selected_family,
+            "interaction_family_eligible": False,
+            "scientific_gate_pass": False,
         }
         frame = pd.DataFrame(
             {

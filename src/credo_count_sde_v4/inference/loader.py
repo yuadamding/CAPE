@@ -18,6 +18,7 @@ from ..contracts import (
     InferenceBundleManifest,
     ResolvedConfig,
     ResolvedRunCapabilities,
+    SelectionManifest,
 )
 from ..errors import CapabilityError, IntegrityError
 from ..model import CountSDEModel
@@ -68,6 +69,11 @@ def finalize_inference(config_path: Path) -> Path:
         (workspace / "compiled" / "config.json").read_text()
     )
     contract, arrays, model, checkpoint = load_training_state(config_path, device="cpu")
+    selection = SelectionManifest.model_validate_json(
+        (workspace / "training" / "selection.json").read_text()
+    )
+    if selection.selected_checkpoint_id != checkpoint.checkpoint_id:
+        raise IntegrityError("Selection manifest does not bind the finalized checkpoint.")
     destination = workspace / "inference"
     manifest_holder: dict[str, InferenceBundleManifest] = {}
 
@@ -75,6 +81,9 @@ def finalize_inference(config_path: Path) -> Path:
         save_tensor_file(temp / "model.safetensors", model.state_dict())
         (temp / "run-contract.json").write_bytes(
             canonical_json_bytes(contract.model_dump(mode="json")) + b"\n"
+        )
+        (temp / "selection-manifest.json").write_bytes(
+            canonical_json_bytes(selection.model_dump(mode="json")) + b"\n"
         )
         seed_plan = {
             "schema_version": 1,
@@ -88,6 +97,7 @@ def finalize_inference(config_path: Path) -> Path:
         (temp / "evaluation-seed-plan.json").write_bytes(canonical_json_bytes(seed_plan) + b"\n")
         output_schema = {
             "schema_version": 1,
+            "selected_family": selection.selected_family,
             "terminal_state": "weighted_particle_mean",
             "gene_output": (
                 "composition" if contract.capabilities.decode_gene_composition else None
@@ -103,6 +113,7 @@ def finalize_inference(config_path: Path) -> Path:
             "selected_checkpoint_id": checkpoint.checkpoint_id,
             "recipe_id": contract.recipe_id,
             "recipe_version": contract.recipe_version,
+            "selected_family": selection.selected_family,
             "model": _future_ref(
                 workspace,
                 final / "model.safetensors",
@@ -115,6 +126,13 @@ def finalize_inference(config_path: Path) -> Path:
                 final / "run-contract.json",
                 temp / "run-contract.json",
                 schema_id="credo.compiled_run",
+                media_type="application/json",
+            ).model_dump(mode="json"),
+            "selection": _future_ref(
+                workspace,
+                final / "selection-manifest.json",
+                temp / "selection-manifest.json",
+                schema_id="credo.selection_manifest",
                 media_type="application/json",
             ).model_dump(mode="json"),
             "evaluation_seed_plan": _future_ref(
@@ -376,12 +394,22 @@ def open_inference_run(
     for reference in (
         manifest.model,
         manifest.run_contract,
+        manifest.selection,
         manifest.evaluation_seed_plan,
         manifest.output_schema,
     ):
         _verify_ref(workspace, reference)
     if manifest.compiled_run_id != contract.compiled_run_id:
         raise IntegrityError("Inference parent contract mismatch.")
+    selection = SelectionManifest.model_validate_json(
+        (path / "selection-manifest.json").read_text()
+    )
+    if (
+        selection.compiled_run_id != contract.compiled_run_id
+        or selection.selected_checkpoint_id != manifest.selected_checkpoint_id
+        or selection.selected_family != manifest.selected_family
+    ):
+        raise IntegrityError("Inference selection binding mismatch.")
     if contract.implementation_tree_hash != implementation_tree_hash():
         raise IntegrityError("Installed V4 implementation differs from the compiled run.")
     if contract.recipe_wheel_hash != recipe_distribution_hash():
@@ -401,5 +429,9 @@ def open_inference_run(
     model = CountSDEModel(config.model, config.intent).to(selected)
     state = load_tensor_file(path / "model.safetensors", device=selected)
     model.load_state_dict(state, strict=True)
+    if model.source_target_main_weight is not None:
+        alpha = float(model.source_target_main_weight.detach().cpu())
+        if not 0.0 <= alpha <= model.config.source_target_main_max_weight:
+            raise IntegrityError("Deployed target-main shrinkage weight is outside its bound.")
     model.eval()
     return V4Run(workspace, manifest, contract, config, arrays, model, selected)

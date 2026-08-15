@@ -1,0 +1,70 @@
+{
+  "$id": "https://credo.local/schemas/state-selection-calibration.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Frozen training-only calibration for nested state-family selection.",
+  "properties": {
+    "calibration_data_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Calibration Data Hash",
+      "type": "string"
+    },
+    "calibration_id": {
+      "title": "Calibration Id",
+      "type": "string"
+    },
+    "checkpoint_updates": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Checkpoint Updates",
+      "type": "array"
+    },
+    "false_interaction_rate_upper_bound": {
+      "maximum": 0.05,
+      "minimum": 0.0,
+      "title": "False Interaction Rate Upper Bound",
+      "type": "number"
+    },
+    "interaction_minimum_improvement": {
+      "exclusiveMinimum": 0.0,
+      "title": "Interaction Minimum Improvement",
+      "type": "number"
+    },
+    "method": {
+      "enum": [
+        "target_label_permutation",
+        "synthetic_null_repeats"
+      ],
+      "title": "Method",
+      "type": "string"
+    },
+    "repeated_seeds": {
+      "minimum": 20,
+      "title": "Repeated Seeds",
+      "type": "integer"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "target_minimum_improvement": {
+      "exclusiveMinimum": 0.0,
+      "title": "Target Minimum Improvement",
+      "type": "number"
+    }
+  },
+  "required": [
+    "calibration_id",
+    "method",
+    "repeated_seeds",
+    "false_interaction_rate_upper_bound",
+    "target_minimum_improvement",
+    "interaction_minimum_improvement",
+    "checkpoint_updates",
+    "calibration_data_hash"
+  ],
+  "title": "StateSelectionCalibration",
+  "type": "object"
+}

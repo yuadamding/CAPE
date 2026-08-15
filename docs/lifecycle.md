@@ -20,6 +20,18 @@ hash-binds; it does not fit. Training publishes immutable checkpoint
 generations. `resume` requires the identical compiled contract. `fork` starts a
 new attempt from compatible model weights and a new compiled protocol.
 
+Null-guarded state-family selection adds a transactional sub-lifecycle:
+
+```text
+REFIT_PLANNED → REFIT_RUNNING → REFIT_COMMITTED
+```
+
+The refit is built under a same-filesystem temporary directory and published
+atomically. An interrupted uncommitted attempt is diagnostic evidence, not a
+checkpoint parent; resume deterministically rebuilds the refit. A fresh refit
+checkpoint has no state-continuation parent and instead records the inner
+selection checkpoint through `selection_source_checkpoint_id`.
+
 Evaluation is one-shot: checkpoint selection and eligibility are frozen first.
 The evaluator publishes a separate audit and cannot mutate the inference
 bundle. Sealing creates a read-only aggregate.

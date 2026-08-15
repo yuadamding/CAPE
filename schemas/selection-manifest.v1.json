@@ -1,0 +1,238 @@
+{
+  "$id": "https://credo.local/schemas/selection-manifest.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Immutable nested-family decision and post-selection refit binding.",
+  "properties": {
+    "candidate_updates": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Candidate Updates",
+      "type": "array"
+    },
+    "compiled_run_id": {
+      "title": "Compiled Run Id",
+      "type": "string"
+    },
+    "global_null_score": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Global Null Score"
+    },
+    "inner_selected_checkpoint_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Inner Selected Checkpoint Id"
+    },
+    "inner_selected_update": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Inner Selected Update"
+    },
+    "interaction_incremental_gain": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Interaction Incremental Gain"
+    },
+    "interaction_minimum_required_improvement": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Interaction Minimum Required Improvement"
+    },
+    "interaction_score": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Interaction Score"
+    },
+    "metric": {
+      "title": "Metric",
+      "type": "string"
+    },
+    "policy": {
+      "title": "Policy",
+      "type": "string"
+    },
+    "post_selection_refit": {
+      "default": false,
+      "title": "Post Selection Refit",
+      "type": "boolean"
+    },
+    "refit_checkpoint_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Refit Checkpoint Id"
+    },
+    "refit_series_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Refit Series Hash"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "score": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Score"
+    },
+    "selected_checkpoint_id": {
+      "title": "Selected Checkpoint Id",
+      "type": "string"
+    },
+    "selected_checkpoint_relative_uri": {
+      "title": "Selected Checkpoint Relative Uri",
+      "type": "string"
+    },
+    "selected_family": {
+      "enum": [
+        "configured_checkpoint",
+        "gene_decoder_selected",
+        "state_validation_selected",
+        "global_terminal_null",
+        "shrunk_sister_guide_target_terminal",
+        "target_plus_source_target_interaction"
+      ],
+      "title": "Selected Family",
+      "type": "string"
+    },
+    "selected_update": {
+      "minimum": 0,
+      "title": "Selected Update",
+      "type": "integer"
+    },
+    "selection_calibration_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Selection Calibration Hash"
+    },
+    "selection_id": {
+      "title": "Selection Id",
+      "type": "string"
+    },
+    "shrunk_target_only_score": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Shrunk Target Only Score"
+    },
+    "target_incremental_gain": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target Incremental Gain"
+    },
+    "target_minimum_required_improvement": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target Minimum Required Improvement"
+    }
+  },
+  "required": [
+    "selection_id",
+    "compiled_run_id",
+    "policy",
+    "metric",
+    "score",
+    "selected_update",
+    "selected_checkpoint_id",
+    "selected_checkpoint_relative_uri",
+    "candidate_updates",
+    "selected_family"
+  ],
+  "title": "SelectionManifest",
+  "type": "object"
+}

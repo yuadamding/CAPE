@@ -27,6 +27,7 @@ from ..contracts import (
     ResolvedRunCapabilities,
     SemanticStudySnapshot,
     SplitContract,
+    StateSelectionCalibration,
     TransportTopologyContract,
 )
 from ..errors import ContractError
@@ -114,6 +115,16 @@ def compile_problem(config_path: Path) -> Path:
     _multiplicity = MultiplicityPlan.model_validate_json(multiplicity_path.read_text())
     candidates = CandidateSelectionPlan.model_validate_json(candidate_path.read_text())
     baselines = BaselineRegistry.model_validate_json(baseline_path.read_text())
+    calibration_path = (
+        (root / config.state_selection_calibration).resolve()
+        if config.state_selection_calibration is not None
+        else None
+    )
+    calibration = (
+        StateSelectionCalibration.model_validate_json(calibration_path.read_text())
+        if calibration_path is not None
+        else None
+    )
     denominator = (
         DenominatorContract.model_validate_json((root / config.denominator_contract).read_text())
         if config.denominator_contract
@@ -192,6 +203,21 @@ def compile_problem(config_path: Path) -> Path:
             )
     if candidates.information_set_hash != sha256_file(root / config.information_set):
         raise ContractError("Candidate selection plan uses a different information set.")
+    if config.model.source_target_interaction_rank:
+        if calibration is None or calibration_path is None:
+            raise ContractError("Source-target selection calibration is absent.")
+        if calibration.checkpoint_updates != config.training.state_checkpoint_updates:
+            raise ContractError("Selection calibration checkpoint schedule differs from training.")
+        if not np.isclose(
+            calibration.target_minimum_improvement,
+            config.training.state_validation_target_minimum_improvement,
+        ):
+            raise ContractError("Target-only selection margin differs from calibration.")
+        if not np.isclose(
+            calibration.interaction_minimum_improvement,
+            config.training.state_validation_interaction_minimum_improvement,
+        ):
+            raise ContractError("Interaction selection margin differs from calibration.")
     if eligibility.source_information_set_hash != sha256_file(root / config.information_set):
         raise ContractError("Eligibility manifest uses a different information set.")
     if not preregistration.frozen_before_evaluation:
@@ -231,8 +257,13 @@ def compile_problem(config_path: Path) -> Path:
     pool_hash = (
         sha256_file(root / config.pool_contract) if config.pool_contract is not None else None
     )
+    decoder_trained = bool(
+        config.model.gene_decoder_features
+        and config.training.gene_decoder_batch_size
+        and config.training.gene_decoder_loss_weight
+    )
     capabilities = ResolvedRunCapabilities.for_intent(config.intent).model_copy(
-        update={"decode_gene_composition": bool(config.model.gene_decoder_features)}
+        update={"decode_gene_composition": decoder_trained}
     )
     problem_arrays = {
         "source_z": source_z,
@@ -271,6 +302,9 @@ def compile_problem(config_path: Path) -> Path:
         "preregistration_hash": sha256_file(preregistration_path),
         "multiplicity_plan_hash": sha256_file(multiplicity_path),
         "candidate_selection_plan_hash": sha256_file(candidate_path),
+        "state_selection_calibration_hash": (
+            sha256_file(calibration_path) if calibration_path is not None else None
+        ),
         "correction_contract_hash": prepared.input_view.sha256,
         "representation_id": prepared.prepared_id,
         "latent_cache_index_hash": prepared.latent_cache.sha256,

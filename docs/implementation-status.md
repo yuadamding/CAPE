@@ -1,6 +1,6 @@
 # Implementation status
 
-Last verified: 2026-08-14. Authority: package engineering status; biological
+Last verified: 2026-08-15. Authority: package engineering status; biological
 run receipts and cohort audits remain external to this repository.
 
 Implemented in this repository:
@@ -44,17 +44,23 @@ primary-population definition consistently to both point metrics and target
 bootstraps. Local acceptance establishes contracts and CPU behavior; the
 completed dev14 H100 run below establishes the external development result.
 
-Dev15 retires the dev14 source-only residual as the recommended successor and
-adds a bounded source × target pilot channel. It persists the exact update-0
-null, explicitly selects among global-null, training-only target-terminal, and
-target-plus-interaction families, applies a frozen positive improvement margin,
-and refits the selected family/update budget on all outer-training state
-series. The source is ridge-whitened; the interaction is rank-limited, strongly
-penalized, zero for controls, absent in reference mode, and incompatible with
-decoder training. These are engineering safeguards; no real-cohort dev15
-performance result exists yet.
+Dev16 supersedes dev15 before cohort execution. It estimates a bounded scalar
+target-main shrinkage model from leave-one-guide-out sister-target predictions
+without an interaction, freezes that model, and
+tests the source × target term only through the full-versus-interaction-off
+increment. The selector uses separate target and interaction margins from a
+hash-bound training-only calibration, requires an explicit early checkpoint
+schedule, and records all three scores and displacement magnitudes. A typed
+selection manifest is embedded in inference and reported by evaluation; only a
+deployed interaction family can pass the interaction advancement gate. The
+gene decoder is structurally absent. Post-selection refit publishes through
+`REFIT_PLANNED → REFIT_RUNNING → REFIT_COMMITTED`, resumes after interruption,
+uses no false state-parent edge, and records its exact final objective. Local
+acceptance covers global-only, shrunk-target, full-target, and interaction truth
+regimes plus 20 target-only null repetitions with zero false interaction
+selections. No real-cohort dev15 or dev16 performance result exists.
 
-Deliberately not asserted complete in `4.0.0.dev15`:
+Deliberately not asserted complete in `4.0.0.dev16`:
 
 - stable CREDO entry-point discovery;
 - in-repository real-cohort adapters, biological thresholds, or biological claims;
@@ -100,5 +106,5 @@ authority.
 
 Exact future use depends on the branch commit, `REPOSITORY.sha256`, the
 wheel/sdist bytes, generated schemas, and the local validation receipt. A clean
-dev15 commit and release receipt remain required before any pilot deployment or
+dev16 commit and release receipt remain required before any pilot deployment or
 stable promotion.
