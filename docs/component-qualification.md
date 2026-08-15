@@ -1,6 +1,6 @@
 # Component-wise qualification program
 
-Status: authoritative development order for `4.0.0.dev18`. This page defines
+Status: authoritative development order for `4.0.0.dev19`. This page defines
 software promotion, not a biological claim.
 
 CREDO V4 is qualified as a dependency graph rather than one large training
@@ -107,9 +107,9 @@ model; its null calibration and bootstrap entries are explicitly
 | Stage | Package status | Pooled real-data status | Promotion |
 |---|---|---|---|
 | T00 | implemented; eight focused tests pass | external Renz receipt passes | T00 only |
-| T01 | v1 count-native gate implemented | v1 failed; dimension 0 in 4/4 folds | blocked |
+| T01 | v1/v2 count-native gates implemented | both failed; dimension 0 in 4/4 folds | blocked |
 | T02 | baseline primitives exist; complete noise-floor receipt absent | not run | blocked |
-| T03 | dev18 identifiability/null hardening is under engineering validation | not run under this ladder | blocked |
+| T03 | identifiability/null hardening exists as engineering code | not run under this ladder | blocked |
 | T04–T13 | partial numerical/model primitives exist | not run under this ladder | blocked |
 
 The external T00 Renz receipt retains 495 source-eligible guides (445
@@ -125,6 +125,15 @@ was selectable and won every fold. The learned candidates were worse by
 `fail_retired`; it was not refit, P60 support was not inspected, and T02 remains
 blocked. The failure receipt is retained outside the package in
 `credo_v4_renz_t01_representation_20260815/`.
+
+The preregistered centered successor represented the global square-root gene
+frequency explicitly and fit only residual Hellinger structure. It also
+selected dimension 0 in every fold: learned dimensions 8, 16, 32, and 48 were
+0.178–0.238 nats per count worse than the global gene-frequency decoder. T01
+v2 is also `fail_retired`; no post-selection refit or P60-support diagnostic
+was eligible. The two immutable failures block T02. Changing the loss,
+threshold, or candidate family would be a new T01 protocol, not continuation
+of either failed test.
 
 Synthetic values reported outside a committed component directory are useful
 design evidence but are not promotion evidence. Every subsequent stage must

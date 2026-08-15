@@ -1,6 +1,6 @@
 """Discovery metadata for the future stable bridge.
 
-Development `4.0.dev18` intentionally does not register this object through an
+Development `4.0.dev19` intentionally does not register this object through an
 entry point. The standalone v4 CLI is the complete executor and loader.
 """
 

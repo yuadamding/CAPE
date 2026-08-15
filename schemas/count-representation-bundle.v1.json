@@ -85,7 +85,10 @@
       "$ref": "#/$defs/ArtifactRef"
     },
     "method": {
-      "const": "multinomial_hellinger_pca_v1",
+      "enum": [
+        "multinomial_hellinger_pca_v1",
+        "multinomial_centered_hellinger_pca_v2"
+      ],
       "title": "Method",
       "type": "string"
     },

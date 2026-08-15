@@ -8,7 +8,7 @@ count_state → count_measure → count_context
 ```
 
 It is a sibling of, not a modification to, the frozen CREDO checkout. Version
-`4.0.0.dev18` is engineering software; it is not a biological result and cannot
+`4.0.0.dev19` is engineering software; it is not a biological result and cannot
 be relabeled as stable `4.0`.
 
 Implemented surfaces include strict hash-bound contracts, sparse count storage,
@@ -17,13 +17,11 @@ likelihood, separate state/fitness/context channels, immutable checkpoint and
 resume, streaming inference, four-branch contrasts, one-shot evaluation, and a
 sealed aggregate. The repository contains no cohort adapter or biological data.
 
-Dev18 changes the development policy from monolithic long runs to
-component-wise qualification. T00 now has an explicit, immutable pooled
-finite-measure API and receipt. Later representation, noise-floor, hierarchy,
-drift, diffusion, reaction, joint-measure, ecology, weak-form,
-counterfactual, decoder, and biology stages remain blocked until their parent
-receipts pass. The in-progress T03 source × target hardening is engineering
-code, not a qualified real-cohort result.
+Dev19 retains the component-wise policy introduced in dev18 and adds two
+fail-closed count-native T01 implementations. Neither passed the real pooled
+Renz gate, so T01 and all downstream stages remain blocked. T00 has an
+explicit, immutable pooled finite-measure API and receipt. The T03 source ×
+target hardening is engineering code, not a qualified real-cohort result.
 
 ## Quick start
 

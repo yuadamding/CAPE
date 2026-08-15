@@ -1,5 +1,15 @@
 # Changelog
 
+## 4.0.0.dev19 — 2026-08-15
+
+- add an explicit globally centered Hellinger residual implementation to the
+  fail-closed T01 count-native representation gate;
+- retain both real pooled-Renz T01 candidates as immutable negative evidence:
+  dimension 0 won all four folds for each, so neither candidate was refit and
+  T02 remains blocked;
+- expose full verification/reuse of an existing T01 bundle without changing
+  its scientific receipt.
+
 ## 4.0.0.dev18 — 2026-08-15
 
 - adopt a T00–T13 component-wise qualification ladder with fail-closed channel

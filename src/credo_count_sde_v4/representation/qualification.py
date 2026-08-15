@@ -18,7 +18,6 @@ import numpy as np
 import pandas as pd
 import yaml
 from scipy import sparse
-from scipy.sparse.linalg import svds
 from scipy.spatial import cKDTree
 
 from ..canonical import canonical_json_bytes, contract_id, path_manifest, sha256_bytes, sha256_file
@@ -83,45 +82,44 @@ def _fix_component_signs(components: np.ndarray) -> np.ndarray:
     return result
 
 
-def _fit_basis(matrix: sparse.csr_matrix, rank: int, seed: int) -> np.ndarray:
+def _fit_basis(matrix: sparse.csr_matrix, rank: int, seed: int) -> tuple[np.ndarray, np.ndarray]:
     hellinger, _ = _hellinger(matrix)
+    center = np.sqrt(_global_frequency(matrix)).astype(np.float32)
     available = min(hellinger.shape)
     selected_rank = min(rank, max(1, available - 1))
     if selected_rank == 1 and available <= 1:
         basis = np.ones((1, hellinger.shape[1]), dtype=np.float32)
         basis /= np.linalg.norm(basis)
-    elif hellinger.nnz < 10_000_000:
-        _, singular, right = svds(
-            hellinger.astype(np.float64),
-            k=selected_rank,
-            which="LM",
-            random_state=seed,
-        )
-        basis = right[np.argsort(singular)[::-1]].astype(np.float32)
+    elif hellinger.shape[0] * hellinger.shape[1] <= 10_000_000:
+        residual = hellinger.toarray().astype(np.float32) - center[None, :]
+        _, _, right = np.linalg.svd(residual, full_matrices=False)
+        basis = right[:selected_rank].astype(np.float32)
     else:
         width = min(selected_rank + 8, available)
         generator = np.random.default_rng(seed)
         probe = generator.standard_normal((hellinger.shape[1], width), dtype=np.float32)
-        sample = np.asarray(hellinger @ probe, dtype=np.float32)
+        sample = np.asarray(hellinger @ probe, dtype=np.float32) - (center @ probe)[None, :]
         left, _ = np.linalg.qr(sample, mode="reduced")
-        dual = np.asarray(hellinger.T @ left, dtype=np.float32)
-        sample = np.asarray(hellinger @ dual, dtype=np.float32)
+        dual = np.asarray(hellinger.T @ left, dtype=np.float32) - np.outer(center, left.sum(axis=0))
+        sample = np.asarray(hellinger @ dual, dtype=np.float32) - (center @ dual)[None, :]
         left, _ = np.linalg.qr(sample, mode="reduced")
-        compressed = np.asarray(left.T @ hellinger, dtype=np.float32)
+        compressed = np.asarray(left.T @ hellinger, dtype=np.float32) - np.outer(
+            left.sum(axis=0), center
+        )
         _, _, right = np.linalg.svd(compressed, full_matrices=False)
         basis = right[:selected_rank].astype(np.float32)
     if basis.shape[0] < rank:
         basis = np.pad(basis, ((0, rank - basis.shape[0]), (0, 0)))
-    return _fix_component_signs(basis)
+    return _fix_component_signs(basis), center
 
 
-def _encode(matrix: sparse.csr_matrix, components: np.ndarray) -> np.ndarray:
+def _encode(matrix: sparse.csr_matrix, components: np.ndarray, center: np.ndarray) -> np.ndarray:
     hellinger, _ = _hellinger(matrix)
-    return np.asarray(hellinger @ components.T, dtype=np.float32)
+    return np.asarray(hellinger @ components.T, dtype=np.float32) - (center @ components.T)[None, :]
 
 
-def _decode(z: np.ndarray, components: np.ndarray) -> np.ndarray:
-    reconstructed = np.asarray(z @ components, dtype=np.float64)
+def _decode(z: np.ndarray, components: np.ndarray, center: np.ndarray) -> np.ndarray:
+    reconstructed = np.asarray(center[None, :] + z @ components, dtype=np.float64)
     probabilities = np.square(reconstructed)
     probabilities += np.finfo(np.float64).tiny
     probabilities /= probabilities.sum(axis=1, keepdims=True)
@@ -139,19 +137,22 @@ def _per_row_nll(
     matrix: sparse.csr_matrix,
     components: np.ndarray | None,
     global_frequency: np.ndarray,
+    center: np.ndarray | None = None,
     *,
     batch_size: int = 256,
 ) -> np.ndarray:
     matrix = matrix.tocsr()
+    if components is not None and center is None:
+        raise ValueError("A count-native decoder requires its frozen Hellinger center.")
     result = np.empty(matrix.shape[0], dtype=np.float64)
     for start in range(0, matrix.shape[0], batch_size):
         stop = min(start + batch_size, matrix.shape[0])
         block = matrix[start:stop]
-        probabilities = (
-            np.broadcast_to(global_frequency, block.shape)
-            if components is None
-            else _decode(_encode(block, components), components)
-        )
+        if components is None:
+            probabilities = np.broadcast_to(global_frequency, block.shape)
+        else:
+            assert center is not None
+            probabilities = _decode(_encode(block, components, center), components, center)
         totals = np.asarray(block.sum(axis=1), dtype=np.float64).reshape(-1)
         cross_entropy = np.zeros(len(block.indptr) - 1, dtype=np.float64)
         for local in range(block.shape[0]):
@@ -175,13 +176,14 @@ def _guide_metrics(
     frame: pd.DataFrame,
     matrix: sparse.csr_matrix,
     components: np.ndarray,
+    center: np.ndarray,
     global_frequency: np.ndarray,
     *,
     fold: str,
     half_seed: int,
     nll_max_cells_per_guide: int,
 ) -> tuple[pd.DataFrame, dict[str, np.ndarray]]:
-    z = _encode(matrix, components)
+    z = _encode(matrix, components, center)
     rows: list[dict[str, Any]] = []
     centroids: dict[str, np.ndarray] = {}
     for guide, positions in frame.groupby("guide_id", sort=True).indices.items():
@@ -201,12 +203,12 @@ def _guide_metrics(
                 )
             )
         nll_local = shuffled[: min(len(shuffled), nll_max_cells_per_guide)]
-        model_nll = _per_row_nll(matrix[nll_local], components, global_frequency)
+        model_nll = _per_row_nll(matrix[nll_local], components, global_frequency, center)
         global_nll = _per_row_nll(matrix[nll_local], None, global_frequency)
         observed = np.asarray(matrix[local].sum(axis=0), dtype=np.float64).reshape(-1)
         observed /= observed.sum()
         centroid = z[local].mean(axis=0)
-        predicted = _decode(centroid[None, :], components)[0]
+        predicted = _decode(centroid[None, :], components, center)[0]
         centroids[str(guide)] = centroid
         first = frame.iloc[int(local[0])]
         rows.append(
@@ -282,13 +284,14 @@ def _support_coverage(
     source_query: sparse.csr_matrix,
     terminal_query: sparse.csr_matrix,
     components: np.ndarray,
+    center: np.ndarray,
 ) -> dict[str, float]:
-    reference_z = _encode(reference, components)
+    reference_z = _encode(reference, components, center)
     tree = cKDTree(reference_z)
-    calibration_distance = tree.query(_encode(calibration, components), k=1)[0]
+    calibration_distance = tree.query(_encode(calibration, components, center), k=1)[0]
     threshold = float(np.quantile(calibration_distance, 0.99))
-    source_distance = tree.query(_encode(source_query, components), k=1)[0]
-    terminal_distance = tree.query(_encode(terminal_query, components), k=1)[0]
+    source_distance = tree.query(_encode(source_query, components, center), k=1)[0]
+    terminal_distance = tree.query(_encode(terminal_query, components, center), k=1)[0]
     source_coverage = float(np.mean(source_distance <= threshold))
     terminal_coverage = float(np.mean(terminal_distance <= threshold))
     return {
@@ -355,8 +358,10 @@ def _null_refits(
         fit_positions = generator.choice(
             matrix.shape[0], size=min(512, matrix.shape[0]), replace=False
         )
-        basis = _fit_basis(matrix[np.sort(fit_positions)], dimension, seed + 10_000 + repeat)
-        z = _encode(matrix, basis)
+        basis, center = _fit_basis(
+            matrix[np.sort(fit_positions)], dimension, seed + 10_000 + repeat
+        )
+        z = _encode(matrix, basis, center)
         centroids = {
             str(guide): z[np.asarray(positions, dtype=np.int64)].mean(axis=0)
             for guide, positions in guide_rows.items()
@@ -457,7 +462,7 @@ def qualify_count_representation(
         "schema_version": 1,
         "test_contract_id": "pending",
         "test_id": "T01_COUNT_NATIVE_REPRESENTATION",
-        "component": "multinomial_hellinger_pca_v1",
+        "component": "multinomial_centered_hellinger_pca_v2",
         "primary_metric": "outer_source_per_count_nll",
         "primary_baseline": "global_gene_frequency_decoder",
         "required_margin": required_nll_margin,
@@ -475,7 +480,7 @@ def qualify_count_representation(
     test_contract = ComponentTestContract.model_validate(contract_payload)
     config = {
         "schema_version": 1,
-        "method": "multinomial_hellinger_pca_v1",
+        "method": "multinomial_centered_hellinger_pca_v2",
         "dimensions": list(dimensions),
         "fit_max_rows": fit_max_rows,
         "inner_validation_max_rows": inner_validation_max_rows,
@@ -533,7 +538,9 @@ def qualify_count_representation(
         )
         fit_matrix = store.rows(fit_ids).matrix
         inner_matrix = store.rows(inner_ids).matrix
-        maximum_basis = _fit_basis(fit_matrix, max(dimensions), seed + 300 + fold_index_value)
+        maximum_basis, candidate_center = _fit_basis(
+            fit_matrix, max(dimensions), seed + 300 + fold_index_value
+        )
         global_frequency = _global_frequency(fit_matrix)
         global_nll = float(_per_row_nll(inner_matrix, None, global_frequency).mean())
         candidate_rows.append(
@@ -548,7 +555,12 @@ def qualify_count_representation(
         scored: list[tuple[float, int]] = []
         for dimension in dimensions:
             nll = float(
-                _per_row_nll(inner_matrix, maximum_basis[:dimension], global_frequency).mean()
+                _per_row_nll(
+                    inner_matrix,
+                    maximum_basis[:dimension],
+                    global_frequency,
+                    candidate_center,
+                ).mean()
             )
             candidate_rows.append(
                 {
@@ -581,9 +593,12 @@ def qualify_count_representation(
             train_source.row_id.to_numpy(np.int64), fit_max_rows, seed + 400 + fold_index_value
         )
         refit_matrix = store.rows(refit_ids).matrix
-        components = _fit_basis(refit_matrix, selected_dimension, seed + 500 + fold_index_value)
+        components, center = _fit_basis(
+            refit_matrix, selected_dimension, seed + 500 + fold_index_value
+        )
         global_frequency = _global_frequency(refit_matrix)
         encoder_payload[f"{fold}__components"] = components
+        encoder_payload[f"{fold}__center"] = center
         encoder_payload[f"{fold}__global_frequency"] = global_frequency.astype(np.float32)
         outer_source_ids = outer_source.row_id.to_numpy(np.int64)
         outer_source_matrix = store.rows(outer_source_ids).matrix
@@ -591,6 +606,7 @@ def qualify_count_representation(
             outer_source.reset_index(drop=True),
             outer_source_matrix,
             components,
+            center,
             global_frequency,
             fold=fold,
             half_seed=seed + 600 + fold_index_value,
@@ -598,7 +614,7 @@ def qualify_count_representation(
         )
         train_metric_frame = train_source.reset_index(drop=True)
         train_matrix = store.rows(train_metric_frame.row_id.to_numpy(np.int64)).matrix
-        train_z = _encode(train_matrix, components)
+        train_z = _encode(train_matrix, components, center)
         structure = _target_structure(
             metrics,
             outer_centroids,
@@ -655,6 +671,7 @@ def qualify_count_representation(
             store.rows(source_query_ids).matrix,
             store.rows(terminal_query_ids).matrix,
             components,
+            center,
         )
         support_rows.append({"outer_fold": fold, "dimension": selected_dimension, **coverage})
         fold_index.append(
@@ -780,7 +797,9 @@ def qualify_count_representation(
         )
         selected_model = {
             "schema_version": 1,
-            "method": "multinomial_hellinger_pca_v1" if all_selected else "global_frequency",
+            "method": (
+                "multinomial_centered_hellinger_pca_v2" if all_selected else "global_frequency"
+            ),
             "selected_dimensions": selected_dimensions,
             "selection_checkpoint": pooled.source_checkpoint,
             "terminal_used_for_selection": False,
@@ -817,7 +836,7 @@ def qualify_count_representation(
             "schema_version": 1,
             "representation_id": "pending",
             "pooled_data_id": pooled.pooled_data_id,
-            "method": "multinomial_hellinger_pca_v1",
+            "method": "multinomial_centered_hellinger_pca_v2",
             "feature_index_hash": store_manifest.feature_index_hash,
             "count_store_sha256": store_manifest.content_sha256,
             "dimensions": list(dimensions),
@@ -936,6 +955,7 @@ def verify_count_representation(
         for fold, dimension in bundle.selected_dimensions.items():
             if dimension > 0 and (
                 f"{fold}__components" not in encoders
+                or f"{fold}__center" not in encoders
                 or encoders[f"{fold}__components"].shape[0] != dimension
             ):
                 raise IntegrityError(f"T01 encoder is missing or malformed for {fold}.")

@@ -180,7 +180,7 @@ class CountRepresentationBundle(StrictModel):
     schema_version: int = 1
     representation_id: str
     pooled_data_id: str
-    method: Literal["multinomial_hellinger_pca_v1"]
+    method: Literal["multinomial_hellinger_pca_v1", "multinomial_centered_hellinger_pca_v2"]
     feature_index_hash: Sha256
     count_store_sha256: Sha256
     dimensions: tuple[int, ...]
@@ -920,7 +920,7 @@ class CompiledRunContract(StrictModel):
     schema_version: int = 1
     compiled_run_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev18"] = "4.0.dev18"
+    recipe_version: Literal["4.0.dev19"] = "4.0.dev19"
     recipe_wheel_hash: Sha256
     frozen_credo_artifact_hash: Sha256
     environment_lock_hash: Sha256
@@ -987,7 +987,7 @@ class InferenceBundleManifest(StrictModel):
     compiled_run_id: str
     selected_checkpoint_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev18"] = "4.0.dev18"
+    recipe_version: Literal["4.0.dev19"] = "4.0.dev19"
     selected_family: Literal[
         "configured_checkpoint",
         "gene_decoder_selected",

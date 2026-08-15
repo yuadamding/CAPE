@@ -15,16 +15,18 @@ Implemented in this repository:
 - CLI/API, full content/reload verification, correction/context audit helpers;
 - CPU regression, leakage, corruption, fault, resume, compatibility, and wheel CI.
 
-Dev18 adds the first component-qualified boundary: the T00 pooled
-finite-measure contract, public API/CLI, strict channel-isolation contract, and
-eight focused invariants. The external pooled Renz adapter passed T00 with 495
-guides and 277,200 cells, but no T01–T13 component is promoted. See
+Dev19 retains the component-qualified boundary introduced in dev18: the T00
+pooled finite-measure contract, public API/CLI, strict channel-isolation
+contract, and eight focused invariants. The external pooled Renz adapter passed
+T00 with 495 guides and 277,200 cells, but no T01–T13 component is promoted. See
 [component qualification](component-qualification.md).
 
-T01 v1 is implemented fail-closed and has been exercised on the pooled Renz
-population. It correctly retained the global decoder in all four folds because
-every low-rank candidate worsened source-only count likelihood. This is a
-retired candidate, not a representation qualification; downstream tests remain
+T01 v1 and v2 are implemented fail-closed and have been exercised on the
+pooled Renz population. Both correctly retained the global decoder in all four
+folds because every low-rank candidate worsened source-only count likelihood.
+The raw Hellinger candidates were 0.204–0.256 nats/count worse; centered
+residual Hellinger candidates were 0.178–0.238 worse. These are retired
+candidates, not a representation qualification; downstream tests remain
 blocked.
 
 Local acceptance result: see `receipts/local-validation.json` for the current
@@ -81,7 +83,7 @@ conditional-interaction, and joint nulls, freezes fold and seed identities,
 and strengthens noninteraction comparators. That T03 code remains unqualified
 until T01, T02, and the prescribed pooled pilot pass.
 
-Deliberately not asserted complete in `4.0.0.dev18`:
+Deliberately not asserted complete in `4.0.0.dev19`:
 
 - stable CREDO entry-point discovery;
 - in-repository real-cohort adapters, biological thresholds, or biological claims;
@@ -127,5 +129,5 @@ authority.
 
 Exact future use depends on the branch commit, `REPOSITORY.sha256`, the
 wheel/sdist bytes, generated schemas, and the local validation receipt. A clean
-dev18 commit and release receipt are necessary—but not sufficient—before any
+dev19 commit and release receipt are necessary—but not sufficient—before any
 pilot deployment or stable promotion.

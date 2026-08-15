@@ -1,6 +1,6 @@
 # Architecture
 
-Status: component-qualified engineering architecture for `4.0.0.dev18`.
+Status: component-qualified engineering architecture for `4.0.0.dev19`.
 
 The package is a sibling distribution. It owns the count-native numerical
 recipe and never writes into the frozen CREDO checkout. Numerical modules can
