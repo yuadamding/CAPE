@@ -13,6 +13,7 @@ from credo_count_sde_v4.canonical import (
     validate_relative_uri,
 )
 from credo_count_sde_v4.contracts import (
+    ComponentTestContract,
     CounterfactualBranch,
     CounterfactualDesign,
     DenominatorBlock,
@@ -141,3 +142,28 @@ def test_path_manifest_rejects_symlinks(tmp_path: Path) -> None:
     (tmp_path / "link").symlink_to(target.name)
     with pytest.raises(ContractError, match="Symlink"):
         path_manifest(tmp_path)
+
+
+def test_component_contract_enforces_channel_isolation_matrix() -> None:
+    payload = {
+        "schema_version": 1,
+        "test_contract_id": "pending",
+        "test_id": "T06_DIFFUSION",
+        "component": "diffusion",
+        "primary_metric": "terminal_variance_error",
+        "primary_baseline": "fixed_zero_diffusion",
+        "required_margin": 0.0,
+        "drift": "fixed",
+        "diffusion": "trainable",
+        "reaction": "off",
+        "ecology": "off",
+        "decoder": "off",
+        "update_zero_selectable": True,
+        "post_selection_refit_required": True,
+    }
+    payload["test_contract_id"] = contract_id(payload, id_field="test_contract_id")
+    ComponentTestContract.model_validate(payload)
+    payload["reaction"] = "trainable"
+    payload["test_contract_id"] = contract_id(payload, id_field="test_contract_id")
+    with pytest.raises(ValidationError, match="channel-isolation"):
+        ComponentTestContract.model_validate(payload)

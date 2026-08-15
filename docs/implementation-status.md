@@ -15,6 +15,12 @@ Implemented in this repository:
 - CLI/API, full content/reload verification, correction/context audit helpers;
 - CPU regression, leakage, corruption, fault, resume, compatibility, and wheel CI.
 
+Dev18 adds the first component-qualified boundary: the T00 pooled
+finite-measure contract, public API/CLI, strict channel-isolation contract, and
+eight focused invariants. The external pooled Renz adapter passed T00 with 495
+guides and 277,200 cells, but no T01–T13 component is promoted. See
+[component qualification](component-qualification.md).
+
 Local acceptance result: see `receipts/local-validation.json` for the current
 test count and coverage; one CUDA
 test was skipped because the validation environment exposed no CUDA device. Ruff,
@@ -44,7 +50,7 @@ primary-population definition consistently to both point metrics and target
 bootstraps. Local acceptance establishes contracts and CPU behavior; the
 completed dev14 H100 run below establishes the external development result.
 
-Dev17 supersedes dev16 before cohort execution. It estimates a bounded scalar
+Dev17 superseded dev16 before cohort execution. It estimates a bounded scalar
 target-main shrinkage model from leave-one-guide-out sister-target predictions
 without an interaction, freezes that model, and
 tests the source × target term only through the full-versus-interaction-off
@@ -63,9 +69,13 @@ acceptance covers global-only, shrunk-target, full-target, and interaction truth
 regimes plus a 59-fit evidence-bearing null-calibration lifecycle. The pilot
 also forbids diffusion, selection, alternative drift, analytic fitting,
 decoder training, support weighting, and checkpoint forks. No real-cohort
-dev15, dev16, or dev17 performance result exists.
+dev15, dev16, or dev17 performance result exists. Dev18 further target-centers
+the interaction, enforces target-wise zero mean, separates target-main,
+conditional-interaction, and joint nulls, freezes fold and seed identities,
+and strengthens noninteraction comparators. That T03 code remains unqualified
+until T01, T02, and the prescribed pooled pilot pass.
 
-Deliberately not asserted complete in `4.0.0.dev17`:
+Deliberately not asserted complete in `4.0.0.dev18`:
 
 - stable CREDO entry-point discovery;
 - in-repository real-cohort adapters, biological thresholds, or biological claims;
@@ -111,5 +121,5 @@ authority.
 
 Exact future use depends on the branch commit, `REPOSITORY.sha256`, the
 wheel/sdist bytes, generated schemas, and the local validation receipt. A clean
-dev17 commit and release receipt are necessary—but not sufficient—before any
+dev18 commit and release receipt are necessary—but not sufficient—before any
 pilot deployment or stable promotion.

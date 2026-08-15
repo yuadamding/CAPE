@@ -1,6 +1,6 @@
 # Release policy
 
-`4.0.0.dev17` is engineering-only. It cannot be relabeled as alpha, beta,
+`4.0.0.dev18` is engineering-only. It cannot be relabeled as alpha, beta,
 release-candidate, stable, or biological evidence.
 
 The intended ladder is `dev1 → dev2 → a1 → a2 → b1 → rc1 → 4.0.0`. Every
@@ -14,4 +14,6 @@ loader remains `credo-v4 open-run`. A stable discovery descriptor is added only
 after the bridge and legacy compatibility tests pass.
 
 See [implementation status](implementation-status.md) for the exact boundary of
-the current checkout.
+the current checkout. Scientific channels additionally require the ordered
+component receipts in [component qualification](component-qualification.md);
+a successful GPU job or monolithic training loss is never a release gate.

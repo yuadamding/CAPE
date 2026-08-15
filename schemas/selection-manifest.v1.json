@@ -4,6 +4,66 @@
   "additionalProperties": false,
   "description": "Immutable nested-family decision and post-selection refit binding.",
   "properties": {
+    "best_noninteraction_baseline": {
+      "anyOf": [
+        {
+          "enum": [
+            "shrunk_target_only",
+            "empirical_bayes_target",
+            "target_terminal",
+            "target_delta",
+            "linear_source_plus_target"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Best Noninteraction Baseline"
+    },
+    "best_noninteraction_score": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Best Noninteraction Score"
+    },
+    "best_target_only_baseline": {
+      "anyOf": [
+        {
+          "enum": [
+            "shrunk_target_only",
+            "empirical_bayes_target",
+            "target_terminal"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Best Target Only Baseline"
+    },
+    "best_target_only_score": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Best Target Only Score"
+    },
     "candidate_updates": {
       "items": {
         "type": "integer"
@@ -157,6 +217,7 @@
         "state_validation_selected",
         "global_terminal_null",
         "shrunk_sister_guide_target_terminal",
+        "selected_training_only_target_main",
         "target_plus_source_target_interaction"
       ],
       "title": "Selected Family",

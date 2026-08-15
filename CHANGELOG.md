@@ -1,5 +1,23 @@
 # Changelog
 
+## 4.0.0.dev18 — 2026-08-15
+
+- adopt a T00–T13 component-wise qualification ladder with fail-closed channel
+  isolation and receipt-based downstream dependencies;
+- add a cohort-neutral, order-invariant pooled finite-measure API and CLI with
+  exact cell coverage, source-only eligibility, feature-order identity,
+  complete control/target catalogs, Jeffreys-smoothed relative masses, and
+  manifest-last publication;
+- publish the standard component contract, metrics, activity, selection,
+  receipt, and checksum surface even when null/bootstrap/model fields are not
+  applicable;
+- harden the optional T03 source × target pilot with training-target source
+  centering, exact target-wise zero interaction, target-balanced full-batch
+  optimization, separate two-null calibration, fixed split/seed identities,
+  and strongest preregistered noninteraction comparators;
+- prohibit scale-out and target-VRAM selection until prerequisite component
+  receipts pass.
+
 ## 4.0.0.dev17 — 2026-08-15
 
 - replace the self-attested selection calibration with a verified row-level

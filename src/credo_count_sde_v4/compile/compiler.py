@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import torch
 
 from ..canonical import (
     canonical_json_bytes,
@@ -67,6 +68,19 @@ def _calibration_protocol_payload(results: StateSelectionCalibrationResults) -> 
     return results.model_dump(mode="json", exclude={"rows"})
 
 
+def _optimizer_fingerprint(config: Any) -> str:
+    return _hash(
+        {
+            "class": config.training.optimizer_name,
+            "learning_rate": config.training.learning_rate,
+            "betas": config.training.optimizer_betas,
+            "epsilon": config.training.optimizer_epsilon,
+            "weight_decay": config.training.optimizer_weight_decay,
+            "deterministic_algorithms": config.training.deterministic,
+        }
+    )
+
+
 def _verify_selection_calibration(
     *,
     calibration: StateSelectionCalibration,
@@ -77,6 +91,7 @@ def _verify_selection_calibration(
     implementation_hash: str,
     config: Any,
     snapshot: SemanticStudySnapshot,
+    problem_arrays: dict[str, np.ndarray],
 ) -> None:
     artifact_path = (calibration_path.parent / calibration.results_artifact.relative_uri).resolve()
     try:
@@ -122,8 +137,23 @@ def _verify_selection_calibration(
     expected = {
         "calibration_id": calibration.calibration_id,
         "method": calibration.method,
+        "calibration_stage": calibration.calibration_stage,
+        "development_calibration_sha256": calibration.development_calibration_sha256,
+        "repeated_per_null": calibration.repeated_per_null,
+        "pooled_estimand": config.pooled_estimand,
+        "outer_fold_id": config.outer_fold_id,
+        "inner_split_id": config.inner_split_id,
+        "pooled_outer_fold_ids": config.pooled_outer_fold_ids,
+        "pooled_inner_split_ids": config.pooled_inner_split_ids,
+        "pooled_optimization_seeds": config.pooled_optimization_seeds,
+        "state_split_seed": config.training.state_split_seed,
         "implementation_tree_hash": implementation_hash,
         "calibration_code_hash": sha256_file(calibration_code),
+        "environment_lock_hash": environment_lock_hash(),
+        "optimizer_fingerprint": _optimizer_fingerprint(config),
+        "device_type": config.training.pilot_device_type,
+        "dtype": config.training.dtype,
+        "deterministic_algorithms": config.training.deterministic,
         "representation_id": prepared_id,
         "split_manifest_hash": split_hash,
         "compiled_problem_hash": problem_hash,
@@ -131,6 +161,8 @@ def _verify_selection_calibration(
         "interaction_scale": config.model.source_target_interaction_scale,
         "learning_rate": config.training.learning_rate,
         "state_batch_size": config.training.state_batch_size,
+        "state_full_batch": True,
+        "noninteraction_linear_ridge": config.training.noninteraction_linear_ridge,
         "source_target_main_penalty": config.training.source_target_main_penalty,
         "source_target_interaction_penalty": (config.training.source_target_interaction_penalty),
         "target_minimum_improvement": (config.training.state_validation_target_minimum_improvement),
@@ -145,13 +177,32 @@ def _verify_selection_calibration(
     for field, value in expected.items():
         if actual[field] != value:
             raise ContractError(f"Calibration execution surface differs at {field}.")
-    if results.seeds != tuple(row.seed for row in results.rows):
-        raise ContractError("Calibration seed list and row results differ.")
-    if len(results.rows) != calibration.repeated_seeds:
-        raise ContractError("Calibration repeat count differs from row-level results.")
-    false_count = sum(row.false_interaction_selected for row in results.rows)
-    if false_count != calibration.false_interaction_count:
-        raise ContractError("Calibration false-selection count differs from row outcomes.")
+    from ..training.trainer import _state_split
+
+    split = _state_split(problem_arrays, config, torch.device("cpu"))
+    if any(
+        row.fit_series_sha256 != split.fit_series_hash
+        or row.validation_series_sha256 != split.validation_series_hash
+        or row.outer_fold_id != config.outer_fold_id
+        or row.inner_split_id != config.inner_split_id
+        for row in results.rows
+    ):
+        raise ContractError("Calibration rows differ from the frozen pooled split identity.")
+    expected_score_updates = (0, *config.training.state_checkpoint_updates)
+    if any(
+        tuple(score.update for score in row.checkpoint_scores) != expected_score_updates
+        for row in results.rows
+    ):
+        raise ContractError("Calibration checkpoint score grid differs from training.")
+    false_target = sum(row.false_target_main_selected for row in results.rows)
+    false_interaction = sum(row.false_interaction_selected for row in results.rows)
+    false_joint = sum(row.false_joint_interaction_selected for row in results.rows)
+    if (
+        false_target != calibration.false_target_main_count
+        or false_interaction != calibration.false_interaction_count
+        or false_joint != calibration.false_joint_interaction_count
+    ):
+        raise ContractError("Calibration false-selection counts differ from row outcomes.")
     if _hash(_calibration_protocol_payload(results)) != calibration.calibration_protocol_hash:
         raise ContractError("Calibration protocol hash differs from row-level evidence.")
 
@@ -373,6 +424,10 @@ def compile_problem(config_path: Path) -> Path:
         "series_ids": np.asarray([series.series_id for series in snapshot.series]),
     }
     problem_hash = _problem_hash(problem_arrays)
+    if config.model.source_target_interaction_rank and (
+        config.model.pool_count != 1 or np.any(problem_arrays["pool_index"] != 0)
+    ):
+        raise ContractError("Pooled source-target pilots require pool_index=0 for every series.")
     if calibration is not None and calibration_path is not None:
         _verify_selection_calibration(
             calibration=calibration,
@@ -383,6 +438,7 @@ def compile_problem(config_path: Path) -> Path:
             implementation_hash=implementation_hash,
             config=config,
             snapshot=snapshot,
+            problem_arrays=problem_arrays,
         )
     payload = {
         "schema_version": 1,
@@ -411,6 +467,9 @@ def compile_problem(config_path: Path) -> Path:
         "state_selection_calibration_hash": (
             sha256_file(calibration_path) if calibration_path is not None else None
         ),
+        "state_selection_calibration_stage": (
+            calibration.calibration_stage if calibration is not None else None
+        ),
         "correction_contract_hash": prepared.input_view.sha256,
         "representation_id": prepared.prepared_id,
         "latent_cache_index_hash": prepared.latent_cache.sha256,
@@ -427,6 +486,31 @@ def compile_problem(config_path: Path) -> Path:
                 },
                 "m2": False,
                 "capture": False,
+                "pooled_estimand": config.pooled_estimand,
+                "state_primary_unit": (
+                    "target_equal_weight" if config.model.source_target_interaction_rank else None
+                ),
+                "interaction_input": (
+                    "training_target_centered_source_residual"
+                    if config.model.source_target_interaction_rank
+                    else None
+                ),
+                "interaction_constraint": (
+                    "exact_training_targetwise_mean_zero"
+                    if config.model.source_target_interaction_rank
+                    else None
+                ),
+                "noninteraction_baselines": (
+                    [
+                        "shrunk_target_only",
+                        "empirical_bayes_target",
+                        "target_terminal",
+                        "target_delta",
+                        "linear_source_plus_target",
+                    ]
+                    if config.model.source_target_interaction_rank
+                    else []
+                ),
             }
         ),
         "count_estimator_contract_hash": _hash(

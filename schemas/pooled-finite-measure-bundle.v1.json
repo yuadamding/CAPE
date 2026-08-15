@@ -1,0 +1,180 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/pooled-finite-measure-bundle.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Immutable T00 pooled guide-by-checkpoint finite-measure data contract.",
+  "properties": {
+    "cells": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "control_guides": {
+      "minimum": 1,
+      "title": "Control Guides",
+      "type": "integer"
+    },
+    "eligibility": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "eligibility_uses_terminal_counts": {
+      "const": false,
+      "default": false,
+      "title": "Eligibility Uses Terminal Counts",
+      "type": "boolean"
+    },
+    "excluded_cell_universe_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Excluded Cell Universe Hash",
+      "type": "string"
+    },
+    "feature_order_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Feature Order Hash",
+      "type": "string"
+    },
+    "finite_measures": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "guide_catalog": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "input_cell_universe_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Input Cell Universe Hash",
+      "type": "string"
+    },
+    "mass_pseudocount": {
+      "default": 0.5,
+      "exclusiveMinimum": 0,
+      "title": "Mass Pseudocount",
+      "type": "number"
+    },
+    "per_guide_metrics": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "per_target_metrics": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "perturbation_targets": {
+      "minimum": 1,
+      "title": "Perturbation Targets",
+      "type": "integer"
+    },
+    "pooled_data_id": {
+      "title": "Pooled Data Id",
+      "type": "string"
+    },
+    "retained_cell_universe_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Retained Cell Universe Hash",
+      "type": "string"
+    },
+    "retained_cells": {
+      "minimum": 1,
+      "title": "Retained Cells",
+      "type": "integer"
+    },
+    "retained_guides": {
+      "minimum": 1,
+      "title": "Retained Guides",
+      "type": "integer"
+    },
+    "sample_id": {
+      "const": "pooled",
+      "default": "pooled",
+      "title": "Sample Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "source_checkpoint": {
+      "minLength": 1,
+      "title": "Source Checkpoint",
+      "type": "string"
+    },
+    "source_eligibility_min_cells": {
+      "minimum": 1,
+      "title": "Source Eligibility Min Cells",
+      "type": "integer"
+    },
+    "targeting_guides": {
+      "minimum": 1,
+      "title": "Targeting Guides",
+      "type": "integer"
+    },
+    "terminal_checkpoint": {
+      "minLength": 1,
+      "title": "Terminal Checkpoint",
+      "type": "string"
+    }
+  },
+  "required": [
+    "pooled_data_id",
+    "source_checkpoint",
+    "terminal_checkpoint",
+    "feature_order_hash",
+    "input_cell_universe_hash",
+    "retained_cell_universe_hash",
+    "excluded_cell_universe_hash",
+    "source_eligibility_min_cells",
+    "retained_cells",
+    "retained_guides",
+    "targeting_guides",
+    "control_guides",
+    "perturbation_targets",
+    "cells",
+    "guide_catalog",
+    "eligibility",
+    "finite_measures",
+    "per_guide_metrics",
+    "per_target_metrics"
+  ],
+  "title": "PooledFiniteMeasureBundle",
+  "type": "object"
+}

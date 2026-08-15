@@ -1,0 +1,112 @@
+{
+  "$id": "https://credo.local/schemas/component-test-contract.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Frozen component-wise qualification contract.",
+  "properties": {
+    "component": {
+      "minLength": 1,
+      "title": "Component",
+      "type": "string"
+    },
+    "decoder": {
+      "default": "off",
+      "enum": [
+        "off",
+        "fixed",
+        "trainable"
+      ],
+      "title": "Decoder",
+      "type": "string"
+    },
+    "diffusion": {
+      "default": "off",
+      "enum": [
+        "off",
+        "fixed",
+        "trainable"
+      ],
+      "title": "Diffusion",
+      "type": "string"
+    },
+    "drift": {
+      "default": "off",
+      "enum": [
+        "off",
+        "fixed",
+        "trainable"
+      ],
+      "title": "Drift",
+      "type": "string"
+    },
+    "ecology": {
+      "default": "off",
+      "enum": [
+        "off",
+        "fixed",
+        "trainable"
+      ],
+      "title": "Ecology",
+      "type": "string"
+    },
+    "post_selection_refit_required": {
+      "title": "Post Selection Refit Required",
+      "type": "boolean"
+    },
+    "primary_baseline": {
+      "minLength": 1,
+      "title": "Primary Baseline",
+      "type": "string"
+    },
+    "primary_metric": {
+      "minLength": 1,
+      "title": "Primary Metric",
+      "type": "string"
+    },
+    "reaction": {
+      "default": "off",
+      "enum": [
+        "off",
+        "fixed",
+        "trainable"
+      ],
+      "title": "Reaction",
+      "type": "string"
+    },
+    "required_margin": {
+      "minimum": 0,
+      "title": "Required Margin",
+      "type": "number"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "test_contract_id": {
+      "title": "Test Contract Id",
+      "type": "string"
+    },
+    "test_id": {
+      "pattern": "^T\\d{2}_[A-Z0-9_]+$",
+      "title": "Test Id",
+      "type": "string"
+    },
+    "update_zero_selectable": {
+      "title": "Update Zero Selectable",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "test_contract_id",
+    "test_id",
+    "component",
+    "primary_metric",
+    "primary_baseline",
+    "required_margin",
+    "update_zero_selectable",
+    "post_selection_refit_required"
+  ],
+  "title": "ComponentTestContract",
+  "type": "object"
+}

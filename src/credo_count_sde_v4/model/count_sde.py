@@ -50,9 +50,12 @@ class CountSDEModel(nn.Module):
             self.source_anchor_output = None
         self.source_target_main_weight: nn.Parameter | None
         self.source_target_main_offset: torch.Tensor
+        self.source_target_main_baseline_code: torch.Tensor
         self.target_interaction_embedding: nn.Parameter | None
         self.source_interaction_center: torch.Tensor
         self.source_interaction_whitener: torch.Tensor
+        self.source_target_center: torch.Tensor
+        self.source_target_interaction_mean: torch.Tensor
         if config.source_target_interaction_rank:
             rank = config.source_target_interaction_rank
             # The target-only shrinkage coefficient is fitted analytically on
@@ -61,11 +64,16 @@ class CountSDEModel(nn.Module):
             # makes the deployed ablation exact and auditable.
             self.source_target_main_weight = nn.Parameter(torch.zeros(()), requires_grad=False)
             self.register_buffer("source_target_main_offset", torch.zeros(targets, d))
+            self.register_buffer(
+                "source_target_main_baseline_code", torch.zeros((), dtype=torch.int64)
+            )
             self.source_interaction_projection: nn.Linear | None = nn.Linear(d, rank, bias=False)
             self.target_interaction_embedding = nn.Parameter(torch.empty(targets, rank))
             self.source_target_output: nn.Linear | None = nn.Linear(rank, d, bias=False)
             self.register_buffer("source_interaction_center", torch.zeros(d))
             self.register_buffer("source_interaction_whitener", torch.eye(d))
+            self.register_buffer("source_target_center", torch.zeros(targets, d))
+            self.register_buffer("source_target_interaction_mean", torch.zeros(targets, d))
             nn.init.normal_(self.source_interaction_projection.weight, std=0.02)
             nn.init.normal_(self.target_interaction_embedding, std=0.02)
             # The interaction family contains the exact terminal-centroid null.
@@ -73,11 +81,16 @@ class CountSDEModel(nn.Module):
         else:
             self.register_parameter("source_target_main_weight", None)
             self.register_buffer("source_target_main_offset", torch.empty(0, d))
+            self.register_buffer(
+                "source_target_main_baseline_code", torch.zeros((), dtype=torch.int64)
+            )
             self.source_interaction_projection = None
             self.target_interaction_embedding = None
             self.source_target_output = None
             self.register_buffer("source_interaction_center", torch.empty(0))
             self.register_buffer("source_interaction_whitener", torch.empty(0, d))
+            self.register_buffer("source_target_center", torch.empty(0, d))
+            self.register_buffer("source_target_interaction_mean", torch.empty(0, d))
         self.state_drift_hidden = nn.Linear(d, config.hidden_dim, bias=True)
         self.state_drift_output = nn.Linear(config.hidden_dim, d, bias=False)
         self.state_drift_hidden.requires_grad_(config.state_dependent_drift)
@@ -232,19 +245,63 @@ class CountSDEModel(nn.Module):
                 self.source_target_main_weight * self.source_target_main_offset[target_index] * mask
             )
             if effect_mode == "factual":
-                whitened = (source_z - self.source_interaction_center) @ (
-                    self.source_interaction_whitener.T
-                )
-                source_score = self.source_interaction_projection(whitened)
-                target_embedding = F.normalize(
-                    self.target_interaction_embedding[target_index], dim=-1, eps=1e-8
-                )
-                interaction = source_score * target_embedding
-                residual = self.source_target_output(interaction)
-                result = result + (
-                    self.config.source_target_interaction_scale * torch.tanh(residual) * mask
+                result = result + self.source_target_interaction(
+                    source_z, target_index, is_control, center_on_training_targets=True
                 )
         return result
+
+    def source_target_interaction(
+        self,
+        source_z: torch.Tensor,
+        target_index: torch.Tensor,
+        is_control: torch.Tensor,
+        *,
+        center_on_training_targets: bool,
+    ) -> torch.Tensor:
+        """Return the identifiable within-target interaction displacement.
+
+        Source inputs are residualized by training-target means before the
+        target-conditioned network is applied.  The persisted training-target
+        output mean is then removed, preventing this channel from acting as a
+        second target-main effect at inference.
+        """
+
+        if not self.config.source_target_interaction_rank:
+            return torch.zeros_like(source_z)
+        assert self.source_interaction_projection is not None
+        assert self.target_interaction_embedding is not None
+        assert self.source_target_output is not None
+        residual_source = source_z - self.source_target_center[target_index]
+        whitened = residual_source @ self.source_interaction_whitener.T
+        source_score = self.source_interaction_projection(whitened)
+        target_embedding = F.normalize(
+            self.target_interaction_embedding[target_index], dim=-1, eps=1e-8
+        )
+        raw = self.config.source_target_interaction_scale * torch.tanh(
+            self.source_target_output(source_score * target_embedding)
+        )
+        if center_on_training_targets:
+            raw = raw - self.source_target_interaction_mean[target_index]
+        return raw * self._mask(is_control, 2)
+
+    @torch.no_grad()
+    def refresh_source_target_interaction_mean(
+        self,
+        source_z: torch.Tensor,
+        target_index: torch.Tensor,
+        is_control: torch.Tensor,
+    ) -> None:
+        """Project the interaction to exact zero mean on training guides."""
+
+        if not self.config.source_target_interaction_rank:
+            return
+        raw = self.source_target_interaction(
+            source_z, target_index, is_control, center_on_training_targets=False
+        )
+        self.source_target_interaction_mean.zero_()
+        for target_value in torch.unique(target_index[~is_control.bool()]).tolist():
+            local = (target_index == int(target_value)) & ~is_control.bool()
+            self.source_target_interaction_mean[int(target_value)].copy_(raw[local].mean(dim=0))
 
     def state_step(
         self,

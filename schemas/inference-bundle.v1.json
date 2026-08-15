@@ -117,8 +117,8 @@
       "type": "string"
     },
     "recipe_version": {
-      "const": "4.0.dev17",
-      "default": "4.0.dev17",
+      "const": "4.0.dev18",
+      "default": "4.0.dev18",
       "title": "Recipe Version",
       "type": "string"
     },
@@ -145,6 +145,7 @@
         "state_validation_selected",
         "global_terminal_null",
         "shrunk_sister_guide_target_terminal",
+        "selected_training_only_target_main",
         "target_plus_source_target_interaction"
       ],
       "title": "Selected Family",

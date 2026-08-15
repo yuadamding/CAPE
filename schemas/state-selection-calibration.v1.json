@@ -46,7 +46,7 @@
   "$id": "https://credo.local/schemas/state-selection-calibration.v1.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Frozen training-only calibration for nested state-family selection.",
+  "description": "Frozen pooled calibration for nested state-family selection.",
   "properties": {
     "calibration_id": {
       "title": "Calibration Id",
@@ -55,6 +55,14 @@
     "calibration_protocol_hash": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Calibration Protocol Hash",
+      "type": "string"
+    },
+    "calibration_stage": {
+      "enum": [
+        "development",
+        "locked_audit"
+      ],
+      "title": "Calibration Stage",
       "type": "string"
     },
     "checkpoint_updates": {
@@ -77,6 +85,19 @@
       "title": "Confidence Method",
       "type": "string"
     },
+    "development_calibration_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Development Calibration Sha256"
+    },
     "false_interaction_count": {
       "const": 0,
       "default": 0,
@@ -89,23 +110,51 @@
       "title": "False Interaction Rate Upper Bound",
       "type": "number"
     },
+    "false_joint_interaction_count": {
+      "const": 0,
+      "default": 0,
+      "title": "False Joint Interaction Count",
+      "type": "integer"
+    },
+    "false_joint_interaction_rate_upper_bound": {
+      "maximum": 0.05,
+      "minimum": 0.0,
+      "title": "False Joint Interaction Rate Upper Bound",
+      "type": "number"
+    },
+    "false_target_main_count": {
+      "const": 0,
+      "default": 0,
+      "title": "False Target Main Count",
+      "type": "integer"
+    },
+    "false_target_main_rate_upper_bound": {
+      "maximum": 0.05,
+      "minimum": 0.0,
+      "title": "False Target Main Rate Upper Bound",
+      "type": "number"
+    },
+    "familywise_error_target": {
+      "default": 0.05,
+      "exclusiveMinimum": 0.0,
+      "maximum": 0.05,
+      "title": "Familywise Error Target",
+      "type": "number"
+    },
     "interaction_minimum_improvement": {
       "exclusiveMinimum": 0.0,
       "title": "Interaction Minimum Improvement",
       "type": "number"
     },
     "method": {
-      "enum": [
-        "target_label_permutation",
-        "conditional_source_permutation",
-        "synthetic_null_repeats"
-      ],
+      "const": "pooled_nested_two_null",
+      "default": "pooled_nested_two_null",
       "title": "Method",
       "type": "string"
     },
-    "repeated_seeds": {
-      "minimum": 59,
-      "title": "Repeated Seeds",
+    "repeated_per_null": {
+      "minimum": 119,
+      "title": "Repeated Per Null",
       "type": "integer"
     },
     "results_artifact": {
@@ -124,9 +173,11 @@
   },
   "required": [
     "calibration_id",
-    "method",
-    "repeated_seeds",
+    "calibration_stage",
+    "repeated_per_null",
+    "false_target_main_rate_upper_bound",
     "false_interaction_rate_upper_bound",
+    "false_joint_interaction_rate_upper_bound",
     "target_minimum_improvement",
     "interaction_minimum_improvement",
     "checkpoint_updates",

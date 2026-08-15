@@ -207,8 +207,8 @@
       "type": "string"
     },
     "recipe_version": {
-      "const": "4.0.dev17",
-      "default": "4.0.dev17",
+      "const": "4.0.dev18",
+      "default": "4.0.dev18",
       "title": "Recipe Version",
       "type": "string"
     },
@@ -258,6 +258,21 @@
       ],
       "title": "State Selection Calibration Hash"
     },
+    "state_selection_calibration_stage": {
+      "anyOf": [
+        {
+          "enum": [
+            "development",
+            "locked_audit"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "State Selection Calibration Stage"
+    },
     "target_hierarchy_hash": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Target Hierarchy Hash",
@@ -286,6 +301,7 @@
     "multiplicity_plan_hash",
     "candidate_selection_plan_hash",
     "state_selection_calibration_hash",
+    "state_selection_calibration_stage",
     "correction_contract_hash",
     "representation_id",
     "latent_cache_index_hash",

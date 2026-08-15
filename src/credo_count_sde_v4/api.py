@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
+import pandas as pd
 import yaml
 from pydantic import BaseModel
 
@@ -14,10 +16,13 @@ from .compat.credo3 import verify_frozen_credo
 from .compile import compile_problem
 from .contracts import (
     CompiledRunContract,
+    ComponentTestContract,
+    ComponentTestReceipt,
     CountStoreManifest,
     EvaluationBundleManifest,
     InferenceBundleManifest,
     LifecycleState,
+    PooledFiniteMeasureBundle,
     PreparedRepresentation,
     ResolvedConfig,
     SealedRunManifest,
@@ -27,6 +32,7 @@ from .contracts import (
     StateSelectionCalibrationResults,
     VerifyLevel,
 )
+from .data import build_pooled_finite_measures, verify_pooled_finite_measures
 from .errors import ContractError, IntegrityError
 from .evaluation import evaluate_run, seal_run
 from .inference import V4Run, finalize_inference, open_inference_run
@@ -52,6 +58,34 @@ def resolve_config(config_path: Path) -> ResolvedConfig:
     return load_config(config_path)
 
 
+def pool_finite_measures(
+    destination: Path,
+    *,
+    cells: pd.DataFrame,
+    guide_catalog: pd.DataFrame,
+    source_checkpoint: str,
+    terminal_checkpoint: str,
+    feature_order_hashes: Mapping[str, str],
+    minimum_source_cells: int = 1,
+    mass_pseudocount: float = 0.5,
+) -> Path:
+    """Build and fully verify the cohort-neutral T00 pooled data bundle."""
+
+    _supported_preflight()
+    result = build_pooled_finite_measures(
+        destination,
+        cells=cells,
+        guide_catalog=guide_catalog,
+        source_checkpoint=source_checkpoint,
+        terminal_checkpoint=terminal_checkpoint,
+        feature_order_hashes=feature_order_hashes,
+        minimum_source_cells=minimum_source_cells,
+        mass_pseudocount=mass_pseudocount,
+    )
+    verify_pooled_finite_measures(result)
+    return result
+
+
 def validate_contract(path: Path) -> dict[str, Any]:
     """Validate canonical JSON syntax and reject non-object contracts."""
 
@@ -67,6 +101,9 @@ def validate_contract(path: Path) -> dict[str, Any]:
         selected = StateSelectionCalibrationResults
     else:
         discriminators = (
+            ("pooled_data_id", PooledFiniteMeasureBundle),
+            ("test_contract_id", ComponentTestContract),
+            ("receipt_id", ComponentTestReceipt),
             ("compiled_run_id", CompiledRunContract),
             ("prepared_id", PreparedRepresentation),
             ("evaluation_id", EvaluationBundleManifest),
@@ -153,19 +190,27 @@ def calibrate_state_selection(
     config_path: Path,
     output_root: Path,
     *,
-    seed_start: int,
-    repeats: int,
+    permutation_seed_start: int,
+    optimizer_seed_start: int,
+    initialization_seed_start: int,
+    repeats_per_null: int,
     device: str = "cpu",
+    calibration_stage: Literal["development", "locked_audit"] = "development",
+    development_calibration: Path | None = None,
 ) -> tuple[Path, Path]:
-    """Run and publish genuine null fits before interaction-pilot compilation."""
+    """Run and publish fixed-split pooled null fits before pilot compilation."""
 
     _supported_preflight()
-    seeds = tuple(range(seed_start, seed_start + repeats))
     return run_state_selection_calibration(
         config_path,
         output_root,
-        seeds=seeds,
+        repeats_per_null=repeats_per_null,
+        permutation_seed_start=permutation_seed_start,
+        optimizer_seed_start=optimizer_seed_start,
+        initialization_seed_start=initialization_seed_start,
         device=device,
+        calibration_stage=calibration_stage,
+        development_calibration=development_calibration,
     )
 
 

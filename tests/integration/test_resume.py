@@ -20,16 +20,34 @@ from credo_count_sde_v4.training.calibration import run_state_selection_calibrat
 
 def _bind_real_calibration(config: Path, updates: list[int]) -> None:
     payload = yaml.safe_load(config.read_text())
+    payload["pooled_estimand"] = "pooled_known_target_heldout_guide"
+    payload["outer_fold_id"] = "synthetic-outer-fold-0"
+    payload["inner_split_id"] = "synthetic-inner-split-0"
+    payload["pooled_outer_fold_ids"] = ["synthetic-outer-fold-0", "synthetic-outer-fold-1"]
+    payload["pooled_inner_split_ids"] = ["synthetic-inner-split-0", "synthetic-inner-split-1"]
     payload["state_selection_calibration"] = (
         "work/input/state-calibration/state-selection-calibration.json"
     )
     payload["training"]["state_checkpoint_updates"] = updates
+    seed = int(payload["training"]["seed"])
+    payload["pooled_optimization_seeds"] = [seed, seed + 1, seed + 2]
+    payload["training"].update(
+        {
+            "state_full_batch": True,
+            "pilot_device_type": "cpu",
+            "state_split_seed": 7001,
+            "initialization_seed": 7002,
+        }
+    )
     config.write_text(yaml.safe_dump(payload, sort_keys=False))
     prepare_representation(config)
     run_state_selection_calibration(
         config,
         config.parent / "work/input/state-calibration",
-        seeds=tuple(range(200_000, 200_059)),
+        repeats_per_null=119,
+        permutation_seed_start=100_000,
+        optimizer_seed_start=200_000,
+        initialization_seed_start=300_000,
     )
 
 
@@ -76,7 +94,10 @@ def test_finalize_honors_preselected_checkpoint_generation(tmp_path: Path) -> No
 
 def test_null_guarded_selection_survives_interrupted_training(tmp_path: Path) -> None:
     config = create_synthetic_project(
-        tmp_path / "null-guarded-resume", intent=RunIntent.COUNT_STATE, updates=4
+        tmp_path / "null-guarded-resume",
+        intent=RunIntent.COUNT_STATE,
+        updates=4,
+        pooled=True,
     )
     payload = yaml.safe_load(config.read_text())
     payload["model"].update(
@@ -122,7 +143,9 @@ def test_interrupted_post_selection_refit_resumes_to_identical_model(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     configs = [
-        create_synthetic_project(tmp_path / name, intent=RunIntent.COUNT_STATE, updates=2)
+        create_synthetic_project(
+            tmp_path / name, intent=RunIntent.COUNT_STATE, updates=2, pooled=True
+        )
         for name in ("complete-refit", "interrupted-refit")
     ]
     for config in configs:

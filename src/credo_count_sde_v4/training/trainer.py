@@ -85,7 +85,7 @@ def _state_split(
             ranked = sorted(
                 positions,
                 key=lambda index: hashlib.sha256(
-                    f"{config.training.seed}:{target_value}:{series[index]}".encode()
+                    f"{config.training.state_split_seed}:{target_value}:{series[index]}".encode()
                 ).digest(),
             )
             validation.extend(ranked[:count])
@@ -256,6 +256,14 @@ def _device(value: str | torch.device | None) -> torch.device:
     if result.type == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA was requested but is unavailable.")
     return result
+
+
+def _validate_pilot_device(config: ResolvedConfig, device: torch.device) -> None:
+    expected = config.training.pilot_device_type
+    if config.model.source_target_interaction_rank and device.type != expected:
+        raise ResumeMismatchError(
+            f"Pilot device differs from calibrated device: expected {expected}, got {device.type}."
+        )
 
 
 def _tensor_problem(arrays: dict[str, np.ndarray], device: torch.device) -> dict[str, torch.Tensor]:
@@ -464,7 +472,22 @@ def _initialize_state_channels(
         source = problem["source_z"][evaluable]
         target = problem["target_index"][evaluable].long()
         control = problem["is_control"][evaluable].bool()
-        model.terminal_anchor.copy_(terminal.mean(dim=0))
+        if model.config.source_target_interaction_rank:
+            targeting_targets = torch.unique(target[~control])
+            target_terminal_means = [
+                terminal[(target == int(value)) & ~control].mean(dim=0)
+                for value in targeting_targets.tolist()
+            ]
+            model.terminal_anchor.copy_(
+                torch.stack(target_terminal_means).mean(dim=0)
+                if target_terminal_means
+                else terminal.mean(dim=0)
+            )
+        else:
+            # Preserve the established non-pilot recipe exactly. Equal-target
+            # M0 is part of the pooled interaction estimand, not a silent
+            # migration of earlier state models.
+            model.terminal_anchor.copy_(terminal.mean(dim=0))
         model.target_anchor_offset.zero_()
         model.target_anchor_gate.zero_()
         weight = model.config.target_anchor_weight
@@ -521,10 +544,31 @@ def _initialize_state_channels(
                     gate * (target_mean - model.terminal_anchor)
                 )
         if model.config.source_target_interaction_rank:
-            center = source.mean(dim=0)
-            centered = source - center
-            sample_denominator = max(len(centered) - 1, 1)
-            covariance = centered.T @ centered / sample_denominator
+            model.source_target_center.zero_()
+            residual_rows: list[torch.Tensor] = []
+            residual_weights: list[torch.Tensor] = []
+            for target_value in targeting_targets.tolist():
+                local = (target == int(target_value)) & ~control
+                local_source = source[local]
+                local_center = local_source.mean(dim=0)
+                model.source_target_center[int(target_value)].copy_(local_center)
+                residual_rows.append(local_source - local_center)
+                residual_weights.append(
+                    torch.full(
+                        (len(local_source),),
+                        1.0 / (len(targeting_targets) * len(local_source)),
+                        dtype=source.dtype,
+                        device=source.device,
+                    )
+                )
+            if not residual_rows:
+                raise ValueError("Source-target interaction has no targeting training guides.")
+            centered = torch.cat(residual_rows, dim=0)
+            weights = torch.cat(residual_weights)
+            center = torch.stack(
+                [model.source_target_center[int(value)] for value in targeting_targets.tolist()]
+            ).mean(dim=0)
+            covariance = centered.T @ (centered * weights[:, None])
             average_variance = torch.diagonal(covariance).mean().clamp_min(1e-6)
             ridge = model.config.source_target_whitening_ridge * average_variance
             eigenvalues, eigenvectors = torch.linalg.eigh(covariance)
@@ -541,6 +585,7 @@ def _initialize_state_channels(
                 model.source_target_main_offset[int(target_value)].copy_(
                     terminal[local].mean(dim=0) - model.terminal_anchor
                 )
+            model.refresh_source_target_interaction_mean(source, target, control)
         prediction = _deterministic_prediction(
             model,
             problem["source_z"][evaluable],
@@ -655,6 +700,202 @@ def _target_balanced_mse(
     return torch.stack(target_losses).mean()
 
 
+_TARGET_MAIN_BASELINE_CODES = {
+    "shrunk_target_only": 0,
+    "empirical_bayes_target": 1,
+    "target_terminal": 2,
+}
+
+
+def _empirical_bayes_target_gates(
+    terminal: torch.Tensor,
+    target: torch.Tensor,
+    control: torch.Tensor,
+    global_terminal: torch.Tensor,
+) -> dict[int, torch.Tensor]:
+    target_values = torch.unique(target[~control]).tolist()
+    means = {
+        int(value): terminal[(target == int(value)) & ~control].mean(dim=0)
+        for value in target_values
+    }
+    if not means:
+        return {}
+    tau2 = torch.stack(
+        [(value - global_terminal).square().mean() for value in means.values()]
+    ).mean()
+    gates: dict[int, torch.Tensor] = {}
+    for value in target_values:
+        local = terminal[(target == int(value)) & ~control]
+        sigma2 = (local - local.mean(dim=0)).square().mean()
+        gates[int(value)] = tau2 / (tau2 + sigma2 / len(local) + 1e-12)
+    return gates
+
+
+@torch.no_grad()
+def _noninteraction_validation_scores(
+    model: CountSDEModel,
+    problem: dict[str, torch.Tensor],
+    state_split: _StateSplit,
+    config: ResolvedConfig,
+) -> dict[str, float | str]:
+    """Score the frozen pooled noninteraction family on one inner split."""
+
+    fit = state_split.fit_indices
+    validation = state_split.validation_indices
+    validation_control = problem["is_control"][validation].bool()
+    primary = ~validation_control
+    if not torch.any(primary):
+        raise ValueError("Pooled baseline selection requires noncontrol validation guides.")
+    fit_source = problem["source_z"][fit]
+    fit_terminal = problem["terminal_z"][fit]
+    fit_target = problem["target_index"][fit].long()
+    fit_control = problem["is_control"][fit].bool()
+    validation_source = problem["source_z"][validation][primary]
+    validation_terminal = problem["terminal_z"][validation][primary]
+    validation_target = problem["target_index"][validation].long()[primary]
+    global_terminal = model.terminal_anchor
+    target_means = {
+        int(value): fit_terminal[(fit_target == int(value)) & ~fit_control].mean(dim=0)
+        for value in torch.unique(fit_target[~fit_control]).tolist()
+    }
+    if any(int(value) not in target_means for value in validation_target.tolist()):
+        raise ValueError("An inner validation target has no training-guide target mean.")
+
+    target_terminal = torch.stack([target_means[int(value)] for value in validation_target])
+    alpha = _fit_shrunk_target_main_weight(model, problem, fit, config, materialize=False)
+    shrunk = global_terminal + alpha * (target_terminal - global_terminal)
+    gates = _empirical_bayes_target_gates(fit_terminal, fit_target, fit_control, global_terminal)
+    empirical_bayes = torch.stack(
+        [
+            global_terminal + gates[int(value)] * (target_means[int(value)] - global_terminal)
+            for value in validation_target
+        ]
+    )
+    target_delta_means = {
+        int(value): (
+            fit_terminal[(fit_target == int(value)) & ~fit_control]
+            - fit_source[(fit_target == int(value)) & ~fit_control]
+        ).mean(dim=0)
+        for value in torch.unique(fit_target[~fit_control]).tolist()
+    }
+    target_delta = validation_source + torch.stack(
+        [target_delta_means[int(value)] for value in validation_target]
+    )
+
+    train = ~fit_control
+    train_source = fit_source[train].to(torch.float64)
+    train_terminal = fit_terminal[train].to(torch.float64)
+    train_target = fit_target[train]
+    target_values = tuple(sorted(set(map(int, train_target.tolist()))))
+    target_lookup = {value: index for index, value in enumerate(target_values)}
+    train_one_hot = torch.zeros(
+        len(train_target), len(target_values), dtype=torch.float64, device=train_source.device
+    )
+    train_one_hot[
+        torch.arange(len(train_target), device=train_source.device),
+        torch.tensor(
+            [target_lookup[int(value)] for value in train_target],
+            device=train_source.device,
+        ),
+    ] = 1.0
+    design = torch.cat(
+        [
+            torch.ones(len(train_source), 1, dtype=torch.float64, device=train_source.device),
+            train_source,
+            train_one_hot,
+        ],
+        dim=1,
+    )
+    multiplicity = torch.stack([(train_target == int(value)).sum() for value in train_target]).to(
+        torch.float64
+    )
+    row_weight = multiplicity.reciprocal()
+    weighted_design = design * torch.sqrt(row_weight)[:, None]
+    weighted_terminal = train_terminal * torch.sqrt(row_weight)[:, None]
+    penalty = torch.eye(design.shape[1], dtype=torch.float64, device=design.device)
+    penalty[0, 0] = 0.0
+    coefficients = torch.linalg.solve(
+        weighted_design.T @ weighted_design + config.training.noninteraction_linear_ridge * penalty,
+        weighted_design.T @ weighted_terminal,
+    )
+    validation_one_hot = torch.zeros(
+        len(validation_target),
+        len(target_values),
+        dtype=torch.float64,
+        device=design.device,
+    )
+    validation_one_hot[
+        torch.arange(len(validation_target), device=design.device),
+        torch.tensor(
+            [target_lookup[int(value)] for value in validation_target], device=design.device
+        ),
+    ] = 1.0
+    validation_design = torch.cat(
+        [
+            torch.ones(len(validation_source), 1, dtype=torch.float64, device=design.device),
+            validation_source.to(torch.float64),
+            validation_one_hot,
+        ],
+        dim=1,
+    )
+    linear = (validation_design @ coefficients).to(validation_terminal.dtype)
+
+    predictions = {
+        "shrunk_target_only": shrunk,
+        "empirical_bayes_target": empirical_bayes,
+        "target_terminal": target_terminal,
+        "target_delta": target_delta,
+        "linear_source_plus_target": linear,
+    }
+    scores = {
+        name: float(
+            torch.sqrt(
+                _target_balanced_mse(prediction - validation_terminal, validation_target)
+            ).cpu()
+        )
+        for name, prediction in predictions.items()
+    }
+    target_order = ("shrunk_target_only", "empirical_bayes_target", "target_terminal")
+    all_order = (*target_order, "target_delta", "linear_source_plus_target")
+    best_target = min(target_order, key=lambda name: (scores[name], target_order.index(name)))
+    best_all = min(all_order, key=lambda name: (scores[name], all_order.index(name)))
+    return {
+        **{f"state_validation_noninteraction_{name}_rmse": score for name, score in scores.items()},
+        "state_validation_shrunk_target_only_rmse": scores["shrunk_target_only"],
+        "state_validation_best_target_only_rmse": scores[best_target],
+        "state_validation_best_target_only_baseline": best_target,
+        "state_validation_best_noninteraction_rmse": scores[best_all],
+        "state_validation_best_noninteraction_baseline": best_all,
+    }
+
+
+@torch.no_grad()
+def _materialize_target_main_baseline(
+    model: CountSDEModel,
+    problem: dict[str, torch.Tensor],
+    fit_indices: torch.Tensor,
+    config: ResolvedConfig,
+    baseline: str,
+) -> None:
+    """Materialize the selected deployable M1 without validation endpoints."""
+
+    if baseline not in _TARGET_MAIN_BASELINE_CODES:
+        raise ValueError(f"Unsupported deployable target-main baseline: {baseline}.")
+    assert model.source_target_main_weight is not None
+    if baseline == "shrunk_target_only":
+        _fit_shrunk_target_main_weight(model, problem, fit_indices, config, materialize=True)
+    else:
+        model.source_target_main_weight.fill_(1.0)
+        if baseline == "empirical_bayes_target":
+            terminal = problem["terminal_z"][fit_indices]
+            target = problem["target_index"][fit_indices].long()
+            control = problem["is_control"][fit_indices].bool()
+            gates = _empirical_bayes_target_gates(terminal, target, control, model.terminal_anchor)
+            for target_value, gate in gates.items():
+                model.source_target_main_offset[target_value].mul_(gate)
+    model.source_target_main_baseline_code.fill_(_TARGET_MAIN_BASELINE_CODES[baseline])
+
+
 def _support_reliability(
     problem: dict[str, torch.Tensor], indices: torch.Tensor, config: ResolvedConfig
 ) -> torch.Tensor | None:
@@ -688,11 +929,18 @@ def _state_objective(
     pool = problem["pool_index"][indices].long()
     control = problem["is_control"][indices].bool()
     error = prediction - problem["terminal_z"][indices]
-    empirical = _target_balanced_mse(
-        error,
-        target,
-        _support_reliability(problem, indices, config),
-    )
+    reliability = _support_reliability(problem, indices, config)
+    if model.config.source_target_interaction_rank and torch.any(~control):
+        # Perturbation targets are the primary pooled units. Controls remain a
+        # secondary audited population and do not receive one target's worth
+        # of influence in the scientific pilot objective.
+        empirical = _target_balanced_mse(
+            error[~control],
+            target[~control],
+            reliability[~control] if reliability is not None else None,
+        )
+    else:
+        empirical = _target_balanced_mse(error, target, reliability)
     state_parameters: list[torch.Tensor] = [
         model.base_drift,
         model.target_drift,
@@ -765,11 +1013,18 @@ def _state_objective(
             effect_mode="target_only",
         )
         interaction_displacement = prediction - target_only
+        interaction_penalty = (
+            _target_balanced_mse(
+                interaction_displacement[~control],
+                target[~control],
+            )
+            if torch.any(~control)
+            else interaction_displacement.square().mean()
+        )
         objective = (
             objective
             + config.training.source_target_main_penalty * model.source_target_main_weight.square()
-            + config.training.source_target_interaction_penalty
-            * interaction_displacement.square().mean()
+            + config.training.source_target_interaction_penalty * interaction_penalty
         )
     return empirical, objective
 
@@ -782,6 +1037,13 @@ def _training_diagnostics(
     config: ResolvedConfig,
     decoder_data: _GeneDecoderData | None = None,
 ) -> dict[str, float | str]:
+    if model.config.source_target_interaction_rank:
+        fit = state_split.fit_indices
+        model.refresh_source_target_interaction_mean(
+            problem["source_z"][fit],
+            problem["target_index"][fit].long(),
+            problem["is_control"][fit].bool(),
+        )
     evaluable = torch.isfinite(problem["terminal_z"]).all(dim=1)
     indices = torch.where(evaluable)[0]
     prediction = _deterministic_prediction(
@@ -844,31 +1106,41 @@ def _training_diagnostics(
     if len(state_split.validation_indices):
         fit = state_split.fit_indices
         validation = state_split.validation_indices
-        fit_terminal = problem["terminal_z"][fit]
         validation_target = problem["target_index"][validation].long()
         validation_control = problem["is_control"][validation].bool()
-        global_terminal = fit_terminal.mean(dim=0)
+        global_terminal = model.terminal_anchor
         global_prediction = global_terminal.expand(len(validation), -1)
         targeting = ~validation_control
         if torch.any(targeting):
+            # The pooled noninteraction registry is part of the dev18
+            # source-target interaction contract.  Legacy state models do not
+            # own the target-main buffers needed to materialize those
+            # baselines and must retain their existing validation path.
+            if model.config.source_target_interaction_rank:
+                baseline_evidence = _noninteraction_validation_scores(
+                    model, problem, state_split, config
+                )
+                diagnostics.update(baseline_evidence)
             validation_terminal = problem["terminal_z"][validation]
             global_error = global_prediction[targeting] - validation_terminal[targeting]
             global_mse = _target_balanced_mse(global_error, validation_target[targeting])
             diagnostics["state_validation_global_null_rmse"] = float(torch.sqrt(global_mse).cpu())
             if model.config.source_target_interaction_rank:
-                alpha = _fit_shrunk_target_main_weight(
-                    model, problem, fit, config, materialize=False
+                target_prediction = _deterministic_prediction(
+                    model,
+                    problem["source_z"][validation],
+                    problem["duration"][validation],
+                    validation_target,
+                    problem["pool_index"][validation].long(),
+                    validation_control,
+                    problem["grid_steps"][validation].long(),
+                    effect_mode="target_only",
                 )
-                target_displacement = (
-                    alpha
-                    * model.source_target_main_offset[validation_target]
-                    * model._mask(validation_control, 2)
-                )
-                target_prediction = global_prediction + target_displacement
+                target_displacement = target_prediction - global_prediction
                 target_error = target_prediction[targeting] - validation_terminal[targeting]
                 target_mse = _target_balanced_mse(target_error, validation_target[targeting])
                 target_rmse = float(torch.sqrt(target_mse).cpu())
-                diagnostics["state_validation_shrunk_target_only_rmse"] = target_rmse
+                diagnostics["state_validation_materialized_target_only_rmse"] = target_rmse
                 full_prediction = _deterministic_prediction(
                     model,
                     problem["source_z"][validation],
@@ -882,17 +1154,31 @@ def _training_diagnostics(
                 full_mse = _target_balanced_mse(full_error, validation_target[targeting])
                 full_rmse = float(torch.sqrt(full_mse).cpu())
                 interaction_displacement = full_prediction - target_prediction
+                if model.source_target_main_weight is None:
+                    raise RuntimeError("Target-main diagnostics require a fitted target channel.")
                 diagnostics.update(
                     {
                         "state_validation_full_interaction_rmse": full_rmse,
                         "state_validation_interaction_incremental_gain": target_rmse - full_rmse,
                         "interaction_displacement_rms": float(
-                            torch.sqrt(interaction_displacement[targeting].square().mean()).cpu()
+                            torch.sqrt(
+                                _target_balanced_mse(
+                                    interaction_displacement[targeting],
+                                    validation_target[targeting],
+                                )
+                            ).cpu()
                         ),
                         "target_main_displacement_rms": float(
-                            torch.sqrt(target_displacement[targeting].square().mean()).cpu()
+                            torch.sqrt(
+                                _target_balanced_mse(
+                                    target_displacement[targeting],
+                                    validation_target[targeting],
+                                )
+                            ).cpu()
                         ),
-                        "state_fit_shrunk_target_main_weight": alpha,
+                        "state_fit_shrunk_target_main_weight": float(
+                            model.source_target_main_weight.cpu()
+                        ),
                     }
                 )
     return diagnostics
@@ -978,15 +1264,33 @@ def _write_selection(
                 training_root / "checkpoints" / f"generation-{best_trained_update:09d}"
             )
             best_state = json.loads((best_generation / "training-state.json").read_text())
-            target_score = best_state.get("diagnostics", {}).get(
-                "state_validation_shrunk_target_only_rmse"
+            best_diagnostics = best_state.get("diagnostics", {})
+            target_score = best_diagnostics.get("state_validation_best_target_only_rmse")
+            target_baseline = best_diagnostics.get("state_validation_best_target_only_baseline")
+            noninteraction_score = best_diagnostics.get("state_validation_best_noninteraction_rmse")
+            noninteraction_baseline = best_diagnostics.get(
+                "state_validation_best_noninteraction_baseline"
             )
-            if target_score is None:
-                raise RuntimeError("Null-guarded selection lacks the shrunk target-only baseline.")
+            shrunk_score = best_diagnostics.get("state_validation_shrunk_target_only_rmse")
+            if any(
+                value is None
+                for value in (
+                    target_score,
+                    target_baseline,
+                    noninteraction_score,
+                    noninteraction_baseline,
+                    shrunk_score,
+                )
+            ):
+                raise RuntimeError(
+                    "Null-guarded selection lacks complete noninteraction baselines."
+                )
             target_score = float(target_score)
+            noninteraction_score = float(noninteraction_score)
+            shrunk_score = float(shrunk_score)
             target_required = config.training.state_validation_target_minimum_improvement
             interaction_required = config.training.state_validation_interaction_minimum_improvement
-            interaction_improvement = target_score - best_trained_score
+            interaction_improvement = noninteraction_score - best_trained_score
             target_improvement = null_score - target_score
             overall_interaction_improvement = null_score - best_trained_score
             if (
@@ -1001,13 +1305,17 @@ def _write_selection(
                 selected_family = "target_plus_source_target_interaction"
             elif target_improvement >= target_required:
                 score, update, checkpoint_id = target_score, 0, null_checkpoint_id
-                selected_family = "shrunk_sister_guide_target_terminal"
+                selected_family = "selected_training_only_target_main"
             else:
                 score, update, checkpoint_id = null_score, 0, null_checkpoint_id
                 selected_family = "global_terminal_null"
             selection_details = {
                 "global_null_score": null_score,
-                "shrunk_target_only_score": target_score,
+                "shrunk_target_only_score": shrunk_score,
+                "best_target_only_score": target_score,
+                "best_target_only_baseline": target_baseline,
+                "best_noninteraction_score": noninteraction_score,
+                "best_noninteraction_baseline": noninteraction_baseline,
                 "interaction_score": best_trained_score,
                 "interaction_incremental_gain": interaction_improvement,
                 "target_incremental_gain": target_improvement,
@@ -1068,12 +1376,21 @@ def _loss(
         else "complete_count_block"
     )
     candidates = state_split.fit_indices
-    generator = torch.Generator(device=problem["source_z"].device)
-    generator.manual_seed(config.training.seed + update)
-    order = candidates[
-        torch.randperm(len(candidates), generator=generator, device=candidates.device)
-    ]
-    indices = order[: config.training.state_batch_size]
+    if config.training.state_full_batch:
+        indices = candidates
+    else:
+        generator = torch.Generator(device=problem["source_z"].device)
+        generator.manual_seed(config.training.seed + update)
+        order = candidates[
+            torch.randperm(len(candidates), generator=generator, device=candidates.device)
+        ]
+        indices = order[: config.training.state_batch_size]
+    if config.model.source_target_interaction_rank:
+        model.refresh_source_target_interaction_mean(
+            problem["source_z"][candidates],
+            problem["target_index"][candidates].long(),
+            problem["is_control"][candidates].bool(),
+        )
     source = problem["source_z"][indices]
     duration = problem["duration"][indices]
     target = problem["target_index"][indices]
@@ -1166,9 +1483,9 @@ def _loss(
 def _new_model_optimizer(
     config: ResolvedConfig, device: torch.device
 ) -> tuple[CountSDEModel, torch.optim.Optimizer]:
-    torch.manual_seed(config.training.seed)
-    np.random.seed(config.training.seed)
-    random.seed(config.training.seed)
+    torch.manual_seed(config.training.initialization_seed)
+    np.random.seed(config.training.initialization_seed)
+    random.seed(config.training.initialization_seed)
     torch.use_deterministic_algorithms(config.training.deterministic)
     if torch.backends.cudnn.is_available():  # type: ignore[no-untyped-call]
         torch.backends.cudnn.deterministic = config.training.deterministic
@@ -1177,6 +1494,9 @@ def _new_model_optimizer(
     optimizer = torch.optim.AdamW(
         [parameter for parameter in model.parameters() if parameter.requires_grad],
         lr=config.training.learning_rate,
+        betas=config.training.optimizer_betas,
+        eps=config.training.optimizer_epsilon,
+        weight_decay=config.training.optimizer_weight_decay,
     )
     return model, optimizer
 
@@ -1291,10 +1611,15 @@ def _post_selection_refit(
             )
             if selected_family in {
                 "shrunk_sister_guide_target_terminal",
+                "selected_training_only_target_main",
                 "target_plus_source_target_interaction",
             }:
-                _fit_shrunk_target_main_weight(
-                    model, problem, state_split.fit_indices, config, materialize=True
+                _materialize_target_main_baseline(
+                    model,
+                    problem,
+                    state_split.fit_indices,
+                    config,
+                    str(selection["best_target_only_baseline"]),
                 )
             if selected_family == "target_plus_source_target_interaction" and selected_update:
                 for update in range(1, selected_update + 1):
@@ -1419,6 +1744,7 @@ def train_model(
         + b"\n"
     )
     selected_device = _device(device)
+    _validate_pilot_device(config, selected_device)
     model, optimizer = _new_model_optimizer(config, selected_device)
     fork_parent: str | None = None
     if initial_checkpoint is not None:
@@ -1477,8 +1803,12 @@ def train_model(
         )
         checkpoints.append(checkpoint)
         if config.model.source_target_interaction_rank:
-            _fit_shrunk_target_main_weight(
-                model, problem, state_split.fit_indices, config, materialize=True
+            _materialize_target_main_baseline(
+                model,
+                problem,
+                state_split.fit_indices,
+                config,
+                str(diagnostics["state_validation_best_target_only_baseline"]),
             )
     for update in range(1, end + 1):
         optimizer.zero_grad(set_to_none=True)
@@ -1575,6 +1905,7 @@ def resume_training(config_path: Path, *, device: str | torch.device | None = No
         raise ResumeMismatchError("Environment changed after compilation.")
     config = compiled_config
     selected_device = _device(device)
+    _validate_pilot_device(config, selected_device)
     contract, arrays, model, optimizer, previous = _load_latest(workspace, config, selected_device)
     if previous.compiled_run_id != contract.compiled_run_id:
         raise ResumeMismatchError("Checkpoint belongs to another compiled run.")
@@ -1601,8 +1932,17 @@ def resume_training(config_path: Path, *, device: str | torch.device | None = No
     state_split = _state_split(arrays, config, selected_device)
     decoder_data = _gene_decoder_data(root, workspace, config)
     if config.model.source_target_interaction_rank and previous.update == 0:
-        _fit_shrunk_target_main_weight(
-            model, problem, state_split.fit_indices, config, materialize=True
+        previous_state = json.loads(
+            (
+                workspace / "training/checkpoints/generation-000000000/training-state.json"
+            ).read_text()
+        )
+        _materialize_target_main_baseline(
+            model,
+            problem,
+            state_split.fit_indices,
+            config,
+            str(previous_state["diagnostics"]["state_validation_best_target_only_baseline"]),
         )
     training_root = workspace / "training"
     checkpoint = previous

@@ -135,6 +135,128 @@ class FeatureIndex(StrictModel):
         return self
 
 
+class PooledFiniteMeasureBundle(StrictModel):
+    """Immutable T00 pooled guide-by-checkpoint finite-measure data contract."""
+
+    schema_version: int = 1
+    pooled_data_id: str
+    sample_id: Literal["pooled"] = "pooled"
+    source_checkpoint: str = Field(min_length=1)
+    terminal_checkpoint: str = Field(min_length=1)
+    feature_order_hash: Sha256
+    input_cell_universe_hash: Sha256
+    retained_cell_universe_hash: Sha256
+    excluded_cell_universe_hash: Sha256
+    source_eligibility_min_cells: int = Field(ge=1)
+    eligibility_uses_terminal_counts: Literal[False] = False
+    mass_pseudocount: float = Field(default=0.5, gt=0)
+    retained_cells: int = Field(ge=1)
+    retained_guides: int = Field(ge=1)
+    targeting_guides: int = Field(ge=1)
+    control_guides: int = Field(ge=1)
+    perturbation_targets: int = Field(ge=1)
+    cells: ArtifactRef
+    guide_catalog: ArtifactRef
+    eligibility: ArtifactRef
+    finite_measures: ArtifactRef
+    per_guide_metrics: ArtifactRef
+    per_target_metrics: ArtifactRef
+
+    @model_validator(mode="after")
+    def validate_identity(self) -> PooledFiniteMeasureBundle:
+        expected = self.identity(id_field="pooled_data_id")
+        if self.pooled_data_id != expected:
+            raise ValueError(f"pooled_data_id mismatch: expected {expected}.")
+        if self.source_checkpoint == self.terminal_checkpoint:
+            raise ValueError("Source and terminal checkpoints must differ.")
+        if self.targeting_guides + self.control_guides != self.retained_guides:
+            raise ValueError("Targeting/control guide counts do not cover the retained catalog.")
+        return self
+
+
+class ComponentTestContract(StrictModel):
+    """Frozen component-wise qualification contract."""
+
+    schema_version: int = 1
+    test_contract_id: str
+    test_id: str = Field(pattern=r"^T\d{2}_[A-Z0-9_]+$")
+    component: str = Field(min_length=1)
+    primary_metric: str = Field(min_length=1)
+    primary_baseline: str = Field(min_length=1)
+    required_margin: float = Field(ge=0)
+    drift: Literal["off", "fixed", "trainable"] = "off"
+    diffusion: Literal["off", "fixed", "trainable"] = "off"
+    reaction: Literal["off", "fixed", "trainable"] = "off"
+    ecology: Literal["off", "fixed", "trainable"] = "off"
+    decoder: Literal["off", "fixed", "trainable"] = "off"
+    update_zero_selectable: bool
+    post_selection_refit_required: bool
+
+    @model_validator(mode="after")
+    def validate_contract_identity(self) -> ComponentTestContract:
+        expected = self.identity(id_field="test_contract_id")
+        if self.test_contract_id != expected:
+            raise ValueError(f"test_contract_id mismatch: expected {expected}.")
+        stage = self.test_id[:3]
+        exact: dict[str, tuple[str, str, str, str, str]] = {
+            "T00": ("off", "off", "off", "off", "off"),
+            "T01": ("off", "off", "off", "off", "off"),
+            "T02": ("off", "off", "off", "off", "off"),
+            "T03": ("off", "off", "off", "off", "off"),
+            "T04": ("fixed", "fixed", "fixed", "off", "off"),
+            "T05": ("trainable", "fixed", "off", "off", "off"),
+            "T06": ("fixed", "trainable", "off", "off", "off"),
+            "T07": ("fixed", "fixed", "trainable", "off", "off"),
+            "T08": ("trainable", "trainable", "trainable", "off", "off"),
+            "T09": ("fixed", "fixed", "fixed", "trainable", "off"),
+            "T11": ("fixed", "fixed", "fixed", "fixed", "off"),
+            "T12": ("fixed", "fixed", "fixed", "fixed", "trainable"),
+            "T13": ("fixed", "fixed", "fixed", "fixed", "fixed"),
+        }
+        observed = (self.drift, self.diffusion, self.reaction, self.ecology, self.decoder)
+        if stage in exact and observed != exact[stage]:
+            raise ValueError(f"{stage} channel-isolation matrix mismatch.")
+        if stage == "T10" and (
+            observed[:3] != ("fixed", "fixed", "fixed")
+            or self.ecology not in {"off", "fixed"}
+            or self.decoder != "off"
+        ):
+            raise ValueError("T10 channel-isolation matrix mismatch.")
+        return self
+
+
+class ComponentTestReceipt(StrictModel):
+    """Fail-closed result for one independently qualified component."""
+
+    schema_version: int = 1
+    receipt_id: str
+    test_id: str = Field(pattern=r"^T\d{2}_[A-Z0-9_]+$")
+    status: Literal["pass", "fail_retired", "not_run"]
+    primary_metric: str
+    primary_baseline: str
+    point_delta: float
+    bootstrap_interval: tuple[float, float]
+    required_margin: float = Field(ge=0)
+    channel_activity: float = Field(ge=0)
+    protected_metrics_pass: bool
+    selected_update: int = Field(ge=0)
+    input_hashes: dict[str, Sha256]
+    config_hash: Sha256
+    implementation_hash: Sha256
+
+    @model_validator(mode="after")
+    def validate_receipt(self) -> ComponentTestReceipt:
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
+        lower, upper = self.bootstrap_interval
+        if lower > upper:
+            raise ValueError("Bootstrap interval must be ordered.")
+        if self.status == "pass" and not self.protected_metrics_pass:
+            raise ValueError("A passing component must preserve protected metrics.")
+        return self
+
+
 class InputViewArtifact(StrictModel):
     schema_version: int = 1
     view_id: str
@@ -466,8 +588,16 @@ class TrainingConfig(StrictModel):
     state_batch_size: int = Field(default=16, gt=0)
     checkpoint_every: int = Field(default=25, gt=0)
     seed: int = Field(default=0, ge=0)
+    initialization_seed: int = Field(default=0, ge=0)
+    state_split_seed: int = Field(default=0, ge=0)
     dtype: Literal["float32", "float64"] = "float32"
     deterministic: bool = True
+    state_full_batch: bool = False
+    optimizer_name: Literal["AdamW"] = "AdamW"
+    optimizer_betas: tuple[float, float] = (0.9, 0.999)
+    optimizer_epsilon: float = Field(default=1e-8, gt=0.0)
+    optimizer_weight_decay: float = Field(default=0.01, ge=0.0)
+    pilot_device_type: Literal["cpu", "cuda"] | None = None
     selected_update: int | None = None
     analytic_fit: bool = False
     gene_decoder_batch_size: int = Field(default=0, ge=0)
@@ -483,6 +613,7 @@ class TrainingConfig(StrictModel):
     source_drift_penalty: float = Field(default=0.0, ge=0.0)
     source_target_main_penalty: float = Field(default=0.0, ge=0.0)
     source_target_interaction_penalty: float = Field(default=0.0, ge=0.0)
+    noninteraction_linear_ridge: float = Field(default=1.0, gt=0.0)
     state_checkpoint_updates: tuple[int, ...] = ()
     state_validation_target_minimum_improvement: float = Field(default=0.0, ge=0.0)
     state_validation_interaction_minimum_improvement: float = Field(default=0.0, ge=0.0)
@@ -496,6 +627,9 @@ class TrainingConfig(StrictModel):
 
     @model_validator(mode="after")
     def selected_in_budget(self) -> TrainingConfig:
+        beta1, beta2 = self.optimizer_betas
+        if not (0.0 <= beta1 < beta2 < 1.0):
+            raise ValueError("optimizer_betas must satisfy 0 <= beta1 < beta2 < 1.")
         if (self.gene_decoder_batch_size == 0) != (self.gene_decoder_loss_weight == 0.0):
             raise ValueError("Gene decoder batch size and loss weight must be enabled together.")
         if self.gene_decoder_validation_fraction and not self.gene_decoder_batch_size:
@@ -599,6 +733,12 @@ class ResolvedConfig(StrictModel):
     multiplicity_plan: str
     candidate_selection_plan: str
     state_selection_calibration: str | None = None
+    pooled_estimand: Literal["pooled_known_target_heldout_guide"] | None = None
+    outer_fold_id: str | None = None
+    inner_split_id: str | None = None
+    pooled_outer_fold_ids: tuple[str, ...] = ()
+    pooled_inner_split_ids: tuple[str, ...] = ()
+    pooled_optimization_seeds: tuple[int, ...] = ()
     baseline_registry: str
     intent: RunIntent
     model: ModelConfig
@@ -661,10 +801,45 @@ class ResolvedConfig(StrictModel):
                 raise ValueError(
                     "Source-target pilots require an explicit early checkpoint schedule."
                 )
-            if self.training.state_checkpoint_updates[0] > 10:
-                raise ValueError("Source-target pilot checkpointing must begin by update 10.")
+            if self.training.state_checkpoint_updates[0] > 25:
+                raise ValueError("Source-target pilot checkpointing must begin by update 25.")
+            if self.training.max_updates > 500:
+                raise ValueError("The first pooled source-target pilot is capped at 500 updates.")
             if self.state_selection_calibration is None:
                 raise ValueError("Source-target pilots require a bound selection calibration.")
+            if self.pooled_estimand != "pooled_known_target_heldout_guide":
+                raise ValueError(
+                    "Source-target pilots require the pooled known-target held-out-guide estimand."
+                )
+            if not self.outer_fold_id or not self.inner_split_id:
+                raise ValueError(
+                    "Source-target pilots require fixed outer-fold and inner-split IDs."
+                )
+            if (
+                len(set(self.pooled_outer_fold_ids)) < 2
+                or self.outer_fold_id not in self.pooled_outer_fold_ids
+            ):
+                raise ValueError("Pooled pilots require at least two frozen outer guide folds.")
+            if (
+                len(self.pooled_inner_split_ids) != len(self.pooled_outer_fold_ids)
+                or self.inner_split_id not in self.pooled_inner_split_ids
+            ):
+                raise ValueError("Pooled pilots require one frozen inner split per outer fold.")
+            if (
+                len(set(self.pooled_optimization_seeds)) < 3
+                or self.training.seed not in self.pooled_optimization_seeds
+            ):
+                raise ValueError("Pooled pilots require a frozen plan of at least three seeds.")
+            if self.model.pool_count != 1:
+                raise ValueError(
+                    "Pooled source-target pilots require exactly one model-facing pool."
+                )
+            if not self.training.state_full_batch:
+                raise ValueError(
+                    "Pooled source-target pilots require full-batch state optimization."
+                )
+            if self.training.pilot_device_type is None:
+                raise ValueError("Source-target pilots require a frozen device type.")
             forbidden_channels = {
                 "shared_diffusion": self.model.shared_diffusion,
                 "centered_selection": self.model.centered_selection,
@@ -701,7 +876,7 @@ class CompiledRunContract(StrictModel):
     schema_version: int = 1
     compiled_run_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev17"] = "4.0.dev17"
+    recipe_version: Literal["4.0.dev18"] = "4.0.dev18"
     recipe_wheel_hash: Sha256
     frozen_credo_artifact_hash: Sha256
     environment_lock_hash: Sha256
@@ -722,6 +897,7 @@ class CompiledRunContract(StrictModel):
     multiplicity_plan_hash: Sha256
     candidate_selection_plan_hash: Sha256
     state_selection_calibration_hash: Sha256 | None
+    state_selection_calibration_stage: Literal["development", "locked_audit"] | None
     correction_contract_hash: Sha256
     representation_id: str
     latent_cache_index_hash: Sha256
@@ -767,13 +943,14 @@ class InferenceBundleManifest(StrictModel):
     compiled_run_id: str
     selected_checkpoint_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev17"] = "4.0.dev17"
+    recipe_version: Literal["4.0.dev18"] = "4.0.dev18"
     selected_family: Literal[
         "configured_checkpoint",
         "gene_decoder_selected",
         "state_validation_selected",
         "global_terminal_null",
         "shrunk_sister_guide_target_terminal",
+        "selected_training_only_target_main",
         "target_plus_source_target_interaction",
     ]
     selection: ArtifactRef
@@ -875,20 +1052,23 @@ class CandidateSelectionPlan(StrictModel):
 
 
 class StateSelectionCalibration(StrictModel):
-    """Frozen training-only calibration for nested state-family selection."""
+    """Frozen pooled calibration for nested state-family selection."""
 
     schema_version: int = 1
     calibration_id: str
-    method: Literal[
-        "target_label_permutation",
-        "conditional_source_permutation",
-        "synthetic_null_repeats",
-    ]
-    repeated_seeds: int = Field(ge=59)
+    method: Literal["pooled_nested_two_null"] = "pooled_nested_two_null"
+    calibration_stage: Literal["development", "locked_audit"]
+    development_calibration_sha256: Sha256 | None = None
+    repeated_per_null: int = Field(ge=119)
+    false_target_main_count: Literal[0] = 0
     false_interaction_count: Literal[0] = 0
+    false_joint_interaction_count: Literal[0] = 0
     confidence_level: float = Field(default=0.95, ge=0.95, le=0.95)
     confidence_method: Literal["clopper_pearson_one_sided"] = "clopper_pearson_one_sided"
+    familywise_error_target: float = Field(default=0.05, gt=0.0, le=0.05)
+    false_target_main_rate_upper_bound: float = Field(ge=0.0, le=0.05)
     false_interaction_rate_upper_bound: float = Field(ge=0.0, le=0.05)
+    false_joint_interaction_rate_upper_bound: float = Field(ge=0.0, le=0.05)
     target_minimum_improvement: float = Field(gt=0.0)
     interaction_minimum_improvement: float = Field(gt=0.0)
     checkpoint_updates: tuple[int, ...]
@@ -901,41 +1081,132 @@ class StateSelectionCalibration(StrictModel):
             raise ValueError("Calibration must bind a nonempty checkpoint schedule.")
         if tuple(sorted(set(self.checkpoint_updates))) != self.checkpoint_updates:
             raise ValueError("Calibration checkpoint updates must be increasing and unique.")
-        exact_upper = 1.0 - (1.0 - self.confidence_level) ** (1.0 / self.repeated_seeds)
-        if not math.isclose(
+        if self.calibration_stage == "locked_audit" and self.repeated_per_null < 199:
+            raise ValueError("Locked audit calibration requires at least 199 fits per null.")
+        if (self.calibration_stage == "locked_audit") != (
+            self.development_calibration_sha256 is not None
+        ):
+            raise ValueError("Only locked audits must bind the threshold-development calibration.")
+        exact_upper = 1.0 - (1.0 - self.confidence_level) ** (1.0 / self.repeated_per_null)
+        observed_bounds = (
+            self.false_target_main_rate_upper_bound,
             self.false_interaction_rate_upper_bound,
-            exact_upper,
-            rel_tol=0.0,
-            abs_tol=1e-12,
+            self.false_joint_interaction_rate_upper_bound,
+        )
+        if any(
+            not math.isclose(value, exact_upper, rel_tol=0.0, abs_tol=1e-12)
+            for value in observed_bounds
         ):
             raise ValueError(
-                "False-interaction upper bound is inconsistent with zero-failure "
-                "one-sided Clopper-Pearson calibration."
+                "A null-family upper bound is inconsistent with zero-failure one-sided "
+                "Clopper-Pearson calibration."
             )
         return self
 
 
+class StateCalibrationCheckpointScore(StrictModel):
+    update: int = Field(ge=0)
+    global_null_score: float = Field(ge=0.0)
+    shrunk_target_only_score: float = Field(ge=0.0)
+    empirical_bayes_target_score: float = Field(ge=0.0)
+    target_terminal_score: float = Field(ge=0.0)
+    target_delta_score: float = Field(ge=0.0)
+    linear_source_plus_target_score: float = Field(ge=0.0)
+    best_target_only_score: float = Field(ge=0.0)
+    best_target_only_baseline: Literal[
+        "shrunk_target_only", "empirical_bayes_target", "target_terminal"
+    ]
+    best_noninteraction_score: float = Field(ge=0.0)
+    best_noninteraction_baseline: Literal[
+        "shrunk_target_only",
+        "empirical_bayes_target",
+        "target_terminal",
+        "target_delta",
+        "linear_source_plus_target",
+    ]
+    interaction_score: float = Field(ge=0.0)
+
+    @model_validator(mode="after")
+    def exact_best_baselines(self) -> StateCalibrationCheckpointScore:
+        target_scores = {
+            "shrunk_target_only": self.shrunk_target_only_score,
+            "empirical_bayes_target": self.empirical_bayes_target_score,
+            "target_terminal": self.target_terminal_score,
+        }
+        all_scores = {
+            **target_scores,
+            "target_delta": self.target_delta_score,
+            "linear_source_plus_target": self.linear_source_plus_target_score,
+        }
+        if not math.isclose(
+            self.best_target_only_score,
+            target_scores[self.best_target_only_baseline],
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        ) or self.best_target_only_score != min(target_scores.values()):
+            raise ValueError("Best target-only calibration score is inconsistent.")
+        if not math.isclose(
+            self.best_noninteraction_score,
+            all_scores[self.best_noninteraction_baseline],
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        ) or self.best_noninteraction_score != min(all_scores.values()):
+            raise ValueError("Best noninteraction calibration score is inconsistent.")
+        return self
+
+
 class StateSelectionCalibrationRow(StrictModel):
-    """One genuinely fitted null replicate in the calibration result table."""
+    """One randomization fit conditional on a fixed pooled training split."""
 
     replicate_index: int = Field(ge=0)
-    seed: int = Field(ge=0)
+    null_family: Literal["global_target_main", "conditional_interaction", "joint_nested"]
+    outer_fold_id: str
+    inner_split_id: str
+    permutation_seed: int = Field(ge=0)
+    optimizer_seed: int = Field(ge=0)
+    initialization_seed: int = Field(ge=0)
+    permutation_sha256: Sha256
+    fit_series_sha256: Sha256
+    validation_series_sha256: Sha256
+    checkpoint_scores: tuple[StateCalibrationCheckpointScore, ...]
     selected_update: int = Field(ge=0)
     selected_family: Literal[
         "global_terminal_null",
         "shrunk_sister_guide_target_terminal",
+        "selected_training_only_target_main",
         "target_plus_source_target_interaction",
     ]
-    global_null_score: float = Field(ge=0.0)
-    shrunk_target_only_score: float = Field(ge=0.0)
-    interaction_score: float = Field(ge=0.0)
+    maximum_target_main_gain: float
+    maximum_interaction_gain: float
+    false_target_main_selected: bool
     false_interaction_selected: bool
+    false_joint_interaction_selected: bool
 
     @model_validator(mode="after")
     def exact_false_selection_label(self) -> StateSelectionCalibrationRow:
-        expected = self.selected_family == "target_plus_source_target_interaction"
-        if self.false_interaction_selected != expected:
-            raise ValueError("Calibration false-selection label disagrees with selected family.")
+        if len({self.permutation_seed, self.optimizer_seed, self.initialization_seed}) != 3:
+            raise ValueError(
+                "Calibration randomization, optimizer, and initialization seeds must differ."
+            )
+        m1_or_m2 = self.selected_family != "global_terminal_null"
+        m2 = self.selected_family == "target_plus_source_target_interaction"
+        expected_target = self.null_family == "global_target_main" and m1_or_m2
+        expected_interaction = self.null_family == "conditional_interaction" and m2
+        expected_joint = self.null_family == "joint_nested" and m2
+        if (
+            self.false_target_main_selected != expected_target
+            or self.false_interaction_selected != expected_interaction
+            or self.false_joint_interaction_selected != expected_joint
+        ):
+            raise ValueError("Calibration false-selection labels disagree with the null family.")
+        updates = tuple(item.update for item in self.checkpoint_scores)
+        if not updates or tuple(sorted(set(updates))) != updates:
+            raise ValueError("Calibration checkpoint scores must be ordered and unique.")
+        if self.selected_family == "target_plus_source_target_interaction":
+            if self.selected_update == 0 or self.selected_update not in updates:
+                raise ValueError("Selected interaction update is absent from checkpoint scores.")
+        elif self.selected_update != 0:
+            raise ValueError("A noninteraction calibration family must select update zero.")
         return self
 
 
@@ -944,13 +1215,24 @@ class StateSelectionCalibrationResults(StrictModel):
 
     schema_version: int = 1
     calibration_id: str
-    method: Literal[
-        "target_label_permutation",
-        "conditional_source_permutation",
-        "synthetic_null_repeats",
-    ]
+    method: Literal["pooled_nested_two_null"] = "pooled_nested_two_null"
+    calibration_stage: Literal["development", "locked_audit"]
+    development_calibration_sha256: Sha256 | None = None
+    repeated_per_null: int = Field(ge=119)
+    pooled_estimand: Literal["pooled_known_target_heldout_guide"]
+    outer_fold_id: str
+    inner_split_id: str
+    pooled_outer_fold_ids: tuple[str, ...]
+    pooled_inner_split_ids: tuple[str, ...]
+    pooled_optimization_seeds: tuple[int, ...]
+    state_split_seed: int = Field(ge=0)
     implementation_tree_hash: Sha256
     calibration_code_hash: Sha256
+    environment_lock_hash: Sha256
+    optimizer_fingerprint: Sha256
+    device_type: Literal["cpu", "cuda"]
+    dtype: Literal["float32", "float64"]
+    deterministic_algorithms: bool
     representation_id: str
     split_manifest_hash: Sha256
     compiled_problem_hash: Sha256
@@ -958,6 +1240,8 @@ class StateSelectionCalibrationResults(StrictModel):
     interaction_scale: float = Field(gt=0.0)
     learning_rate: float = Field(gt=0.0)
     state_batch_size: int = Field(gt=0)
+    state_full_batch: Literal[True] = True
+    noninteraction_linear_ridge: float = Field(gt=0.0)
     source_target_main_penalty: float = Field(gt=0.0)
     source_target_interaction_penalty: float = Field(gt=0.0)
     target_minimum_improvement: float = Field(gt=0.0)
@@ -965,21 +1249,57 @@ class StateSelectionCalibrationResults(StrictModel):
     checkpoint_updates: tuple[int, ...]
     guide_per_target_distribution_hash: Sha256
     support_distribution_hash: Sha256
-    seeds: tuple[int, ...]
     rows: tuple[StateSelectionCalibrationRow, ...]
 
     @model_validator(mode="after")
     def complete_rows(self) -> StateSelectionCalibrationResults:
         if tuple(sorted(set(self.checkpoint_updates))) != self.checkpoint_updates:
             raise ValueError("Result checkpoint updates must be increasing and unique.")
-        if len(set(self.seeds)) != len(self.seeds):
-            raise ValueError("Calibration seeds must be unique.")
-        if len(self.rows) != len(self.seeds):
-            raise ValueError("Every calibration seed must have exactly one result row.")
+        if self.calibration_stage == "locked_audit" and self.repeated_per_null < 199:
+            raise ValueError("Locked audit results require at least 199 fits per null.")
+        if (self.calibration_stage == "locked_audit") != (
+            self.development_calibration_sha256 is not None
+        ):
+            raise ValueError("Only locked audit results bind a development calibration.")
+        if (
+            len(set(self.pooled_outer_fold_ids)) < 2
+            or len(self.pooled_inner_split_ids) != len(self.pooled_outer_fold_ids)
+            or self.outer_fold_id not in self.pooled_outer_fold_ids
+            or self.inner_split_id not in self.pooled_inner_split_ids
+            or len(set(self.pooled_optimization_seeds)) < 3
+        ):
+            raise ValueError("Calibration results have an incomplete pooled validation plan.")
+        if len(self.rows) != 3 * self.repeated_per_null:
+            raise ValueError("Every null family must contain repeated_per_null result rows.")
         if tuple(row.replicate_index for row in self.rows) != tuple(range(len(self.rows))):
             raise ValueError("Calibration replicate indices must be contiguous and ordered.")
-        if tuple(row.seed for row in self.rows) != self.seeds:
-            raise ValueError("Calibration row seeds differ from the frozen seed list.")
+        if (
+            len({row.outer_fold_id for row in self.rows}) != 1
+            or len({row.inner_split_id for row in self.rows}) != 1
+        ):
+            raise ValueError("Calibration rows must use one fixed pooled split identity.")
+        if any(
+            row.outer_fold_id != self.outer_fold_id or row.inner_split_id != self.inner_split_id
+            for row in self.rows
+        ):
+            raise ValueError("Calibration row split identity differs from the result contract.")
+        if (
+            len({row.fit_series_sha256 for row in self.rows}) != 1
+            or len({row.validation_series_sha256 for row in self.rows}) != 1
+        ):
+            raise ValueError("Calibration rows must use one fixed fit/validation series split.")
+        expected_updates = (0, *self.checkpoint_updates)
+        if any(
+            tuple(score.update for score in row.checkpoint_scores) != expected_updates
+            for row in self.rows
+        ):
+            raise ValueError("Calibration row checkpoint grids differ from the result contract.")
+        for family in ("global_target_main", "conditional_interaction", "joint_nested"):
+            local = [row for row in self.rows if row.null_family == family]
+            if len(local) != self.repeated_per_null:
+                raise ValueError(f"Calibration null family {family} is incomplete.")
+            if len({row.permutation_seed for row in local}) != len(local):
+                raise ValueError(f"Calibration null family {family} has duplicate permutations.")
         return self
 
 
@@ -1002,6 +1322,7 @@ class SelectionManifest(StrictModel):
         "state_validation_selected",
         "global_terminal_null",
         "shrunk_sister_guide_target_terminal",
+        "selected_training_only_target_main",
         "target_plus_source_target_interaction",
     ]
     inner_selected_update: int | None = Field(default=None, ge=0)
@@ -1011,6 +1332,21 @@ class SelectionManifest(StrictModel):
     refit_series_hash: Sha256 | None = None
     global_null_score: float | None = None
     shrunk_target_only_score: float | None = None
+    best_target_only_score: float | None = None
+    best_target_only_baseline: (
+        Literal["shrunk_target_only", "empirical_bayes_target", "target_terminal"] | None
+    ) = None
+    best_noninteraction_score: float | None = None
+    best_noninteraction_baseline: (
+        Literal[
+            "shrunk_target_only",
+            "empirical_bayes_target",
+            "target_terminal",
+            "target_delta",
+            "linear_source_plus_target",
+        ]
+        | None
+    ) = None
     interaction_score: float | None = None
     interaction_incremental_gain: float | None = None
     target_incremental_gain: float | None = None
@@ -1027,6 +1363,10 @@ class SelectionManifest(StrictModel):
             required = (
                 self.global_null_score,
                 self.shrunk_target_only_score,
+                self.best_target_only_score,
+                self.best_target_only_baseline,
+                self.best_noninteraction_score,
+                self.best_noninteraction_baseline,
                 self.interaction_score,
                 self.interaction_incremental_gain,
                 self.target_incremental_gain,

@@ -44,6 +44,7 @@ def create_synthetic_project(
     intent: RunIntent = RunIntent.COUNT_CONTEXT,
     seed: int = 7,
     updates: int = 40,
+    pooled: bool = False,
 ) -> Path:
     """Create a small known-signal two-pool count-SDE fixture."""
 
@@ -59,7 +60,8 @@ def create_synthetic_project(
         for index in range(12)
     )
     target_indices = [0, 1, 2, 0, 1, 2]
-    pool_indices = [0, 0, 0, 1, 1, 1]
+    pool_indices = [0, 0, 0, 0, 0, 0] if pooled else [0, 0, 0, 1, 1, 1]
+    pool_count = 1 if pooled else 2
     source_rows: list[int] = []
     terminal_rows: list[int] = []
     matrices: list[np.ndarray] = []
@@ -137,7 +139,7 @@ def create_synthetic_project(
     row_hash = sha256_bytes(np.asarray(row_ids, dtype="<i8").tobytes())
     feature_hash = sha256_bytes(canonical_json_bytes(feature_payload))
     snapshot = SemanticStudySnapshot(
-        study_id="synthetic-two-pool-v1",
+        study_id="synthetic-pooled-v1" if pooled else "synthetic-two-pool-v1",
         series=tuple(series_records),
         observed_edges=(("source", "terminal"),),
         feature_index_hash=feature_hash,
@@ -194,12 +196,12 @@ def create_synthetic_project(
                     record.series_id for record in series_records if record.pool_index == pool
                 ),
             )
-            for pool in range(2)
+            for pool in range(pool_count)
         ),
     )
     pools = PoolContract(
         pool_contract_id="synthetic-physical-pools-v1",
-        physical_pool_ids=("pool-0", "pool-1"),
+        physical_pool_ids=tuple(f"pool-{pool}" for pool in range(pool_count)),
         contributors=tuple(
             PoolContributor(pool_id=f"pool-{record.pool_index}", series_id=record.series_id)
             for record in series_records
@@ -316,7 +318,7 @@ def create_synthetic_project(
         "model": {
             "state_dim": 4,
             "target_count": 3,
-            "pool_count": 2,
+            "pool_count": pool_count,
             "hidden_dim": 16,
             "shared_diffusion": False,
             "shared_diffusion_inner_validation_pass": False,

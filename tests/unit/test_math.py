@@ -337,6 +337,56 @@ def test_source_target_interaction_is_null_nested_target_specific_and_ablatable(
     )
 
 
+def test_source_target_interaction_is_exactly_target_centered_and_reloadable() -> None:
+    config = ModelConfig(
+        state_dim=2,
+        target_count=3,
+        terminal_anchor_drift=True,
+        source_carryover_alpha=0.0,
+        source_target_interaction_rank=2,
+        source_target_interaction_scale=0.5,
+        trainable_terminal_anchor=False,
+        trainable_target_anchor=False,
+    )
+    model = CountSDEModel(config, RunIntent.COUNT_STATE)
+    source = torch.tensor([[100.0, 1.0], [100.0, -1.0], [-50.0, 2.0], [-50.0, -2.0]])
+    target = torch.tensor([1, 1, 2, 2])
+    control = torch.zeros(4, dtype=torch.bool)
+    with torch.no_grad():
+        model.source_target_center[1].copy_(torch.tensor([100.0, 0.0]))
+        model.source_target_center[2].copy_(torch.tensor([-50.0, 0.0]))
+        model.source_interaction_whitener.copy_(torch.eye(2))
+        assert model.source_interaction_projection is not None
+        assert model.target_interaction_embedding is not None
+        assert model.source_target_output is not None
+        model.source_interaction_projection.weight.copy_(torch.eye(2))
+        model.target_interaction_embedding[1].copy_(torch.tensor([1.0, 1.0]))
+        model.target_interaction_embedding[2].copy_(torch.tensor([-1.0, 1.0]))
+        model.source_target_output.weight.copy_(torch.eye(2))
+        model.refresh_source_target_interaction_mean(source, target, control)
+    interaction = model.source_target_interaction(
+        source, target, control, center_on_training_targets=True
+    )
+    for value in (1, 2):
+        np.testing.assert_allclose(
+            interaction[target == value].detach().numpy().mean(axis=0),
+            np.zeros(2),
+            atol=1e-7,
+        )
+    reloaded = CountSDEModel(config, RunIntent.COUNT_STATE)
+    reloaded.load_state_dict(model.state_dict(), strict=True)
+    assert torch.equal(reloaded.source_target_center, model.source_target_center)
+    assert torch.equal(
+        reloaded.source_target_interaction_mean, model.source_target_interaction_mean
+    )
+    assert torch.equal(
+        reloaded.source_target_interaction(
+            source, target, control, center_on_training_targets=True
+        ),
+        interaction,
+    )
+
+
 def test_source_target_interaction_contract_fails_closed() -> None:
     with pytest.raises(ValueError, match="zero-carryover terminal anchor"):
         ModelConfig(state_dim=2, target_count=2, source_target_interaction_rank=2)
@@ -457,6 +507,10 @@ def test_null_guarded_selection_requires_margin_over_best_baseline(tmp_path: Pat
                 "state_validation_full_interaction_rmse": score,
                 "state_validation_global_null_rmse": 0.5,
                 "state_validation_shrunk_target_only_rmse": target_score,
+                "state_validation_best_target_only_rmse": target_score,
+                "state_validation_best_target_only_baseline": "shrunk_target_only",
+                "state_validation_best_noninteraction_rmse": target_score,
+                "state_validation_best_noninteraction_baseline": "shrunk_target_only",
                 "state_validation_interaction_incremental_gain": target_score - score,
                 "interaction_displacement_rms": abs(target_score - score),
                 "target_main_displacement_rms": 0.1,
@@ -493,9 +547,9 @@ def test_null_guarded_selection_requires_margin_over_best_baseline(tmp_path: Pat
     assert selected["selected_family"] == "target_plus_source_target_interaction"
     target = run_case(tmp_path / "target", 0.445)
     assert target["selected_update"] == 0
-    assert target["selected_family"] == "shrunk_sister_guide_target_terminal"
+    assert target["selected_family"] == "selected_training_only_target_main"
     full_target = run_case(tmp_path / "full-target", 0.35, target_score=0.35)
-    assert full_target["selected_family"] == "shrunk_sister_guide_target_terminal"
+    assert full_target["selected_family"] == "selected_training_only_target_main"
     rejected = run_case(tmp_path / "rejected", 0.49, target_score=0.495)
     assert rejected["selected_update"] == 0
     assert rejected["selected_family"] == "global_terminal_null"

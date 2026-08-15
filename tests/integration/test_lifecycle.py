@@ -29,6 +29,29 @@ from credo_count_sde_v4.training.trainer import (
 )
 
 
+def _mark_pooled_pilot(payload: dict[str, object]) -> None:
+    payload["pooled_estimand"] = "pooled_known_target_heldout_guide"
+    payload["outer_fold_id"] = "synthetic-outer-fold-0"
+    payload["inner_split_id"] = "synthetic-inner-split-0"
+    payload["pooled_outer_fold_ids"] = ["synthetic-outer-fold-0", "synthetic-outer-fold-1"]
+    payload["pooled_inner_split_ids"] = ["synthetic-inner-split-0", "synthetic-inner-split-1"]
+    model = payload["model"]
+    assert isinstance(model, dict)
+    model["pool_count"] = 1
+    training = payload["training"]
+    assert isinstance(training, dict)
+    seed = int(training["seed"])
+    payload["pooled_optimization_seeds"] = [seed, seed + 1, seed + 2]
+    training.update(
+        {
+            "state_full_batch": True,
+            "pilot_device_type": "cpu",
+            "state_split_seed": 7001,
+            "initialization_seed": 7002,
+        }
+    )
+
+
 def _configure_pilot_calibration(
     config: Path,
     *,
@@ -37,6 +60,7 @@ def _configure_pilot_calibration(
     interaction_margin: float,
 ) -> None:
     payload = yaml.safe_load(config.read_text())
+    _mark_pooled_pilot(payload)
     payload["state_selection_calibration"] = (
         "work/input/state-calibration/state-selection-calibration.json"
     )
@@ -50,7 +74,10 @@ def _run_pilot_calibration(config: Path) -> None:
     run_state_selection_calibration(
         config,
         config.parent / "work/input/state-calibration",
-        seeds=tuple(range(100_000, 100_059)),
+        repeats_per_null=119,
+        permutation_seed_start=100_000,
+        optimizer_seed_start=200_000,
+        initialization_seed_start=300_000,
     )
 
 
@@ -208,7 +235,10 @@ def test_null_guarded_interaction_persists_zero_and_refits_selected_null(
     tmp_path: Path,
 ) -> None:
     config = create_synthetic_project(
-        tmp_path / "null-guarded-interaction", intent=RunIntent.COUNT_STATE, updates=4
+        tmp_path / "null-guarded-interaction",
+        intent=RunIntent.COUNT_STATE,
+        updates=4,
+        pooled=True,
     )
     payload = yaml.safe_load(config.read_text())
     payload["model"].update(
@@ -252,8 +282,11 @@ def test_null_guarded_interaction_persists_zero_and_refits_selected_null(
             config.parent / "work/input/state-calibration/state-selection-calibration-results.json"
         ).read_text()
     )
-    assert calibration["repeated_seeds"] == len(results["rows"]) == 59
+    assert calibration["repeated_per_null"] == 119
+    assert len(results["rows"]) == 3 * calibration["repeated_per_null"]
+    assert calibration["false_target_main_count"] == 0
     assert calibration["false_interaction_count"] == 0
+    assert calibration["false_joint_interaction_count"] == 0
     assert calibration["false_interaction_rate_upper_bound"] < 0.05
     assert all(not row["false_interaction_selected"] for row in results["rows"])
     api.compile_run(config)
@@ -271,9 +304,16 @@ def test_null_guarded_interaction_persists_zero_and_refits_selected_null(
     _, arrays, model, checkpoint = load_training_state(config, device="cpu")
     assert checkpoint.checkpoint_id == selection["selected_checkpoint_id"]
     assert checkpoint.update == 0
-    np.testing.assert_allclose(
-        model.terminal_anchor.detach().numpy(), arrays["terminal_z"].mean(axis=0), atol=1e-7
+    target = arrays["target_index"]
+    control = arrays["is_control"].astype(bool)
+    expected_anchor = np.mean(
+        [
+            arrays["terminal_z"][(target == value) & ~control].mean(axis=0)
+            for value in np.unique(target[~control])
+        ],
+        axis=0,
     )
+    np.testing.assert_allclose(model.terminal_anchor.detach().numpy(), expected_anchor, atol=1e-7)
     assert model.source_target_output is not None
     assert torch.count_nonzero(model.source_target_output.weight).item() == 0
     api.finalize(config)
@@ -297,7 +337,10 @@ def test_null_guarded_interaction_persists_zero_and_refits_selected_null(
 
 def test_source_target_pilot_requires_a_positive_selection_margin(tmp_path: Path) -> None:
     config = create_synthetic_project(
-        tmp_path / "zero-selection-margin", intent=RunIntent.COUNT_STATE, updates=2
+        tmp_path / "zero-selection-margin",
+        intent=RunIntent.COUNT_STATE,
+        updates=2,
+        pooled=True,
     )
     payload = yaml.safe_load(config.read_text())
     payload["model"].update(
@@ -330,7 +373,10 @@ def test_source_target_pilot_requires_a_positive_selection_margin(tmp_path: Path
 
 def test_source_target_pilot_rejects_untrained_decoder_architecture(tmp_path: Path) -> None:
     config = create_synthetic_project(
-        tmp_path / "random-decoder-pilot", intent=RunIntent.COUNT_STATE, updates=2
+        tmp_path / "random-decoder-pilot",
+        intent=RunIntent.COUNT_STATE,
+        updates=2,
+        pooled=True,
     )
     payload = yaml.safe_load(config.read_text())
     payload["model"].update(
@@ -358,6 +404,7 @@ def test_source_target_pilot_rejects_untrained_decoder_architecture(tmp_path: Pa
             "checkpoint_selection": "minimum_state_validation_null_guarded",
         }
     )
+    _mark_pooled_pilot(payload)
     config.write_text(yaml.safe_dump(payload, sort_keys=False))
     with pytest.raises(ValueError, match="disable the gene decoder entirely"):
         api.prepare(config)
@@ -389,6 +436,7 @@ def test_source_target_pilot_rejects_uncalibrated_channels(
         tmp_path / f"forbidden-{next(iter(changes))}",
         intent=RunIntent.COUNT_STATE,
         updates=2,
+        pooled=True,
     )
     payload = yaml.safe_load(config.read_text())
     payload["state_selection_calibration"] = "work/input/unused-calibration.json"
@@ -415,6 +463,7 @@ def test_source_target_pilot_rejects_uncalibrated_channels(
         }
     )
     payload[section].update(changes)
+    _mark_pooled_pilot(payload)
     config.write_text(yaml.safe_dump(payload, sort_keys=False))
     with pytest.raises(ValueError, match=message):
         api.prepare(config)
@@ -422,7 +471,10 @@ def test_source_target_pilot_rejects_uncalibrated_channels(
 
 def test_source_target_pilot_rejects_margin_not_bound_by_calibration(tmp_path: Path) -> None:
     config = create_synthetic_project(
-        tmp_path / "mismatched-calibration", intent=RunIntent.COUNT_STATE, updates=2
+        tmp_path / "mismatched-calibration",
+        intent=RunIntent.COUNT_STATE,
+        updates=2,
+        pooled=True,
     )
     payload = yaml.safe_load(config.read_text())
     payload["model"].update(
@@ -462,7 +514,10 @@ def test_source_target_pilot_rejects_margin_not_bound_by_calibration(tmp_path: P
 
 def test_target_only_candidate_is_materialized_by_post_selection_refit(tmp_path: Path) -> None:
     config = create_synthetic_project(
-        tmp_path / "target-only-refit", intent=RunIntent.COUNT_STATE, updates=2
+        tmp_path / "target-only-refit",
+        intent=RunIntent.COUNT_STATE,
+        updates=2,
+        pooled=True,
     )
     payload = yaml.safe_load(config.read_text())
     payload["model"].update(
@@ -509,9 +564,13 @@ def test_target_only_candidate_is_materialized_by_post_selection_refit(tmp_path:
         "selected_checkpoint_id": "0" * 64,
         "selected_checkpoint_relative_uri": "training/checkpoints/generation-000000000",
         "candidate_updates": [0, 1, 2],
-        "selected_family": "shrunk_sister_guide_target_terminal",
+        "selected_family": "selected_training_only_target_main",
         "global_null_score": 0.6,
         "shrunk_target_only_score": 0.5,
+        "best_target_only_score": 0.5,
+        "best_target_only_baseline": "shrunk_target_only",
+        "best_noninteraction_score": 0.5,
+        "best_noninteraction_baseline": "shrunk_target_only",
         "interaction_score": 0.5,
         "interaction_incremental_gain": 0.0,
         "target_incremental_gain": 0.1,

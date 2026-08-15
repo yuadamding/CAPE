@@ -1,12 +1,42 @@
 {
   "$defs": {
-    "StateSelectionCalibrationRow": {
+    "StateCalibrationCheckpointScore": {
       "additionalProperties": false,
-      "description": "One genuinely fitted null replicate in the calibration result table.",
       "properties": {
-        "false_interaction_selected": {
-          "title": "False Interaction Selected",
-          "type": "boolean"
+        "best_noninteraction_baseline": {
+          "enum": [
+            "shrunk_target_only",
+            "empirical_bayes_target",
+            "target_terminal",
+            "target_delta",
+            "linear_source_plus_target"
+          ],
+          "title": "Best Noninteraction Baseline",
+          "type": "string"
+        },
+        "best_noninteraction_score": {
+          "minimum": 0.0,
+          "title": "Best Noninteraction Score",
+          "type": "number"
+        },
+        "best_target_only_baseline": {
+          "enum": [
+            "shrunk_target_only",
+            "empirical_bayes_target",
+            "target_terminal"
+          ],
+          "title": "Best Target Only Baseline",
+          "type": "string"
+        },
+        "best_target_only_score": {
+          "minimum": 0.0,
+          "title": "Best Target Only Score",
+          "type": "number"
+        },
+        "empirical_bayes_target_score": {
+          "minimum": 0.0,
+          "title": "Empirical Bayes Target Score",
+          "type": "number"
         },
         "global_null_score": {
           "minimum": 0.0,
@@ -18,20 +48,132 @@
           "title": "Interaction Score",
           "type": "number"
         },
+        "linear_source_plus_target_score": {
+          "minimum": 0.0,
+          "title": "Linear Source Plus Target Score",
+          "type": "number"
+        },
+        "shrunk_target_only_score": {
+          "minimum": 0.0,
+          "title": "Shrunk Target Only Score",
+          "type": "number"
+        },
+        "target_delta_score": {
+          "minimum": 0.0,
+          "title": "Target Delta Score",
+          "type": "number"
+        },
+        "target_terminal_score": {
+          "minimum": 0.0,
+          "title": "Target Terminal Score",
+          "type": "number"
+        },
+        "update": {
+          "minimum": 0,
+          "title": "Update",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "update",
+        "global_null_score",
+        "shrunk_target_only_score",
+        "empirical_bayes_target_score",
+        "target_terminal_score",
+        "target_delta_score",
+        "linear_source_plus_target_score",
+        "best_target_only_score",
+        "best_target_only_baseline",
+        "best_noninteraction_score",
+        "best_noninteraction_baseline",
+        "interaction_score"
+      ],
+      "title": "StateCalibrationCheckpointScore",
+      "type": "object"
+    },
+    "StateSelectionCalibrationRow": {
+      "additionalProperties": false,
+      "description": "One randomization fit conditional on a fixed pooled training split.",
+      "properties": {
+        "checkpoint_scores": {
+          "items": {
+            "$ref": "#/$defs/StateCalibrationCheckpointScore"
+          },
+          "title": "Checkpoint Scores",
+          "type": "array"
+        },
+        "false_interaction_selected": {
+          "title": "False Interaction Selected",
+          "type": "boolean"
+        },
+        "false_joint_interaction_selected": {
+          "title": "False Joint Interaction Selected",
+          "type": "boolean"
+        },
+        "false_target_main_selected": {
+          "title": "False Target Main Selected",
+          "type": "boolean"
+        },
+        "fit_series_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fit Series Sha256",
+          "type": "string"
+        },
+        "initialization_seed": {
+          "minimum": 0,
+          "title": "Initialization Seed",
+          "type": "integer"
+        },
+        "inner_split_id": {
+          "title": "Inner Split Id",
+          "type": "string"
+        },
+        "maximum_interaction_gain": {
+          "title": "Maximum Interaction Gain",
+          "type": "number"
+        },
+        "maximum_target_main_gain": {
+          "title": "Maximum Target Main Gain",
+          "type": "number"
+        },
+        "null_family": {
+          "enum": [
+            "global_target_main",
+            "conditional_interaction",
+            "joint_nested"
+          ],
+          "title": "Null Family",
+          "type": "string"
+        },
+        "optimizer_seed": {
+          "minimum": 0,
+          "title": "Optimizer Seed",
+          "type": "integer"
+        },
+        "outer_fold_id": {
+          "title": "Outer Fold Id",
+          "type": "string"
+        },
+        "permutation_seed": {
+          "minimum": 0,
+          "title": "Permutation Seed",
+          "type": "integer"
+        },
+        "permutation_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Permutation Sha256",
+          "type": "string"
+        },
         "replicate_index": {
           "minimum": 0,
           "title": "Replicate Index",
-          "type": "integer"
-        },
-        "seed": {
-          "minimum": 0,
-          "title": "Seed",
           "type": "integer"
         },
         "selected_family": {
           "enum": [
             "global_terminal_null",
             "shrunk_sister_guide_target_terminal",
+            "selected_training_only_target_main",
             "target_plus_source_target_interaction"
           ],
           "title": "Selected Family",
@@ -42,21 +184,31 @@
           "title": "Selected Update",
           "type": "integer"
         },
-        "shrunk_target_only_score": {
-          "minimum": 0.0,
-          "title": "Shrunk Target Only Score",
-          "type": "number"
+        "validation_series_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Validation Series Sha256",
+          "type": "string"
         }
       },
       "required": [
         "replicate_index",
-        "seed",
+        "null_family",
+        "outer_fold_id",
+        "inner_split_id",
+        "permutation_seed",
+        "optimizer_seed",
+        "initialization_seed",
+        "permutation_sha256",
+        "fit_series_sha256",
+        "validation_series_sha256",
+        "checkpoint_scores",
         "selected_update",
         "selected_family",
-        "global_null_score",
-        "shrunk_target_only_score",
-        "interaction_score",
-        "false_interaction_selected"
+        "maximum_target_main_gain",
+        "maximum_interaction_gain",
+        "false_target_main_selected",
+        "false_interaction_selected",
+        "false_joint_interaction_selected"
       ],
       "title": "StateSelectionCalibrationRow",
       "type": "object"
@@ -76,6 +228,14 @@
       "title": "Calibration Id",
       "type": "string"
     },
+    "calibration_stage": {
+      "enum": [
+        "development",
+        "locked_audit"
+      ],
+      "title": "Calibration Stage",
+      "type": "string"
+    },
     "checkpoint_updates": {
       "items": {
         "type": "integer"
@@ -88,6 +248,44 @@
       "title": "Compiled Problem Hash",
       "type": "string"
     },
+    "deterministic_algorithms": {
+      "title": "Deterministic Algorithms",
+      "type": "boolean"
+    },
+    "development_calibration_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Development Calibration Sha256"
+    },
+    "device_type": {
+      "enum": [
+        "cpu",
+        "cuda"
+      ],
+      "title": "Device Type",
+      "type": "string"
+    },
+    "dtype": {
+      "enum": [
+        "float32",
+        "float64"
+      ],
+      "title": "Dtype",
+      "type": "string"
+    },
+    "environment_lock_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Environment Lock Hash",
+      "type": "string"
+    },
     "guide_per_target_distribution_hash": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Guide Per Target Distribution Hash",
@@ -96,6 +294,10 @@
     "implementation_tree_hash": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Implementation Tree Hash",
+      "type": "string"
+    },
+    "inner_split_id": {
+      "title": "Inner Split Id",
       "type": "string"
     },
     "interaction_minimum_improvement": {
@@ -120,13 +322,55 @@
       "type": "number"
     },
     "method": {
-      "enum": [
-        "target_label_permutation",
-        "conditional_source_permutation",
-        "synthetic_null_repeats"
-      ],
+      "const": "pooled_nested_two_null",
+      "default": "pooled_nested_two_null",
       "title": "Method",
       "type": "string"
+    },
+    "noninteraction_linear_ridge": {
+      "exclusiveMinimum": 0.0,
+      "title": "Noninteraction Linear Ridge",
+      "type": "number"
+    },
+    "optimizer_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Optimizer Fingerprint",
+      "type": "string"
+    },
+    "outer_fold_id": {
+      "title": "Outer Fold Id",
+      "type": "string"
+    },
+    "pooled_estimand": {
+      "const": "pooled_known_target_heldout_guide",
+      "title": "Pooled Estimand",
+      "type": "string"
+    },
+    "pooled_inner_split_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Pooled Inner Split Ids",
+      "type": "array"
+    },
+    "pooled_optimization_seeds": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Pooled Optimization Seeds",
+      "type": "array"
+    },
+    "pooled_outer_fold_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Pooled Outer Fold Ids",
+      "type": "array"
+    },
+    "repeated_per_null": {
+      "minimum": 119,
+      "title": "Repeated Per Null",
+      "type": "integer"
     },
     "representation_id": {
       "title": "Representation Id",
@@ -143,13 +387,6 @@
       "default": 1,
       "title": "Schema Version",
       "type": "integer"
-    },
-    "seeds": {
-      "items": {
-        "type": "integer"
-      },
-      "title": "Seeds",
-      "type": "array"
     },
     "source_target_interaction_penalty": {
       "exclusiveMinimum": 0.0,
@@ -171,6 +408,17 @@
       "title": "State Batch Size",
       "type": "integer"
     },
+    "state_full_batch": {
+      "const": true,
+      "default": true,
+      "title": "State Full Batch",
+      "type": "boolean"
+    },
+    "state_split_seed": {
+      "minimum": 0,
+      "title": "State Split Seed",
+      "type": "integer"
+    },
     "support_distribution_hash": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Support Distribution Hash",
@@ -184,9 +432,22 @@
   },
   "required": [
     "calibration_id",
-    "method",
+    "calibration_stage",
+    "repeated_per_null",
+    "pooled_estimand",
+    "outer_fold_id",
+    "inner_split_id",
+    "pooled_outer_fold_ids",
+    "pooled_inner_split_ids",
+    "pooled_optimization_seeds",
+    "state_split_seed",
     "implementation_tree_hash",
     "calibration_code_hash",
+    "environment_lock_hash",
+    "optimizer_fingerprint",
+    "device_type",
+    "dtype",
+    "deterministic_algorithms",
     "representation_id",
     "split_manifest_hash",
     "compiled_problem_hash",
@@ -194,6 +455,7 @@
     "interaction_scale",
     "learning_rate",
     "state_batch_size",
+    "noninteraction_linear_ridge",
     "source_target_main_penalty",
     "source_target_interaction_penalty",
     "target_minimum_improvement",
@@ -201,7 +463,6 @@
     "checkpoint_updates",
     "guide_per_target_distribution_hash",
     "support_distribution_hash",
-    "seeds",
     "rows"
   ],
   "title": "StateSelectionCalibrationResults",

@@ -19,6 +19,7 @@ from ..contracts import (
     EvaluationBundleManifest,
     InferenceBundleManifest,
     SealedRunManifest,
+    SelectionManifest,
     SemanticStudySnapshot,
     SeriesRecord,
 )
@@ -59,8 +60,15 @@ def _interaction_advancement_pass(
     overall_bootstrap_upper: float,
     required_interaction_improvement: float,
     required_overall_improvement: float,
+    target_main_bootstrap_upper: float,
+    required_target_main_improvement: float,
     interaction_displacement_rms: float,
     minimum_interaction_displacement_rms: float,
+    target_win_fraction: float,
+    minimum_target_win_fraction: float,
+    maximum_leave_one_target_out_delta: float,
+    top_target_absolute_contribution_fraction: float,
+    maximum_single_target_contribution_fraction: float,
 ) -> bool:
     """Fail closed unless the deployed family and both outer gates pass."""
 
@@ -68,7 +76,11 @@ def _interaction_advancement_pass(
         selected_family == "target_plus_source_target_interaction"
         and interaction_bootstrap_upper < -required_interaction_improvement
         and overall_bootstrap_upper < -required_overall_improvement
+        and target_main_bootstrap_upper < -required_target_main_improvement
         and interaction_displacement_rms >= minimum_interaction_displacement_rms
+        and target_win_fraction >= minimum_target_win_fraction
+        and maximum_leave_one_target_out_delta < 0.0
+        and top_target_absolute_contribution_fraction <= maximum_single_target_contribution_fraction
     )
 
 
@@ -123,6 +135,8 @@ def _population_metrics(
     predictions: dict[str, np.ndarray],
     mask: np.ndarray,
 ) -> dict[str, Any]:
+    if not np.any(mask):
+        return {"series": 0, "evaluable": False}
     result: dict[str, Any] = {"series": int(mask.sum())}
     target = frame.loc[mask, "target_index"].to_numpy(dtype=np.int64)
     for name, values in predictions.items():
@@ -141,6 +155,36 @@ def _population_metrics(
     )
     result["v4_delta_norm_spearman"] = _safe_correlation(
         "spearman", np.linalg.norm(model_delta, axis=1), np.linalg.norm(observed_delta, axis=1)
+    )
+    cosine_denominator = np.linalg.norm(model_delta, axis=1) * np.linalg.norm(
+        observed_delta, axis=1
+    )
+    valid_cosine = cosine_denominator > 0
+    cosine = np.full(len(model_delta), np.nan, dtype=np.float64)
+    cosine[valid_cosine] = (
+        np.sum(model_delta[valid_cosine] * observed_delta[valid_cosine], axis=1)
+        / cosine_denominator[valid_cosine]
+    )
+    result["v4_delta_cosine_mean"] = float(np.nanmean(cosine)) if valid_cosine.any() else None
+    result["v4_delta_cosine_median"] = float(np.nanmedian(cosine)) if valid_cosine.any() else None
+    observed_residuals: list[np.ndarray] = []
+    predicted_residuals: list[np.ndarray] = []
+    for value in np.unique(target):
+        local = target == value
+        if local.sum() < 2:
+            continue
+        observed_local = terminal[mask][local]
+        predicted_local = predictions["v4"][mask][local]
+        observed_residuals.append(observed_local - observed_local.mean(axis=0))
+        predicted_residuals.append(predicted_local - predicted_local.mean(axis=0))
+    result["sister_guide_residual_flat_pearson"] = (
+        _safe_correlation(
+            "pearson",
+            np.concatenate(predicted_residuals).reshape(-1),
+            np.concatenate(observed_residuals).reshape(-1),
+        )
+        if observed_residuals
+        else None
     )
     return result
 
@@ -188,6 +232,18 @@ def _target_balanced_rms(displacement: np.ndarray, target_indices: np.ndarray) -
     return float(np.sqrt(np.mean(target_mse)))
 
 
+def _target_balanced_mean(
+    values: np.ndarray, target_indices: np.ndarray, controls: np.ndarray
+) -> np.ndarray:
+    targeting = ~controls
+    selected_targets = np.unique(target_indices[targeting])
+    if not len(selected_targets):
+        return values.mean(axis=0)
+    return np.asarray(
+        [values[(target_indices == value) & targeting].mean(axis=0) for value in selected_targets]
+    ).mean(axis=0)
+
+
 def _independent_shrunk_target_prediction(
     *,
     train_terminal: np.ndarray,
@@ -200,7 +256,7 @@ def _independent_shrunk_target_prediction(
 ) -> tuple[np.ndarray, float]:
     """Materialize M1 independently of whichever family was deployed."""
 
-    global_terminal = train_terminal.mean(axis=0)
+    global_terminal = _target_balanced_mean(train_terminal, train_target, train_control)
     numerators: list[float] = []
     denominators: list[float] = []
     offsets: dict[int, np.ndarray] = {}
@@ -233,6 +289,88 @@ def _independent_shrunk_target_prediction(
         if not evaluation_control[index] and int(target_value) in offsets:
             prediction[index] += alpha * offsets[int(target_value)]
     return prediction.astype(np.float32), alpha
+
+
+def _empirical_bayes_target_prediction(
+    *,
+    train_terminal: np.ndarray,
+    train_target: np.ndarray,
+    train_control: np.ndarray,
+    evaluation_target: np.ndarray,
+    evaluation_control: np.ndarray,
+) -> tuple[np.ndarray, dict[int, float]]:
+    """Training-only multiplicity/dispersion-aware target shrinkage."""
+
+    global_terminal = _target_balanced_mean(train_terminal, train_target, train_control)
+    target_values = np.unique(train_target[~train_control])
+    means = {
+        int(value): train_terminal[(train_target == value) & ~train_control].mean(axis=0)
+        for value in target_values
+    }
+    tau2 = float(np.mean([np.mean(np.square(value - global_terminal)) for value in means.values()]))
+    gates: dict[int, float] = {}
+    for value in target_values:
+        local = train_terminal[(train_target == value) & ~train_control]
+        sigma2 = float(np.mean(np.square(local - local.mean(axis=0))))
+        gates[int(value)] = tau2 / (tau2 + sigma2 / len(local) + 1e-12)
+    prediction = np.broadcast_to(
+        global_terminal, (len(evaluation_target), len(global_terminal))
+    ).copy()
+    for index, target_value in enumerate(evaluation_target):
+        key = int(target_value)
+        if not evaluation_control[index] and key in means:
+            prediction[index] += gates[key] * (means[key] - global_terminal)
+    return prediction.astype(np.float32), gates
+
+
+def _linear_source_target_prediction(
+    *,
+    train_source: np.ndarray,
+    train_terminal: np.ndarray,
+    train_target: np.ndarray,
+    train_control: np.ndarray,
+    evaluation_source: np.ndarray,
+    evaluation_target: np.ndarray,
+    ridge: float,
+) -> np.ndarray:
+    """Regularized additive source-plus-target comparator with no interaction."""
+
+    primary = ~train_control
+    train_source = train_source[primary]
+    train_terminal = train_terminal[primary]
+    train_target = train_target[primary]
+    target_values = tuple(sorted(set(map(int, train_target))))
+    lookup = {value: index for index, value in enumerate(target_values)}
+    train_one_hot = np.zeros((len(train_target), len(target_values)), dtype=np.float64)
+    train_one_hot[np.arange(len(train_target)), [lookup[int(value)] for value in train_target]] = 1
+    design = np.concatenate(
+        [np.ones((len(train_source), 1)), train_source.astype(np.float64), train_one_hot], axis=1
+    )
+    penalty = np.eye(design.shape[1], dtype=np.float64) * ridge
+    penalty[0, 0] = 0.0
+    multiplicity = np.asarray(
+        [np.sum(train_target == value) for value in train_target], dtype=np.float64
+    )
+    weights = 1.0 / multiplicity
+    weighted_design = design * np.sqrt(weights)[:, None]
+    weighted_terminal = train_terminal * np.sqrt(weights)[:, None]
+    coefficients = np.linalg.solve(
+        weighted_design.T @ weighted_design + penalty,
+        weighted_design.T @ weighted_terminal,
+    )
+    evaluation_one_hot = np.zeros((len(evaluation_target), len(target_values)), dtype=np.float64)
+    for row, value in enumerate(evaluation_target):
+        if int(value) in lookup:
+            evaluation_one_hot[row, lookup[int(value)]] = 1.0
+    evaluation_design = np.concatenate(
+        [
+            np.ones((len(evaluation_source), 1)),
+            evaluation_source.astype(np.float64),
+            evaluation_one_hot,
+        ],
+        axis=1,
+    )
+    return np.asarray(evaluation_design @ coefficients, dtype=np.float32)
 
 
 def _evaluate_bound_outer(
@@ -294,10 +432,14 @@ def _evaluate_bound_outer(
     train_terminal = run.arrays["terminal_z"]
     train_target = run.arrays["target_index"].astype(np.int64)
     train_control = run.arrays["is_control"].astype(bool)
-    global_delta = (train_terminal - train_source).mean(axis=0)
-    control_delta = (train_terminal[train_control] - train_source[train_control]).mean(axis=0)
-    global_terminal = train_terminal.mean(axis=0)
+    train_change = train_terminal - train_source
+    global_delta = _target_balanced_mean(train_change, train_target, train_control)
+    control_delta = (
+        train_change[train_control].mean(axis=0) if train_control.any() else global_delta
+    )
+    global_terminal = _target_balanced_mean(train_terminal, train_target, train_control)
     target_indices = np.asarray([record.target_index for record in records], dtype=np.int64)
+    evaluation_control = np.asarray([record.is_control for record in records], dtype=bool)
     target_delta_rows: list[np.ndarray] = []
     target_terminal_rows: list[np.ndarray] = []
     for row, target_value in zip(source, target_indices, strict=True):
@@ -326,13 +468,38 @@ def _evaluate_bound_outer(
                 train_target=train_target,
                 train_control=train_control,
                 evaluation_target=target_indices,
-                evaluation_control=np.asarray(
-                    [record.is_control for record in records], dtype=bool
-                ),
+                evaluation_control=evaluation_control,
                 maximum_weight=run.config.model.source_target_main_max_weight,
                 scalar_ridge=run.config.training.source_target_main_penalty,
             )
         )
+        predictions["empirical_bayes_target"], empirical_bayes_gates = (
+            _empirical_bayes_target_prediction(
+                train_terminal=train_terminal,
+                train_target=train_target,
+                train_control=train_control,
+                evaluation_target=target_indices,
+                evaluation_control=evaluation_control,
+            )
+        )
+        if "linear_source_target_ridge" not in frozen_plan:
+            raise ContractError("Interaction evaluation requires a frozen linear ridge.")
+        if not np.isclose(
+            float(frozen_plan["linear_source_target_ridge"]),
+            run.config.training.noninteraction_linear_ridge,
+        ):
+            raise ContractError("Outer linear baseline ridge differs from training selection.")
+        predictions["linear_source_plus_target"] = _linear_source_target_prediction(
+            train_source=train_source,
+            train_terminal=train_terminal,
+            train_target=train_target,
+            train_control=train_control,
+            evaluation_source=source,
+            evaluation_target=target_indices,
+            ridge=float(frozen_plan["linear_source_target_ridge"]),
+        )
+    else:
+        empirical_bayes_gates = {}
     device = run.device
     source_tensor = torch.from_numpy(source).to(device)
     target_tensor = torch.from_numpy(target_indices).to(device)
@@ -352,6 +519,23 @@ def _evaluate_bound_outer(
     if device.type == "cuda":
         torch.cuda.synchronize(device)
     predictions["v4"] = (states * weights.unsqueeze(-1)).sum(dim=1).cpu().numpy()
+    if interaction_pilot:
+        target_only_states, target_only_weights, _ = rollout(
+            run.model,
+            source_tensor,
+            torch.tensor([record.duration for record in records], device=device),
+            target_tensor,
+            torch.zeros_like(target_tensor),
+            control_tensor,
+            torch.tensor([record.source_count + 0.5 for record in records], device=device),
+            particles=run.config.evaluation.particles,
+            steps=run.config.evaluation.steps,
+            seed=run.config.evaluation.seed,
+            effect_mode="target_only",
+        )
+        predictions["deployed_target_only"] = (
+            (target_only_states * target_only_weights.unsqueeze(-1)).sum(dim=1).cpu().numpy()
+        )
     mass_np = mass.cpu().numpy()
     weights_np = weights.cpu().numpy()
     numerical_pass = bool(
@@ -368,17 +552,42 @@ def _evaluate_bound_outer(
             "is_control": [record.is_control for record in records],
             "source_cells": [record.source_count for record in records],
             "terminal_cells": [record.terminal_count for record in records],
+            "outer_fold_id": run.config.outer_fold_id,
+            "inner_split_id": run.config.inner_split_id,
+            "optimization_seed": run.config.training.seed,
         }
     )
+    if interaction_pilot:
+        frame["interaction_displacement_rms"] = np.sqrt(
+            np.mean(
+                np.square(predictions["v4"] - predictions["deployed_target_only"]),
+                axis=1,
+            )
+        )
     for name, values in predictions.items():
         frame[f"{name}_rmse"] = np.sqrt(np.mean(np.square(values - terminal), axis=1))
     all_mask = np.ones(len(frame), dtype=bool)
     targeting = ~frame.is_control.to_numpy(dtype=bool)
     control = ~targeting
+    train_target_multiplicity = {
+        int(value): int(np.sum((train_target == value) & ~train_control))
+        for value in np.unique(train_target[~train_control])
+    }
+    interaction_eligible = np.asarray(
+        [
+            (not bool(is_control)) and train_target_multiplicity.get(int(value), 0) >= 2
+            for value, is_control in zip(target_indices, evaluation_control, strict=True)
+        ],
+        dtype=bool,
+    )
+    frame["interaction_eligible"] = interaction_eligible
+    if interaction_pilot and not interaction_eligible.any():
+        raise ContractError("Outer catalog has no known targets with at least two training guides.")
     population_masks = {
         "all_series": all_mask,
         "targeting_series": targeting,
         "control_series": control,
+        "interaction_eligible_targets": interaction_eligible,
     }
     metrics: dict[str, Any] = {
         "schema_version": 1,
@@ -386,6 +595,10 @@ def _evaluate_bound_outer(
         "targeting_series": _population_metrics(frame, terminal, source, predictions, targeting),
         "control_series": _population_metrics(frame, terminal, source, predictions, control),
     }
+    if interaction_eligible.any():
+        metrics["interaction_eligible_targets"] = _population_metrics(
+            frame, terminal, source, predictions, interaction_eligible
+        )
     if run.capabilities.decode_gene_composition:
         observed_composition = _observed_gene_compositions(
             records, CountStore(workspace / "input/counts.h5")
@@ -413,20 +626,47 @@ def _evaluate_bound_outer(
             np.median(1.0 / np.square(observed_composition).sum(axis=1))
         )
         metrics["gene_composition_diagnostic"] = gene_metrics
-    primary = str(frozen_plan["primary_baseline"])
-    if interaction_pilot and primary != "shrunk_target_only":
-        raise ContractError(
-            "Source-target interaction evaluation requires shrunk_target_only as primary baseline."
-        )
     primary_metric = str(frozen_plan.get("primary_metric", "target_balanced_rmse"))
-    key = f"{primary}_{primary_metric}"
     model_key = f"v4_{primary_metric}"
     primary_population = str(frozen_plan["primary_population"])
+    if interaction_pilot and primary_population != "interaction_eligible_targets":
+        raise ContractError(
+            "Pooled source-target pilots require the known-target multi-guide population."
+        )
     if primary_population not in metrics:
         raise ValueError(
             f"Primary population {primary_population!r} is absent from evaluation metrics."
         )
     primary_metrics = metrics[primary_population]
+    declared_primary = str(frozen_plan["primary_baseline"])
+    if interaction_pilot:
+        if declared_primary != "best_preregistered_noninteraction":
+            raise ContractError(
+                "Source-target interaction evaluation requires the strongest frozen "
+                "noninteraction baseline."
+            )
+        required_baselines = {
+            "shrunk_target_only",
+            "empirical_bayes_target",
+            "target_terminal",
+            "target_delta",
+            "linear_source_plus_target",
+        }
+        declared_baselines = tuple(frozen_plan.get("noninteraction_baselines", ()))
+        if set(declared_baselines) != required_baselines:
+            raise ContractError("The pooled noninteraction baseline set is incomplete.")
+        registered = {row.baseline_id for row in baseline_registry.baselines}
+        if not required_baselines <= registered:
+            raise ContractError(
+                "The baseline registry does not bind every pooled noninteraction comparator."
+            )
+        primary = min(
+            declared_baselines,
+            key=lambda name: primary_metrics[f"{name}_{primary_metric}"],
+        )
+    else:
+        primary = declared_primary
+    key = f"{primary}_{primary_metric}"
     if key not in primary_metrics or model_key not in primary_metrics:
         raise ValueError("Primary metric or baseline is absent from the frozen population.")
     numerical_tolerance = float(frozen_plan.get("numerical_tolerance", 0.0))
@@ -435,6 +675,7 @@ def _evaluate_bound_outer(
     metrics["primary_comparison"] = {
         "population": primary_population,
         "baseline": primary,
+        "baseline_policy": declared_primary,
         "metric": primary_metric,
         "v4": primary_metrics[model_key],
         "baseline_value": primary_metrics[key],
@@ -474,10 +715,11 @@ def _evaluate_bound_outer(
         )
     targeting_interaction_rms = (
         _target_balanced_rms(
-            predictions["v4"][targeting] - predictions["shrunk_target_only"][targeting],
-            target_indices[targeting],
+            predictions["v4"][interaction_eligible]
+            - predictions["deployed_target_only"][interaction_eligible],
+            target_indices[interaction_eligible],
         )
-        if interaction_pilot and targeting.any()
+        if interaction_pilot and interaction_eligible.any()
         else 0.0
     )
     family_eligible = run.manifest.selected_family == "target_plus_source_target_interaction"
@@ -486,9 +728,12 @@ def _evaluate_bound_outer(
         if (
             "interaction_scientific_minimum_improvement" not in frozen_plan
             or "overall_scientific_minimum_improvement" not in frozen_plan
+            or "target_main_scientific_minimum_improvement" not in frozen_plan
+            or "minimum_target_win_fraction" not in frozen_plan
+            or "maximum_single_target_contribution_fraction" not in frozen_plan
         ):
             raise ContractError(
-                "Interaction evaluation requires separate frozen M2-vs-M1 and M2-vs-M0 margins."
+                "Interaction evaluation requires frozen nested margins and breadth gates."
             )
         overall_differences = _target_balanced_bootstrap_differences(
             predictions["v4"][population_masks[primary_population]],
@@ -501,25 +746,115 @@ def _evaluate_bound_outer(
         overall_interval = [
             float(value) for value in np.quantile(overall_differences, [0.025, 0.975])
         ]
+        selection = SelectionManifest.model_validate_json(
+            (workspace / "inference/selection-manifest.json").read_text()
+        )
+        if selection.best_target_only_baseline is None:
+            raise ContractError("Interaction inference lacks the selected M1 identity.")
+        selected_target_only = selection.best_target_only_baseline
+        target_main_differences = _target_balanced_bootstrap_differences(
+            predictions["deployed_target_only"][population_masks[primary_population]],
+            predictions["global_terminal"][population_masks[primary_population]],
+            terminal[population_masks[primary_population]],
+            target_indices[population_masks[primary_population]],
+            seed=int(frozen_plan["bootstrap_seed"]),
+            draws=int(frozen_plan["bootstrap_draws"]),
+        )
+        target_main_interval = [
+            float(value) for value in np.quantile(target_main_differences, [0.025, 0.975])
+        ]
         interaction_threshold = (
             float(frozen_plan["interaction_scientific_minimum_improvement"]) + numerical_tolerance
         )
         overall_threshold = (
             float(frozen_plan["overall_scientific_minimum_improvement"]) + numerical_tolerance
         )
+        target_main_threshold = (
+            float(frozen_plan["target_main_scientific_minimum_improvement"]) + numerical_tolerance
+        )
+        primary_mask = population_masks[primary_population]
+        primary_targets = target_indices[primary_mask]
+        if len(np.unique(primary_targets)) < 2:
+            raise ContractError("Pooled interaction inference requires at least two targets.")
+        per_target_differences = {
+            int(value): float(
+                np.sqrt(
+                    np.mean(
+                        np.square(
+                            predictions["v4"][primary_mask][primary_targets == value]
+                            - terminal[primary_mask][primary_targets == value]
+                        )
+                    )
+                )
+                - np.sqrt(
+                    np.mean(
+                        np.square(
+                            predictions[primary][primary_mask][primary_targets == value]
+                            - terminal[primary_mask][primary_targets == value]
+                        )
+                    )
+                )
+            )
+            for value in np.unique(primary_targets)
+        }
+        target_win_fraction = float(
+            np.mean(np.asarray(list(per_target_differences.values())) < 0.0)
+        )
+        absolute_target_differences = np.abs(
+            np.asarray(list(per_target_differences.values()), dtype=np.float64)
+        )
+        top_target_absolute_contribution_fraction = float(
+            absolute_target_differences.max() / max(float(absolute_target_differences.sum()), 1e-12)
+        )
+        leave_one_target_out = []
+        unique_primary_targets = np.unique(primary_targets)
+        for omitted in unique_primary_targets:
+            keep = primary_mask & (target_indices != omitted)
+            leave_one_target_out.append(
+                _target_balanced_rms(predictions["v4"][keep] - terminal[keep], target_indices[keep])
+                - _target_balanced_rms(
+                    predictions[primary][keep] - terminal[keep], target_indices[keep]
+                )
+            )
+        maximum_leave_one_target_out_delta = float(max(leave_one_target_out))
+        minimum_target_win_fraction = float(frozen_plan["minimum_target_win_fraction"])
+        maximum_single_target_contribution_fraction = float(
+            frozen_plan["maximum_single_target_contribution_fraction"]
+        )
         metrics["interaction_outer_gate"] = {
             "m2_minus_m1_interval_95": interval,
             "m2_minus_m0_interval_95": overall_interval,
-            "m1_alpha": shrunk_target_alpha,
+            "m1_minus_m0_interval_95": target_main_interval,
+            "shrunk_target_alpha": shrunk_target_alpha,
+            "empirical_bayes_gate_min": min(empirical_bayes_gates.values(), default=0.0),
+            "empirical_bayes_gate_max": max(empirical_bayes_gates.values(), default=0.0),
+            "best_noninteraction_baseline": primary,
+            "selected_target_only_baseline": selected_target_only,
             "m0_global_null_rmse": primary_metrics[f"global_terminal_{primary_metric}"],
-            "m1_shrunk_target_rmse": primary_metrics[f"shrunk_target_only_{primary_metric}"],
+            "m1_deployed_target_only_rmse": primary_metrics[
+                f"deployed_target_only_{primary_metric}"
+            ],
             "m2_interaction_rmse": primary_metrics[model_key],
             "m1_minus_m0": (
-                primary_metrics[f"shrunk_target_only_{primary_metric}"]
+                primary_metrics[f"deployed_target_only_{primary_metric}"]
                 - primary_metrics[f"global_terminal_{primary_metric}"]
             ),
             "interaction_threshold_including_numerical_tolerance": interaction_threshold,
             "overall_threshold_including_numerical_tolerance": overall_threshold,
+            "target_main_threshold_including_numerical_tolerance": target_main_threshold,
+            "target_win_fraction": target_win_fraction,
+            "minimum_target_win_fraction": minimum_target_win_fraction,
+            "median_target_rmse_difference": float(
+                np.median(np.asarray(list(per_target_differences.values())))
+            ),
+            "top_target_absolute_contribution_fraction": (
+                top_target_absolute_contribution_fraction
+            ),
+            "maximum_single_target_contribution_fraction": (
+                maximum_single_target_contribution_fraction
+            ),
+            "maximum_leave_one_target_out_delta": maximum_leave_one_target_out_delta,
+            "per_target_rmse_differences": per_target_differences,
             "aggregation": "target_balanced_RMSE",
         }
         scientific_gate_pass = bool(
@@ -530,8 +865,19 @@ def _evaluate_bound_outer(
                 overall_bootstrap_upper=overall_interval[1],
                 required_interaction_improvement=interaction_threshold,
                 required_overall_improvement=overall_threshold,
+                target_main_bootstrap_upper=target_main_interval[1],
+                required_target_main_improvement=target_main_threshold,
                 interaction_displacement_rms=targeting_interaction_rms,
                 minimum_interaction_displacement_rms=minimum_interaction_rms,
+                target_win_fraction=target_win_fraction,
+                minimum_target_win_fraction=minimum_target_win_fraction,
+                maximum_leave_one_target_out_delta=maximum_leave_one_target_out_delta,
+                top_target_absolute_contribution_fraction=(
+                    top_target_absolute_contribution_fraction
+                ),
+                maximum_single_target_contribution_fraction=(
+                    maximum_single_target_contribution_fraction
+                ),
             )
         )
     else:
@@ -554,6 +900,14 @@ def _evaluate_bound_outer(
         "interaction_vs_target_only_interval_95": interval if interaction_pilot else None,
         "interaction_vs_global_null_interval_95": overall_interval,
         "shrunk_target_main_weight": shrunk_target_alpha,
+        "pooled_estimand": run.config.pooled_estimand,
+        "outer_fold_id": run.config.outer_fold_id,
+        "inner_split_id": run.config.inner_split_id,
+        "pooled_outer_fold_ids": run.config.pooled_outer_fold_ids,
+        "pooled_inner_split_ids": run.config.pooled_inner_split_ids,
+        "pooled_optimization_seeds": run.config.pooled_optimization_seeds,
+        "optimization_seed": run.config.training.seed,
+        "state_selection_calibration_stage": (run.contract.state_selection_calibration_stage),
         "scientific_minimum_improvement": scientific_minimum,
         "scientific_improvement_threshold_including_numerical_tolerance": scientific_threshold,
         "outer_evaluation_access": (
@@ -567,7 +921,7 @@ def _evaluate_bound_outer(
         ),
         "eligibility_rule": frozen_plan.get("eligibility_rule"),
         "claim_status": "engineering_only_historical_endpoint_exposure",
-        "batch_identifiability": "failed_timepoint_and_WTA_library_are_perfectly_confounded",
+        "scientific_scope": "one_pooled_context_no_library_or_pool_predictors",
         "biological_replication": "unavailable",
         "evaluator_sha256": evaluator_hash,
         "device": str(device),

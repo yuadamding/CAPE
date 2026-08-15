@@ -6,6 +6,8 @@ import argparse
 import json
 from pathlib import Path
 
+import pandas as pd
+
 from .. import api
 from ..compat.credo3 import verify_frozen_credo
 from ..contracts import CounterfactualBranch, CounterfactualDesign, RunIntent
@@ -54,9 +56,24 @@ def build_parser() -> argparse.ArgumentParser:
     calibrate = sub.add_parser("calibrate-state")
     calibrate.add_argument("config", type=_path)
     calibrate.add_argument("--output", type=_path, required=True)
-    calibrate.add_argument("--seed-start", type=int, default=100_000)
-    calibrate.add_argument("--repeats", type=int, default=100)
+    calibrate.add_argument("--permutation-seed-start", type=int, default=100_000)
+    calibrate.add_argument("--optimizer-seed-start", type=int, default=200_000)
+    calibrate.add_argument("--initialization-seed-start", type=int, default=300_000)
+    calibrate.add_argument("--repeats-per-null", type=int, default=119)
+    calibrate.add_argument(
+        "--calibration-stage", choices=["development", "locked_audit"], default="development"
+    )
+    calibrate.add_argument("--development-calibration", type=_path)
     calibrate.add_argument("--device", default="cpu")
+    pool = sub.add_parser("pool-data", help="build the immutable T00 pooled data bundle")
+    pool.add_argument("--cells", type=_path, required=True)
+    pool.add_argument("--guide-catalog", type=_path, required=True)
+    pool.add_argument("--feature-hashes", type=_path, required=True)
+    pool.add_argument("--output", type=_path, required=True)
+    pool.add_argument("--source-checkpoint", required=True)
+    pool.add_argument("--terminal-checkpoint", required=True)
+    pool.add_argument("--minimum-source-cells", type=int, default=1)
+    pool.add_argument("--mass-pseudocount", type=float, default=0.5)
     open_parser = sub.add_parser("open-run")
     open_parser.add_argument("run", type=_path)
     open_parser.add_argument("--device", default="cpu")
@@ -107,11 +124,29 @@ def main(argv: list[str] | None = None) -> int:
         results, calibration = api.calibrate_state_selection(
             args.config,
             args.output,
-            seed_start=args.seed_start,
-            repeats=args.repeats,
+            permutation_seed_start=args.permutation_seed_start,
+            optimizer_seed_start=args.optimizer_seed_start,
+            initialization_seed_start=args.initialization_seed_start,
+            repeats_per_null=args.repeats_per_null,
             device=args.device,
+            calibration_stage=args.calibration_stage,
+            development_calibration=args.development_calibration,
         )
         result = {"results": str(results), "calibration": str(calibration)}
+    elif command == "pool-data":
+        feature_hashes = json.loads(args.feature_hashes.read_text())
+        if not isinstance(feature_hashes, dict):
+            raise ValueError("--feature-hashes must contain one JSON object.")
+        result = api.pool_finite_measures(
+            args.output,
+            cells=pd.read_parquet(args.cells),
+            guide_catalog=pd.read_parquet(args.guide_catalog),
+            source_checkpoint=args.source_checkpoint,
+            terminal_checkpoint=args.terminal_checkpoint,
+            feature_order_hashes=feature_hashes,
+            minimum_source_cells=args.minimum_source_cells,
+            mass_pseudocount=args.mass_pseudocount,
+        )
     elif command == "finalize":
         result = api.finalize(args.config)
     elif command == "evaluate":

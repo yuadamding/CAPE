@@ -64,6 +64,9 @@ def main() -> None:
     amendment = Path(
         "/home/yding1995/.codex/attachments/52905259-b1cd-4e04-8fae-e2cb672514a8/pasted-text.txt"
     )
+    component_decision = Path(
+        "/home/yding1995/.codex/attachments/787edecc-16fc-44f4-95bb-0d5589155bbd/pasted-text.txt"
+    )
     receipt = {
         "schema_version": 1,
         "status": "engineering_only",
@@ -80,6 +83,9 @@ def main() -> None:
         "frozen_credo": verify_frozen_credo(workspace),
         "blueprint_sha256": sha256_file(blueprint) if blueprint.is_file() else None,
         "amendment_sha256": sha256_file(amendment) if amendment.is_file() else None,
+        "component_qualification_decision_sha256": (
+            sha256_file(component_decision) if component_decision.is_file() else None
+        ),
         "tests_passed": args.tests_passed,
         "coverage_percent": args.coverage_percent,
         "distributions": distributions,

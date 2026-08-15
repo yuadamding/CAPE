@@ -1,0 +1,112 @@
+{
+  "$id": "https://credo.local/schemas/component-test-receipt.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Fail-closed result for one independently qualified component.",
+  "properties": {
+    "bootstrap_interval": {
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "title": "Bootstrap Interval",
+      "type": "array"
+    },
+    "channel_activity": {
+      "minimum": 0,
+      "title": "Channel Activity",
+      "type": "number"
+    },
+    "config_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Config Hash",
+      "type": "string"
+    },
+    "implementation_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Implementation Hash",
+      "type": "string"
+    },
+    "input_hashes": {
+      "additionalProperties": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "title": "Input Hashes",
+      "type": "object"
+    },
+    "point_delta": {
+      "title": "Point Delta",
+      "type": "number"
+    },
+    "primary_baseline": {
+      "title": "Primary Baseline",
+      "type": "string"
+    },
+    "primary_metric": {
+      "title": "Primary Metric",
+      "type": "string"
+    },
+    "protected_metrics_pass": {
+      "title": "Protected Metrics Pass",
+      "type": "boolean"
+    },
+    "receipt_id": {
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "required_margin": {
+      "minimum": 0,
+      "title": "Required Margin",
+      "type": "number"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "selected_update": {
+      "minimum": 0,
+      "title": "Selected Update",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail_retired",
+        "not_run"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "test_id": {
+      "pattern": "^T\\d{2}_[A-Z0-9_]+$",
+      "title": "Test Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "test_id",
+    "status",
+    "primary_metric",
+    "primary_baseline",
+    "point_delta",
+    "bootstrap_interval",
+    "required_margin",
+    "channel_activity",
+    "protected_metrics_pass",
+    "selected_update",
+    "input_hashes",
+    "config_hash",
+    "implementation_hash"
+  ],
+  "title": "ComponentTestReceipt",
+  "type": "object"
+}
