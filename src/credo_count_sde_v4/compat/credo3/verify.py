@@ -50,30 +50,32 @@ def _verify_checkout_against_archive(checkout: Path, archive: Path) -> None:
     expected: dict[str, bytes] = {}
     with tarfile.open(archive, "r:") as handle:
         for member in handle.getmembers():
-            path = PurePosixPath(member.name)
+            member_path = PurePosixPath(member.name)
             if (
-                path.is_absolute()
-                or ".." in path.parts
-                or not path.parts
-                or path.parts[0] != FROZEN_ARCHIVE_ROOT
+                member_path.is_absolute()
+                or ".." in member_path.parts
+                or not member_path.parts
+                or member_path.parts[0] != FROZEN_ARCHIVE_ROOT
                 or not (member.isfile() or member.isdir())
             ):
                 raise IntegrityError(f"Unsafe frozen CREDO archive member: {member.name}.")
             if member.isfile():
-                relative = PurePosixPath(*path.parts[1:]).as_posix()
+                relative = PurePosixPath(*member_path.parts[1:]).as_posix()
                 stream = handle.extractfile(member)
                 if stream is None or relative in expected:
                     raise IntegrityError("Frozen CREDO archive inventory is ambiguous.")
                 expected[relative] = stream.read()
     observed: dict[str, Path] = {}
-    for path in checkout.rglob("*"):
-        relative = path.relative_to(checkout)
-        if relative.parts and relative.parts[0] == ".git":
+    for checkout_path in checkout.rglob("*"):
+        relative_path = checkout_path.relative_to(checkout)
+        if relative_path.parts and relative_path.parts[0] == ".git":
             continue
-        if path.is_symlink() or (not path.is_file() and not path.is_dir()):
-            raise IntegrityError(f"Unsafe frozen CREDO checkout entry: {relative}.")
-        if path.is_file():
-            observed[relative.as_posix()] = path
+        if checkout_path.is_symlink() or (
+            not checkout_path.is_file() and not checkout_path.is_dir()
+        ):
+            raise IntegrityError(f"Unsafe frozen CREDO checkout entry: {relative_path}.")
+        if checkout_path.is_file():
+            observed[relative_path.as_posix()] = checkout_path
     missing = set(expected) - set(observed)
     extras = set(observed) - set(expected)
     allowed_ignored = {

@@ -112,6 +112,14 @@ def _ledger(config_path: Path) -> LifecycleLedger:
     return LifecycleLedger(_workspace(config_path) / "ledger" / "events.jsonl")
 
 
+def _trained_artifact_id(training_root: Path) -> str:
+    selection = training_root / "selection.json"
+    if selection.exists():
+        return str(json.loads(selection.read_text())["selected_checkpoint_id"])
+    latest = json.loads((training_root / "checkpoints" / "latest.json").read_text())
+    return str(latest["checkpoint_id"])
+
+
 def prepare(config_path: Path) -> Path:
     _supported_preflight()
     result = prepare_representation(config_path)
@@ -133,8 +141,9 @@ def compile_run(config_path: Path) -> Path:
 def train(config_path: Path, *, device: str | None = None) -> Path:
     _supported_preflight()
     result = train_model(config_path, device=device)
-    latest = json.loads((result / "checkpoints" / "latest.json").read_text())
-    _ledger(config_path).transition(LifecycleState.TRAINED, artifact_id=latest["checkpoint_id"])
+    _ledger(config_path).transition(
+        LifecycleState.TRAINED, artifact_id=_trained_artifact_id(result)
+    )
     return result
 
 
@@ -143,10 +152,9 @@ def fork(config_path: Path, *, from_checkpoint: Path, device: str | None = None)
 
     _supported_preflight()
     result = train_model(config_path, device=device, initial_checkpoint=from_checkpoint)
-    latest = json.loads((result / "checkpoints" / "latest.json").read_text())
     _ledger(config_path).transition(
         LifecycleState.TRAINED,
-        artifact_id=latest["checkpoint_id"],
+        artifact_id=_trained_artifact_id(result),
         details={"fork_parent": str(from_checkpoint)},
     )
     return result
@@ -156,8 +164,9 @@ def resume(config_path: Path, *, device: str | None = None) -> Path:
     _supported_preflight()
     result = resume_training(config_path, device=device)
     if _ledger(config_path).state() is LifecycleState.COMPILED:
-        latest = json.loads((result / "checkpoints" / "latest.json").read_text())
-        _ledger(config_path).transition(LifecycleState.TRAINED, artifact_id=latest["checkpoint_id"])
+        _ledger(config_path).transition(
+            LifecycleState.TRAINED, artifact_id=_trained_artifact_id(result)
+        )
     return result
 
 

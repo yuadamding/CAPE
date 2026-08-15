@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -26,6 +28,7 @@ from credo_count_sde_v4.training.trainer import (
     _initialize_state_channels,
     _state_split,
     _target_balanced_mse,
+    _write_selection,
 )
 
 
@@ -280,6 +283,151 @@ def test_source_conditioned_anchor_contract_fails_closed() -> None:
         )
     with pytest.raises(ValueError, match="requires an enabled gene decoder"):
         TrainingConfig(train_state_with_gene_decoder=True)
+
+
+def test_source_target_interaction_is_null_nested_target_specific_and_ablatable() -> None:
+    config = ModelConfig(
+        state_dim=2,
+        target_count=3,
+        terminal_anchor_drift=True,
+        source_carryover_alpha=0.0,
+        source_target_interaction_rank=2,
+        source_target_interaction_scale=0.5,
+        trainable_terminal_anchor=False,
+        trainable_target_anchor=False,
+    )
+    model = CountSDEModel(config, RunIntent.COUNT_STATE)
+    source = torch.tensor([[1.0, 0.0], [1.0, 0.0], [1.0, 0.0]])
+    target = torch.tensor([0, 1, 2])
+    control = torch.tensor([True, False, False])
+    with torch.no_grad():
+        model.terminal_anchor.copy_(torch.tensor([0.25, -0.5]))
+    null = model.anchor(target, control, source_z=source)
+    assert torch.equal(null, model.terminal_anchor.expand_as(null))
+    assert model.source_interaction_projection is not None
+    assert model.target_interaction_embedding is not None
+    assert model.source_target_output is not None
+    with torch.no_grad():
+        model.source_interaction_projection.weight.copy_(torch.eye(2))
+        model.target_interaction_embedding.copy_(
+            torch.tensor([[0.0, 0.0], [1.0, 0.0], [-1.0, 0.0]])
+        )
+        model.source_target_output.weight.copy_(torch.eye(2))
+    factual = model.anchor(target, control, source_z=source)
+    reference = model.anchor(target, control, source_z=source, effect_mode="reference")
+    assert torch.equal(factual[0], null[0])
+    assert factual[1, 0] > null[1, 0]
+    assert factual[2, 0] < null[2, 0]
+    assert torch.equal(reference, null)
+    swapped = model.anchor(torch.tensor([0, 2, 1]), control, source_z=source)
+    assert not torch.equal(swapped[1:], factual[1:])
+    with torch.no_grad():
+        model.source_target_output.weight.zero_()
+    assert torch.equal(model.anchor(target, control, source_z=source), null)
+    assert model.source_target_main_weight is not None
+    with torch.no_grad():
+        model.source_target_main_offset[1].copy_(torch.tensor([0.2, -0.1]))
+        model.source_target_main_weight.fill_(1.0)
+    target_only = model.anchor(target, control, source_z=source)
+    assert torch.equal(target_only[0], null[0])
+    assert not torch.equal(target_only[1], null[1])
+    assert torch.equal(
+        model.anchor(target, control, source_z=source, effect_mode="reference"), null
+    )
+
+
+def test_source_target_interaction_contract_fails_closed() -> None:
+    with pytest.raises(ValueError, match="zero-carryover terminal anchor"):
+        ModelConfig(state_dim=2, target_count=2, source_target_interaction_rank=2)
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        ModelConfig(
+            state_dim=2,
+            target_count=2,
+            terminal_anchor_drift=True,
+            source_carryover_alpha=0.0,
+            source_conditioned_anchor=True,
+            source_target_interaction_rank=2,
+        )
+    with pytest.raises(ValueError, match="post-selection refitting"):
+        TrainingConfig(
+            state_validation_fraction=0.25,
+            checkpoint_selection="minimum_state_validation_null_guarded",
+        )
+
+
+def test_source_target_interaction_can_learn_a_sign_controlled_signal() -> None:
+    config = ModelConfig(
+        state_dim=2,
+        target_count=3,
+        terminal_anchor_drift=True,
+        source_carryover_alpha=0.0,
+        source_target_interaction_rank=2,
+        source_target_interaction_scale=1.0,
+        trainable_terminal_anchor=False,
+        trainable_target_anchor=False,
+    )
+    model = CountSDEModel(config, RunIntent.COUNT_STATE)
+    source = torch.tensor([[1.0, 0.0], [-1.0, 0.0], [1.0, 0.0], [-1.0, 0.0]])
+    target = torch.tensor([1, 1, 2, 2])
+    control = torch.zeros(4, dtype=torch.bool)
+    expected = torch.tensor([[0.5, 0.0], [-0.5, 0.0], [-0.5, 0.0], [0.5, 0.0]])
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.05)
+    initial = torch.mean((model.anchor(target, control, source_z=source) - expected) ** 2)
+    for _ in range(100):
+        optimizer.zero_grad(set_to_none=True)
+        prediction = model.anchor(target, control, source_z=source)
+        loss = torch.mean((prediction - expected) ** 2)
+        loss.backward()
+        optimizer.step()
+    final = torch.mean((model.anchor(target, control, source_z=source) - expected) ** 2)
+    assert final < initial * 0.05
+
+
+def test_null_guarded_selection_requires_margin_over_best_baseline(tmp_path: Path) -> None:
+    def run_case(root: Path, trained_score: float, target_score: float = 0.45) -> dict[str, object]:
+        for update, score in ((0, 0.5), (5, trained_score)):
+            generation = root / "checkpoints" / f"generation-{update:09d}"
+            generation.mkdir(parents=True)
+            diagnostics = {"state_validation_targeting_target_balanced_rmse": score}
+            if update == 0:
+                diagnostics["state_validation_target_terminal_targeting_target_balanced_rmse"] = (
+                    target_score
+                )
+            (generation / "training-state.json").write_text(
+                json.dumps({"diagnostics": diagnostics})
+            )
+        training = SimpleNamespace(
+            checkpoint_selection="minimum_state_validation_null_guarded",
+            checkpoint_every=5,
+            state_checkpoint_updates=(5,),
+            max_updates=5,
+            state_validation_minimum_improvement=0.01,
+            selected_update=None,
+        )
+        config = SimpleNamespace(training=training)
+        checkpoints = [
+            SimpleNamespace(update=0, checkpoint_id="null"),
+            SimpleNamespace(update=5, checkpoint_id="trained"),
+        ]
+        return _write_selection(
+            root,
+            SimpleNamespace(compiled_run_id="compiled"),
+            config,  # type: ignore[arg-type]
+            checkpoints,  # type: ignore[arg-type]
+        )
+
+    selected = run_case(tmp_path / "selected", 0.40)
+    assert selected["selected_update"] == 5
+    assert selected["selected_family"] == "target_plus_source_target_interaction"
+    assert selected["null_selected"] is False
+    target = run_case(tmp_path / "target", 0.445)
+    assert target["selected_update"] == 0
+    assert target["selected_family"] == "sister_guide_target_terminal"
+    assert target["null_selected"] is False
+    rejected = run_case(tmp_path / "rejected", 0.49, target_score=0.495)
+    assert rejected["selected_update"] == 0
+    assert rejected["selected_family"] == "global_terminal_null"
+    assert rejected["null_selected"] is True
 
 
 def test_csr_decoder_reduction_matches_reference_and_has_finite_gradients() -> None:

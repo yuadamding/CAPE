@@ -15,7 +15,8 @@ Implemented in this repository:
 - CLI/API, full content/reload verification, correction/context audit helpers;
 - CPU regression, leakage, corruption, fault, resume, compatibility, and wheel CI.
 
-Local acceptance result: 69 CPU tests passed at 85.48% line coverage; one CUDA
+Local acceptance result: see `receipts/local-validation.json` for the current
+test count and coverage; one CUDA
 test was skipped because the validation environment exposed no CUDA device. Ruff,
 generated-schema, documentation-link, wheel
 namespace/license, clean-wheel lifecycle, and frozen-CREDO preflight checks
@@ -43,7 +44,17 @@ primary-population definition consistently to both point metrics and target
 bootstraps. Local acceptance establishes contracts and CPU behavior; the
 completed dev14 H100 run below establishes the external development result.
 
-Deliberately not asserted complete in `4.0.0.dev14`:
+Dev15 retires the dev14 source-only residual as the recommended successor and
+adds a bounded source × target pilot channel. It persists the exact update-0
+null, explicitly selects among global-null, training-only target-terminal, and
+target-plus-interaction families, applies a frozen positive improvement margin,
+and refits the selected family/update budget on all outer-training state
+series. The source is ridge-whitened; the interaction is rank-limited, strongly
+penalized, zero for controls, absent in reference mode, and incompatible with
+decoder training. These are engineering safeguards; no real-cohort dev15
+performance result exists yet.
+
+Deliberately not asserted complete in `4.0.0.dev15`:
 
 - stable CREDO entry-point discovery;
 - in-repository real-cohort adapters, biological thresholds, or biological claims;
@@ -87,7 +98,7 @@ historically exposed development contract; additional epochs, particles, or
 memory are not a justified retry. Exact external run receipts remain the
 authority.
 
-The repository currently has no Git commit. Exact future use therefore depends
-on `REPOSITORY.sha256`, the wheel/sdist bytes, generated schemas, and the local
-validation receipt. A versioned commit and clean release receipt remain
-required before stable promotion.
+Exact future use depends on the branch commit, `REPOSITORY.sha256`, the
+wheel/sdist bytes, generated schemas, and the local validation receipt. A clean
+dev15 commit and release receipt remain required before any pilot deployment or
+stable promotion.

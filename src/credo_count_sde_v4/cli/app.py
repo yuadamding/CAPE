@@ -43,8 +43,10 @@ def build_parser() -> argparse.ArgumentParser:
     ):
         command = sub.add_parser(name)
         command.add_argument("config", type=_path)
-        if name in {"train", "resume", "evaluate", "run-all"}:
+        if name in {"train", "resume"}:
             command.add_argument("--device", default=None)
+        elif name in {"evaluate", "run-all"}:
+            command.add_argument("--device", default="cpu")
     fork = sub.add_parser("fork")
     fork.add_argument("config", type=_path)
     fork.add_argument("--from", dest="from_checkpoint", type=_path, required=True)

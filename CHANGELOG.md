@@ -1,5 +1,21 @@
 # Changelog
 
+## 4.0.0.dev15 — 2026-08-14
+
+- add a rank-limited source × target terminal interaction with fit-only source
+  ridge whitening, exact-zero controls, and explicit factual/reference
+  semantics;
+- persist the exact update-0 terminal-centroid null and add a null-guarded
+  training-only selector with a frozen minimum-improvement margin;
+- select explicitly among update 0, an information-matched sister-guide
+  target-terminal model, and the target-plus-interaction model;
+- refit the selected update budget from a fresh initialization on all
+  outer-training state series before finalization;
+- prohibit decoder training and require positive interaction shrinkage for
+  this pilot channel;
+- make CLI evaluation default explicitly to CPU, matching the public API and
+  preventing an omitted `--device` from reaching `torch.device(None)`.
+
 ## 4.0.0.dev14 — 2026-08-13
 
 - add a source-conditioned terminal-anchor residual that is initialized at the

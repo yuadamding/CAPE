@@ -238,7 +238,7 @@ class V4Run:
             payload["gene_composition"] = self.decode_composition(mean)
         output.parent.mkdir(parents=True, exist_ok=True)
         with output.open("xb") as handle:
-            np.savez(handle, **payload)
+            np.savez(handle, **payload)  # type: ignore[arg-type]
         if output.stat().st_size > self.config.evaluation.output_bytes_limit:
             output.unlink()
             raise OSError("Prediction exceeded the compiled output quota.")

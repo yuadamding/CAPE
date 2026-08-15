@@ -56,3 +56,14 @@ def test_cli_full_surface(tmp_path: Path, capsys) -> None:
         "delta_reference",
     }
     assert "compatibility" in capsys.readouterr().out
+
+
+def test_cli_evaluate_defaults_to_cpu(tmp_path: Path) -> None:
+    project = tmp_path / "cli-evaluate-default-device"
+    assert main(["synthetic", "--output", str(project), "--updates", "2"]) == 0
+    config = project / "config.yaml"
+    assert main(["prepare", str(config)]) == 0
+    assert main(["compile", str(config)]) == 0
+    assert main(["train", str(config), "--device", "cpu"]) == 0
+    assert main(["finalize", str(config)]) == 0
+    assert main(["evaluate", str(config)]) == 0

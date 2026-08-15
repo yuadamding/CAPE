@@ -320,7 +320,7 @@ def compile_problem(config_path: Path) -> Path:
             canonical_json_bytes(snapshot.model_dump(mode="json")) + b"\n"
         )
         with (temp / "problem.npz").open("xb") as handle:
-            np.savez(handle, **problem_arrays)
+            np.savez(handle, **problem_arrays)  # type: ignore[arg-type]
 
     publish_directory(destination, writer)
     return destination

@@ -32,6 +32,7 @@ class CountSDEModel(nn.Module):
         self.target_anchor_offset = nn.Parameter(
             torch.zeros(targets, d), requires_grad=config.trainable_target_anchor
         )
+        self.target_anchor_gate: torch.Tensor
         self.register_buffer("target_anchor_gate", torch.zeros(targets))
         if config.source_conditioned_anchor:
             self.source_anchor_hidden: nn.Linear | None = nn.Linear(d, config.hidden_dim, bias=True)
@@ -46,6 +47,32 @@ class CountSDEModel(nn.Module):
         else:
             self.source_anchor_hidden = None
             self.source_anchor_output = None
+        self.source_target_main_weight: nn.Parameter | None
+        self.source_target_main_offset: torch.Tensor
+        self.target_interaction_embedding: nn.Parameter | None
+        self.source_interaction_center: torch.Tensor
+        self.source_interaction_whitener: torch.Tensor
+        if config.source_target_interaction_rank:
+            rank = config.source_target_interaction_rank
+            self.source_target_main_weight = nn.Parameter(torch.zeros(()))
+            self.register_buffer("source_target_main_offset", torch.zeros(targets, d))
+            self.source_interaction_projection: nn.Linear | None = nn.Linear(d, rank, bias=False)
+            self.target_interaction_embedding = nn.Parameter(torch.empty(targets, rank))
+            self.source_target_output: nn.Linear | None = nn.Linear(rank, d, bias=False)
+            self.register_buffer("source_interaction_center", torch.zeros(d))
+            self.register_buffer("source_interaction_whitener", torch.eye(d))
+            nn.init.normal_(self.source_interaction_projection.weight, std=0.02)
+            nn.init.normal_(self.target_interaction_embedding, std=0.02)
+            # The interaction family contains the exact terminal-centroid null.
+            nn.init.zeros_(self.source_target_output.weight)
+        else:
+            self.register_parameter("source_target_main_weight", None)
+            self.register_buffer("source_target_main_offset", torch.empty(0, d))
+            self.source_interaction_projection = None
+            self.target_interaction_embedding = None
+            self.source_target_output = None
+            self.register_buffer("source_interaction_center", torch.empty(0))
+            self.register_buffer("source_interaction_whitener", torch.empty(0, d))
         self.state_drift_hidden = nn.Linear(d, config.hidden_dim, bias=True)
         self.state_drift_output = nn.Linear(config.hidden_dim, d, bias=False)
         self.state_drift_hidden.requires_grad_(config.state_dependent_drift)
@@ -53,6 +80,7 @@ class CountSDEModel(nn.Module):
         nn.init.normal_(self.state_drift_hidden.weight, std=0.02)
         nn.init.zeros_(self.state_drift_hidden.bias)
         nn.init.zeros_(self.state_drift_output.weight)
+        self.gene_decoder: nn.Module | None
         if config.gene_decoder_features:
             if config.gene_decoder_hidden_dim:
                 self.gene_decoder = nn.Sequential(
@@ -184,6 +212,26 @@ class CountSDEModel(nn.Module):
             assert self.source_anchor_output is not None
             residual = self.source_anchor_output(torch.tanh(self.source_anchor_hidden(source_z)))
             result = result + self.config.source_anchor_residual_scale * torch.tanh(residual)
+        if self.config.source_target_interaction_rank and effect_mode == "factual":
+            if source_z is None:
+                raise ValueError("A source-target interaction requires the original source state.")
+            assert self.source_interaction_projection is not None
+            assert self.target_interaction_embedding is not None
+            assert self.source_target_output is not None
+            assert self.source_target_main_weight is not None
+            mask = self._mask(is_control, 2)
+            result = result + (
+                self.source_target_main_weight * self.source_target_main_offset[target_index] * mask
+            )
+            whitened = (source_z - self.source_interaction_center) @ (
+                self.source_interaction_whitener.T
+            )
+            source_score = self.source_interaction_projection(whitened)
+            interaction = source_score * self.target_interaction_embedding[target_index]
+            residual = self.source_target_output(interaction)
+            result = result + (
+                self.config.source_target_interaction_scale * torch.tanh(residual) * mask
+            )
         return result
 
     def state_step(

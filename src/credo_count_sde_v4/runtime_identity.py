@@ -16,7 +16,7 @@ def implementation_tree_hash() -> str:
 
 
 def environment_identity() -> dict[str, object]:
-    packages = {}
+    packages: dict[str, str | None] = {}
     names = (
         "h5py",
         "numpy",
@@ -39,7 +39,7 @@ def environment_identity() -> dict[str, object]:
         torch_identity = {
             "version": torch.__version__,
             "cuda_runtime": torch.version.cuda,
-            "cudnn": torch.backends.cudnn.version(),
+            "cudnn": torch.backends.cudnn.version(),  # type: ignore[no-untyped-call]
         }
     except ImportError:
         torch_identity = {"version": None, "cuda_runtime": None, "cudnn": None}

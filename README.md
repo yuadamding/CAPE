@@ -8,7 +8,7 @@ count_state → count_measure → count_context
 ```
 
 It is a sibling of, not a modification to, the frozen CREDO checkout. Version
-`4.0.0.dev14` is engineering software; it is not a biological result and cannot
+`4.0.0.dev15` is engineering software; it is not a biological result and cannot
 be relabeled as stable `4.0`.
 
 Implemented surfaces include strict hash-bound contracts, sparse count storage,
@@ -16,6 +16,14 @@ source-only representation preparation, exact complete-denominator count
 likelihood, separate state/fitness/context channels, immutable checkpoint and
 resume, streaming inference, four-branch contrasts, one-shot evaluation, and a
 sealed aggregate. The repository contains no cohort adapter or biological data.
+
+Dev15 adds an explicitly pilot-only, low-rank source × target state interaction.
+It persists update 0 and selects among the global null, a sister-guide
+target-terminal model, and the target-plus-interaction model. Each non-null
+family must clear a frozen improvement margin; the selected family and update
+budget are then refit on the complete outer-training information set. This
+contract does not turn pooled guide centroids into finite-measure or
+biological-replicate evidence.
 
 ## Quick start
 

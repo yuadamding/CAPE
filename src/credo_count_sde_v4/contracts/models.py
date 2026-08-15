@@ -397,6 +397,9 @@ class ModelConfig(StrictModel):
     source_carryover_alpha: float = Field(default=1.0, ge=0.0, le=1.0)
     source_conditioned_anchor: bool = False
     source_anchor_residual_scale: float = Field(default=0.25, gt=0.0)
+    source_target_interaction_rank: int = Field(default=0, ge=0, le=8)
+    source_target_interaction_scale: float = Field(default=0.25, gt=0.0)
+    source_target_whitening_ridge: float = Field(default=1e-3, gt=0.0)
     trainable_terminal_anchor: bool = True
     trainable_target_anchor: bool = True
     target_anchor_weight: float = Field(default=0.0, ge=0.0, le=1.0)
@@ -427,6 +430,16 @@ class ModelConfig(StrictModel):
         if self.source_conditioned_anchor and self.source_carryover_alpha != 0.0:
             raise ValueError(
                 "A source-conditioned terminal anchor requires zero recurrent carryover."
+            )
+        if self.source_target_interaction_rank and (
+            not self.terminal_anchor_drift or self.source_carryover_alpha != 0.0
+        ):
+            raise ValueError(
+                "A source-target interaction requires a zero-carryover terminal anchor."
+            )
+        if self.source_target_interaction_rank and self.source_conditioned_anchor:
+            raise ValueError(
+                "Source-only and source-target anchor residuals are mutually exclusive."
             )
         if self.adaptive_target_anchor and (
             not self.terminal_anchor_drift
@@ -467,8 +480,15 @@ class TrainingConfig(StrictModel):
     support_weight_cap: int = Field(default=1_000, gt=0)
     target_drift_penalty: float = Field(default=0.0, ge=0.0)
     source_drift_penalty: float = Field(default=0.0, ge=0.0)
+    source_target_interaction_penalty: float = Field(default=0.0, ge=0.0)
+    state_checkpoint_updates: tuple[int, ...] = ()
+    state_validation_minimum_improvement: float = Field(default=0.0, ge=0.0)
+    post_selection_state_refit: bool = False
     checkpoint_selection: Literal[
-        "final", "minimum_gene_decoder_validation", "minimum_state_validation"
+        "final",
+        "minimum_gene_decoder_validation",
+        "minimum_state_validation",
+        "minimum_state_validation_null_guarded",
     ] = "final"
 
     @model_validator(mode="after")
@@ -486,13 +506,27 @@ class TrainingConfig(StrictModel):
                 raise ValueError(
                     "Validation checkpoint selection resolves selected_update after training."
                 )
-        if self.checkpoint_selection == "minimum_state_validation":
+        if self.checkpoint_selection in {
+            "minimum_state_validation",
+            "minimum_state_validation_null_guarded",
+        }:
             if not self.state_validation_fraction:
                 raise ValueError("State validation selection requires a validation split.")
             if self.selected_update is not None:
                 raise ValueError(
                     "State-validation checkpoint selection resolves selected_update after training."
                 )
+        if (
+            self.checkpoint_selection == "minimum_state_validation_null_guarded"
+            and not self.post_selection_state_refit
+        ):
+            raise ValueError("Null-guarded state selection requires post-selection refitting.")
+        if tuple(sorted(set(self.state_checkpoint_updates))) != self.state_checkpoint_updates:
+            raise ValueError("state_checkpoint_updates must be strictly increasing and unique.")
+        if any(
+            update <= 0 or update > self.max_updates for update in self.state_checkpoint_updates
+        ):
+            raise ValueError("state_checkpoint_updates must lie within 1..max_updates.")
         if self.analytic_fit and self.gene_decoder_batch_size:
             raise ValueError("Analytic fitting cannot train a gene decoder.")
         if self.analytic_fit and (self.max_updates != 1 or self.selected_update not in {None, 1}):
@@ -597,6 +631,24 @@ class ResolvedConfig(StrictModel):
             raise ValueError("count_state forbids denominator and pool contracts.")
         if self.model.terminal_anchor_drift and self.intent is not RunIntent.COUNT_STATE:
             raise ValueError("Development terminal-anchor drift is count_state-only.")
+        if self.model.source_target_interaction_rank:
+            if self.intent is not RunIntent.COUNT_STATE:
+                raise ValueError("Source-target state interactions are count_state-only.")
+            if (
+                self.model.trainable_terminal_anchor
+                or self.model.trainable_target_anchor
+                or self.model.target_anchor_weight != 0.0
+                or self.model.adaptive_target_anchor
+            ):
+                raise ValueError("Source-target pilots require frozen null and target anchors.")
+            if self.training.source_target_interaction_penalty <= 0.0:
+                raise ValueError("Source-target interactions require positive shrinkage.")
+            if self.training.state_validation_minimum_improvement <= 0.0:
+                raise ValueError("Source-target interactions require a positive selection margin.")
+            if self.training.checkpoint_selection != "minimum_state_validation_null_guarded":
+                raise ValueError("Source-target interactions require null-guarded selection.")
+            if self.training.gene_decoder_batch_size:
+                raise ValueError("Source-target state pilots must disable decoder training.")
         return self
 
 
@@ -604,7 +656,7 @@ class CompiledRunContract(StrictModel):
     schema_version: int = 1
     compiled_run_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev14"] = "4.0.dev14"
+    recipe_version: Literal["4.0.dev15"] = "4.0.dev15"
     recipe_wheel_hash: Sha256
     frozen_credo_artifact_hash: Sha256
     environment_lock_hash: Sha256
@@ -668,7 +720,7 @@ class InferenceBundleManifest(StrictModel):
     compiled_run_id: str
     selected_checkpoint_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev14"] = "4.0.dev14"
+    recipe_version: Literal["4.0.dev15"] = "4.0.dev15"
     model: ArtifactRef
     run_contract: ArtifactRef
     evaluation_seed_plan: ArtifactRef
