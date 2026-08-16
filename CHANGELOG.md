@@ -1,5 +1,18 @@
 # Changelog
 
+## 4.0.0.dev26 — 2026-08-16
+
+- harden dev25 by joining legacy and corrected null rows on full repeat identity
+  and by replaying each historical legacy metric before accepting its corrected
+  interval value;
+- add typed T07R-A0 pooled relative-guide likelihood contracts, independent
+  SciPy penalized-DM reference, production-path estimator-parity gate, frozen
+  one-fold nested selection, paired terminal-catalog bootstrap, and full
+  recomputing verifier;
+- pass estimator parity but fail the predeclared real pooled noninferiority
+  gate after update 0 wins inner validation, retiring this real-data adapter
+  without increasing updates or compute.
+
 ## 4.0.0.dev25 — 2026-08-16
 
 - preserve the dev23 model and dev24 R1 correction while deriving a new

@@ -353,9 +353,17 @@ def test_dev25_amendment_reuses_parent_model_and_corrects_r0_r1_metrics(
     assert receipt.r1_target_bootstrap_interval[1] < -0.45
     legacy = pd.read_parquet(amended_t07s / "NULL_REFITS.parquet")
     corrected = pd.read_parquet(amended_t07s / "NULL_INTERVAL_REFITS.parquet")
-    nonzero = corrected.selected_update.ne(0)
+    comparison = legacy.merge(
+        corrected,
+        on=["partition", "repeat", "seed", "selected_update"],
+        validate="one_to_one",
+    )
+    nonzero = comparison.selected_update.ne(0)
+    assert int(nonzero.sum()) == 13
     assert (
-        corrected.loc[nonzero, "interval_effect_rmse_delta"].ne(legacy.loc[nonzero, "delta"]).any()
+        comparison.loc[nonzero, "interval_effect_rmse_delta"]
+        .ne(comparison.loc[nonzero, "delta"])
+        .all()
     )
     calibration = corrected.loc[
         corrected.partition == "calibration", "interval_effect_rmse_delta"

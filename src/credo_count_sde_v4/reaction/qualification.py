@@ -1030,6 +1030,21 @@ def _derive_interval_null_refits(legacy_null: pd.DataFrame, effects: pd.DataFram
             catalog="null_test",
         )
         recovery = _recovery_rows(model, test)
+        legacy_recovery = recovery.copy()
+        legacy_recovery["new_squared_error"] = np.square(
+            legacy_recovery.predicted_centered_relative_fitness_rate
+            - legacy_recovery.observed_centered_interval_log_frequency_change
+        )
+        legacy_recovery["baseline_squared_error"] = np.square(
+            legacy_recovery.observed_centered_interval_log_frequency_change
+        )
+        legacy_target = _target_metrics(legacy_recovery)
+        _, _, legacy_delta = _losses(legacy_target)
+        if abs(legacy_delta - float(summary.delta)) > 1e-12:
+            raise IntegrityError(
+                "The recreated null catalog does not reproduce the parent legacy metric "
+                f"for repeat {key}."
+            )
         target = _target_metrics(recovery)
         new, baseline, delta = _losses(target)
         rows.append(

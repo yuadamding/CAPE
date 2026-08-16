@@ -594,6 +594,105 @@ class ReactionRecoveryMetricAmendment(StrictModel):
         return self
 
 
+class PooledReactionLikelihoodBundle(StrictModel):
+    """Immutable T07R-A0 pooled relative-guide likelihood qualification."""
+
+    schema_version: Literal[1] = 1
+    qualification_id: str
+    test_contract_id: str
+    method: Literal["pooled_target_reaction_dm_likelihood_v1"]
+    evidence_role: Literal["development"] = "development"
+    pooled_data_id: str
+    t02a_amendment_id: str
+    t07s_amendment_id: str
+    fold_assignment_sha256: Sha256
+    outer_fold: Literal[0] = 0
+    inner_validation_fold: Literal[1] = 1
+    candidate_updates: tuple[int, ...]
+    retained_guides: int = Field(ge=1)
+    outer_guides: int = Field(ge=1)
+    target_count: int = Field(ge=2)
+    input_catalog: ArtifactRef
+    selection_curve: ArtifactRef
+    refit_effects: ArtifactRef
+    estimator_parity: ArtifactRef
+    outer_guide_metrics: ArtifactRef
+    null_calibration: ArtifactRef
+    bootstrap_deltas: ArtifactRef
+    selected_model: ArtifactRef
+    test_receipt: ArtifactRef
+    component_receipt: ArtifactRef
+
+    @model_validator(mode="after")
+    def validate_pooled_reaction_likelihood(self) -> PooledReactionLikelihoodBundle:
+        expected = self.identity(id_field="qualification_id")
+        if self.qualification_id != expected:
+            raise ValueError(f"qualification_id mismatch: expected {expected}.")
+        if self.candidate_updates != (0, 25, 50, 100, 200):
+            raise ValueError("T07R-A0 requires the frozen update grid 0,25,50,100,200.")
+        if self.outer_guides >= self.retained_guides:
+            raise ValueError("The T07R outer fold must be smaller than the retained catalog.")
+        return self
+
+
+class PooledReactionLikelihoodReceipt(StrictModel):
+    """Complete T07R-A0 parity and real pooled noninferiority decision surface."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str
+    test_contract_id: str
+    status: Literal["pass", "fail_retired"]
+    evidence_role: Literal["development"] = "development"
+    metric_estimand: Literal["pooled_p60_dirichlet_multinomial_nll_per_count"]
+    outer_fold: Literal[0] = 0
+    selected_update: int = Field(ge=0)
+    post_selection_zero_initialized_refit: Literal[True] = True
+    estimator_probability_max_abs_error: float = Field(ge=0)
+    estimator_probability_tolerance: float = Field(gt=0)
+    estimator_effect_max_abs_error: float = Field(ge=0)
+    estimator_effect_tolerance: float = Field(gt=0)
+    estimator_parity_pass: bool
+    noninferiority_margin: float = Field(ge=0)
+    m2_production_nll: float = Field(ge=0)
+    m1_sister_target_nll: float = Field(ge=0)
+    point_delta: float
+    paired_bootstrap_interval: tuple[float, float]
+    paired_bootstrap_upper_95: float
+    paired_bootstrap_draws: int = Field(ge=1000)
+    real_pooled_noninferiority_pass: bool
+    protected_channels_pass: bool
+    control_residual_max_abs_error: float = Field(ge=0)
+    probability_normalization_max_abs_error: float = Field(ge=0)
+    parent_components_verified: bool
+    config_hash: Sha256
+    implementation_hash: Sha256
+    environment_hash: Sha256
+
+    @model_validator(mode="after")
+    def validate_pooled_reaction_receipt(self) -> PooledReactionLikelihoodReceipt:
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
+        lower, upper = self.paired_bootstrap_interval
+        if lower > upper:
+            raise ValueError("T07R paired bootstrap interval must be ordered.")
+        parity = (
+            self.estimator_probability_max_abs_error < self.estimator_probability_tolerance
+            and self.estimator_effect_max_abs_error < self.estimator_effect_tolerance
+        )
+        if self.estimator_parity_pass != parity:
+            raise ValueError("T07R estimator-parity flag differs from its numerical metrics.")
+        gates = (
+            self.estimator_parity_pass,
+            self.real_pooled_noninferiority_pass,
+            self.protected_channels_pass,
+            self.parent_components_verified,
+        )
+        if self.status == "pass" and not all(gates):
+            raise ValueError("A passing T07R-A0 receipt must satisfy every frozen gate.")
+        return self
+
+
 class RawCountMassNoiseBundle(StrictModel):
     """Immutable T02A raw-count and relative-mass noise-floor bundle."""
 
@@ -1513,7 +1612,7 @@ class CompiledRunContract(StrictModel):
     schema_version: int = 1
     compiled_run_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev25"] = "4.0.dev25"
+    recipe_version: Literal["4.0.dev26"] = "4.0.dev26"
     recipe_wheel_hash: Sha256
     frozen_credo_artifact_hash: Sha256
     environment_lock_hash: Sha256
@@ -1580,7 +1679,7 @@ class InferenceBundleManifest(StrictModel):
     compiled_run_id: str
     selected_checkpoint_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev25"] = "4.0.dev25"
+    recipe_version: Literal["4.0.dev26"] = "4.0.dev26"
     selected_family: Literal[
         "configured_checkpoint",
         "gene_decoder_selected",

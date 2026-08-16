@@ -1,6 +1,6 @@
 # Implementation status
 
-Last verified: 2026-08-15. Authority: package engineering status; biological
+Last verified: 2026-08-16. Authority: package engineering status; biological
 run receipts and cohort audits remain external to this repository.
 
 Implemented in this repository:
@@ -16,7 +16,7 @@ Implemented in this repository:
 - CLI/API, full content/reload verification, correction/context audit helpers;
 - CPU regression, leakage, corruption, fault, resume, compatibility, and wheel CI.
 
-Dev25 retains the component-qualified boundary introduced in dev18: the T00
+Dev26 retains the component-qualified boundary introduced in dev18: the T00
 pooled finite-measure contract, public API/CLI, strict channel-isolation
 contract, and focused invariants. The external pooled Renz adapter passed T00
 with 495 guides and 277,200 cells. T04 independently passed its fixed-truth
@@ -26,6 +26,13 @@ T07S-A separately passes learned constant target-average reaction recovery on
 synthetic complete-denominator catalogs after the duration-correct dev25
 unified R0/R1 amendment; no pooled Renz dynamics component is promoted. See
 [component qualification](component-qualification.md).
+
+T07R-A0 is now implemented and fully exercised on the predeclared pooled Renz
+fold 0. The software estimator-parity gate passed, but update 0 won inner
+validation and the real production likelihood was inferior to the same-
+hierarchy sister-guide target reference. The receipt is `fail_retired`; no
+additional updates, GPU run, or fold scale-out is eligible. See the
+[T07R-A0 record](t07r-a0-pooled-likelihood.md).
 
 T01 v1 and v2 are implemented fail-closed and have been exercised on the
 pooled Renz population. Both correctly retained the global decoder in all four
@@ -64,8 +71,8 @@ software/synthetic qualification, not evidence about a cohort. See the
 [dev24 R1 amendment](t07s-reaction-metric-amendment.md) and authoritative
 [dev25 unified R0/R1 amendment](t07s-null-interval-amendment.md).
 
-Local acceptance result: 134 tests passed with one CUDA-only skip and 86.56%
-coverage; `receipts/local-validation.json` is the machine authority. Ruff,
+Local acceptance result: 137 tests passed with one CUDA-only skip; final
+coverage is recorded in `receipts/local-validation.json`. Ruff,
 mypy, generated-schema, documentation-link, wheel
 namespace/license, clean-wheel lifecycle, and frozen-CREDO preflight checks
 passed. The wheel is reproducible under a fixed `SOURCE_DATE_EPOCH`; normalized
@@ -117,7 +124,7 @@ conditional-interaction, and joint nulls, freezes fold and seed identities,
 and strengthens noninteraction comparators. That T03 code remains unqualified
 until T01, T02, and the prescribed pooled pilot pass.
 
-Deliberately not asserted complete in `4.0.0.dev25`:
+Deliberately not asserted complete in `4.0.0.dev26`:
 
 - stable CREDO entry-point discovery;
 - in-repository real-cohort adapters, biological thresholds, or biological claims;
@@ -163,5 +170,5 @@ authority.
 
 Exact future use depends on the branch commit, `REPOSITORY.sha256`, the
 wheel/sdist bytes, generated schemas, and the local validation receipt. A clean
-dev25 commit and release receipt are necessary—but not sufficient—before any
+dev26 commit and release receipt are necessary—but not sufficient—before any
 pilot deployment or stable promotion.

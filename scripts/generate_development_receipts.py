@@ -95,6 +95,11 @@ def main() -> None:
     t07s_null_interval_report = (
         workspace / "CREDO_V4_T07S_NULL_INTERVAL_AMENDMENT_20260816_RUN_REPORT.md"
     )
+    t07r_review = Path(
+        "/home/yding1995/.codex/attachments/d35e6db0-950c-4cd0-9540-73f816d5ba06/pasted-text.txt"
+    )
+    t07r_evidence = workspace / "credo_v4_renz_t07r_a0_20260816"
+    t07r_bundle = t07r_evidence / "T07R_A0_POOLED_LIKELIHOOD"
     receipt = {
         "schema_version": 1,
         "status": "engineering_only",
@@ -170,6 +175,22 @@ def main() -> None:
         ),
         "t07s_null_interval_run_report_sha256": (
             sha256_file(t07s_null_interval_report) if t07s_null_interval_report.is_file() else None
+        ),
+        "t07r_review_sha256": sha256_file(t07r_review) if t07r_review.is_file() else None,
+        "t07r_qualification_sha256": (
+            sha256_file(t07r_bundle / "pooled-reaction-likelihood.json")
+            if (t07r_bundle / "pooled-reaction-likelihood.json").is_file()
+            else None
+        ),
+        "t07r_test_receipt_sha256": (
+            sha256_file(t07r_bundle / "TEST_RECEIPT.json")
+            if (t07r_bundle / "TEST_RECEIPT.json").is_file()
+            else None
+        ),
+        "t07r_run_report_sha256": (
+            sha256_file(t07r_evidence / "RUN_REPORT.md")
+            if (t07r_evidence / "RUN_REPORT.md").is_file()
+            else None
         ),
         "tests_passed": args.tests_passed,
         "coverage_percent": args.coverage_percent,

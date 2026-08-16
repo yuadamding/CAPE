@@ -105,6 +105,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     reaction_amendment.add_argument("--t07s-bundle", type=_path, required=True)
     reaction_amendment.add_argument("--output", type=_path, required=True)
+    pooled_reaction = sub.add_parser(
+        "qualify-pooled-reaction",
+        help="run the frozen one-fold CPU T07R-A0 pooled likelihood qualification",
+    )
+    pooled_reaction.add_argument("--pooled-bundle", type=_path, required=True)
+    pooled_reaction.add_argument("--t02a-amendment", type=_path, required=True)
+    pooled_reaction.add_argument("--t07s-amendment", type=_path, required=True)
+    pooled_reaction.add_argument("--fold-assignment", type=_path, required=True)
+    pooled_reaction.add_argument("--output", type=_path, required=True)
     raw_noise = sub.add_parser(
         "qualify-raw-noise",
         help="run the independent T02A raw-count and relative-mass noise qualification",
@@ -221,6 +230,14 @@ def main(argv: list[str] | None = None) -> int:
         result = api.qualify_reaction(args.output)
     elif command == "amend-reaction":
         result = api.amend_reaction_metrics(args.output, parent=args.t07s_bundle)
+    elif command == "qualify-pooled-reaction":
+        result = api.qualify_pooled_reaction(
+            args.output,
+            pooled_bundle=args.pooled_bundle,
+            t02a_amendment=args.t02a_amendment,
+            t07s_amendment=args.t07s_amendment,
+            fold_assignment=args.fold_assignment,
+        )
     elif command == "qualify-raw-noise":
         result = api.qualify_raw_noise(
             args.output,

@@ -1,0 +1,190 @@
+{
+  "$id": "https://credo.local/schemas/pooled-reaction-likelihood-receipt.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Complete T07R-A0 parity and real pooled noninferiority decision surface.",
+  "properties": {
+    "config_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Config Hash",
+      "type": "string"
+    },
+    "control_residual_max_abs_error": {
+      "minimum": 0,
+      "title": "Control Residual Max Abs Error",
+      "type": "number"
+    },
+    "environment_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Environment Hash",
+      "type": "string"
+    },
+    "estimator_effect_max_abs_error": {
+      "minimum": 0,
+      "title": "Estimator Effect Max Abs Error",
+      "type": "number"
+    },
+    "estimator_effect_tolerance": {
+      "exclusiveMinimum": 0,
+      "title": "Estimator Effect Tolerance",
+      "type": "number"
+    },
+    "estimator_parity_pass": {
+      "title": "Estimator Parity Pass",
+      "type": "boolean"
+    },
+    "estimator_probability_max_abs_error": {
+      "minimum": 0,
+      "title": "Estimator Probability Max Abs Error",
+      "type": "number"
+    },
+    "estimator_probability_tolerance": {
+      "exclusiveMinimum": 0,
+      "title": "Estimator Probability Tolerance",
+      "type": "number"
+    },
+    "evidence_role": {
+      "const": "development",
+      "default": "development",
+      "title": "Evidence Role",
+      "type": "string"
+    },
+    "implementation_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Implementation Hash",
+      "type": "string"
+    },
+    "m1_sister_target_nll": {
+      "minimum": 0,
+      "title": "M1 Sister Target Nll",
+      "type": "number"
+    },
+    "m2_production_nll": {
+      "minimum": 0,
+      "title": "M2 Production Nll",
+      "type": "number"
+    },
+    "metric_estimand": {
+      "const": "pooled_p60_dirichlet_multinomial_nll_per_count",
+      "title": "Metric Estimand",
+      "type": "string"
+    },
+    "noninferiority_margin": {
+      "minimum": 0,
+      "title": "Noninferiority Margin",
+      "type": "number"
+    },
+    "outer_fold": {
+      "const": 0,
+      "default": 0,
+      "title": "Outer Fold",
+      "type": "integer"
+    },
+    "paired_bootstrap_draws": {
+      "minimum": 1000,
+      "title": "Paired Bootstrap Draws",
+      "type": "integer"
+    },
+    "paired_bootstrap_interval": {
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "title": "Paired Bootstrap Interval",
+      "type": "array"
+    },
+    "paired_bootstrap_upper_95": {
+      "title": "Paired Bootstrap Upper 95",
+      "type": "number"
+    },
+    "parent_components_verified": {
+      "title": "Parent Components Verified",
+      "type": "boolean"
+    },
+    "point_delta": {
+      "title": "Point Delta",
+      "type": "number"
+    },
+    "post_selection_zero_initialized_refit": {
+      "const": true,
+      "default": true,
+      "title": "Post Selection Zero Initialized Refit",
+      "type": "boolean"
+    },
+    "probability_normalization_max_abs_error": {
+      "minimum": 0,
+      "title": "Probability Normalization Max Abs Error",
+      "type": "number"
+    },
+    "protected_channels_pass": {
+      "title": "Protected Channels Pass",
+      "type": "boolean"
+    },
+    "real_pooled_noninferiority_pass": {
+      "title": "Real Pooled Noninferiority Pass",
+      "type": "boolean"
+    },
+    "receipt_id": {
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "selected_update": {
+      "minimum": 0,
+      "title": "Selected Update",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail_retired"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "test_contract_id": {
+      "title": "Test Contract Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "test_contract_id",
+    "status",
+    "metric_estimand",
+    "selected_update",
+    "estimator_probability_max_abs_error",
+    "estimator_probability_tolerance",
+    "estimator_effect_max_abs_error",
+    "estimator_effect_tolerance",
+    "estimator_parity_pass",
+    "noninferiority_margin",
+    "m2_production_nll",
+    "m1_sister_target_nll",
+    "point_delta",
+    "paired_bootstrap_interval",
+    "paired_bootstrap_upper_95",
+    "paired_bootstrap_draws",
+    "real_pooled_noninferiority_pass",
+    "protected_channels_pass",
+    "control_residual_max_abs_error",
+    "probability_normalization_max_abs_error",
+    "parent_components_verified",
+    "config_hash",
+    "implementation_hash",
+    "environment_hash"
+  ],
+  "title": "PooledReactionLikelihoodReceipt",
+  "type": "object"
+}

@@ -77,7 +77,8 @@ reweighting; that future component is **T07S-B**.
 
 Consequently:
 
-- T07R-A0 pooled scalar mass-likelihood design is eligible;
+- T07R-A0 pooled scalar mass-likelihood design was executed in dev26 and
+  retired after failing real-fold noninferiority;
 - T07R-A1 predictive advancement requires an additional permitted source-side
   predictor beyond the target-shared scalar;
 - T07R-B and joint T08 remain blocked by T01/T02B.

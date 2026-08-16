@@ -1,6 +1,6 @@
 # Component-wise qualification program
 
-Status: authoritative development order for `4.0.0.dev25`. This page defines
+Status: authoritative development order for `4.0.0.dev26`. This page defines
 software promotion, not a biological claim.
 
 CREDO V4 is qualified as three dependency tracks rather than one large training
@@ -133,6 +133,7 @@ model; its null calibration and bootstrap entries are explicitly
 | T05S | specification only | not run | independently eligible after T04 |
 | T07S-A | implemented; duration-correct R0/R1 passed | cohort-independent | T07R-A0 design eligible |
 | T07S-B | not run | cohort-independent | state-dependent reaction remains unqualified |
+| T07R-A0 | implemented; estimator parity passed, real fold failed | pooled Renz fold 0 | real target-reaction adapter retired; no scale-out |
 | T05R–T13 | partial numerical/model primitives exist | not run under this ladder | dependency-specific |
 
 The external T00 Renz receipt retains 495 source-eligible guides (445
@@ -186,6 +187,18 @@ reaction in synthetic complete catalogs only. See the
 [dev23 training record](t07s-reaction-recovery.md) and authoritative
 [dev24 R1 amendment](t07s-reaction-metric-amendment.md) and authoritative
 [dev25 unified R0/R1 amendment](t07s-null-interval-amendment.md).
+
+T07R-A0 then tested only pooled relative-guide representation, without a gene
+representation, drift, diffusion, within-guide selection, ecology, decoder, or
+GPU. Its independent penalized-DM reference and production implementation
+agreed to `7.82e-08` maximum probability error and `9.53e-07` maximum target-
+effect error. On the predeclared real fold, however, update 0 won inner
+validation. The resulting production/source-persistence loss was `0.0230634`
+versus `0.0224217` for the sister-guide target reference. The paired delta was
+`+0.000641766`, with interval `[+0.000621024,+0.000662385]`, far above the
+training-only `1e-08` noninferiority margin. T07R-A0 is therefore
+`fail_retired`; the stop rule forbids more updates or four-fold scale-out. See
+the [exact dev26 record](t07r-a0-pooled-likelihood.md).
 
 T02A consumed the exact passed T00 population and complete common-34,699 raw
 CountStore. One hundred balanced cell split-halves at both checkpoints and 100

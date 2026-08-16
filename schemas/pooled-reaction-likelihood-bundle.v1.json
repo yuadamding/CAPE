@@ -1,0 +1,183 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/pooled-reaction-likelihood-bundle.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Immutable T07R-A0 pooled relative-guide likelihood qualification.",
+  "properties": {
+    "bootstrap_deltas": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "candidate_updates": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Candidate Updates",
+      "type": "array"
+    },
+    "component_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "estimator_parity": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "evidence_role": {
+      "const": "development",
+      "default": "development",
+      "title": "Evidence Role",
+      "type": "string"
+    },
+    "fold_assignment_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Fold Assignment Sha256",
+      "type": "string"
+    },
+    "inner_validation_fold": {
+      "const": 1,
+      "default": 1,
+      "title": "Inner Validation Fold",
+      "type": "integer"
+    },
+    "input_catalog": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "method": {
+      "const": "pooled_target_reaction_dm_likelihood_v1",
+      "title": "Method",
+      "type": "string"
+    },
+    "null_calibration": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "outer_fold": {
+      "const": 0,
+      "default": 0,
+      "title": "Outer Fold",
+      "type": "integer"
+    },
+    "outer_guide_metrics": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "outer_guides": {
+      "minimum": 1,
+      "title": "Outer Guides",
+      "type": "integer"
+    },
+    "pooled_data_id": {
+      "title": "Pooled Data Id",
+      "type": "string"
+    },
+    "qualification_id": {
+      "title": "Qualification Id",
+      "type": "string"
+    },
+    "refit_effects": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "retained_guides": {
+      "minimum": 1,
+      "title": "Retained Guides",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "selected_model": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "selection_curve": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "t02a_amendment_id": {
+      "title": "T02A Amendment Id",
+      "type": "string"
+    },
+    "t07s_amendment_id": {
+      "title": "T07S Amendment Id",
+      "type": "string"
+    },
+    "target_count": {
+      "minimum": 2,
+      "title": "Target Count",
+      "type": "integer"
+    },
+    "test_contract_id": {
+      "title": "Test Contract Id",
+      "type": "string"
+    },
+    "test_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    }
+  },
+  "required": [
+    "qualification_id",
+    "test_contract_id",
+    "method",
+    "pooled_data_id",
+    "t02a_amendment_id",
+    "t07s_amendment_id",
+    "fold_assignment_sha256",
+    "candidate_updates",
+    "retained_guides",
+    "outer_guides",
+    "target_count",
+    "input_catalog",
+    "selection_curve",
+    "refit_effects",
+    "estimator_parity",
+    "outer_guide_metrics",
+    "null_calibration",
+    "bootstrap_deltas",
+    "selected_model",
+    "test_receipt",
+    "component_receipt"
+  ],
+  "title": "PooledReactionLikelihoodBundle",
+  "type": "object"
+}

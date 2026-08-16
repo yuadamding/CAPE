@@ -27,6 +27,8 @@ from .contracts import (
     ParticleEngineQualificationBundle,
     ParticleEngineTestReceipt,
     PooledFiniteMeasureBundle,
+    PooledReactionLikelihoodBundle,
+    PooledReactionLikelihoodReceipt,
     PreparedRepresentation,
     RawCountMassNoiseAmendment,
     RawCountMassNoiseAmendmentReceipt,
@@ -66,7 +68,9 @@ from .persistence import LifecycleLedger, verify_directory
 from .prepare import prepare_representation
 from .reaction import (
     amend_reaction_recovery_metrics,
+    qualify_pooled_reaction_likelihood,
     qualify_reaction_recovery,
+    verify_pooled_reaction_likelihood,
     verify_reaction_recovery_metric_amendment,
     verify_reaction_recovery_qualification,
 )
@@ -168,6 +172,28 @@ def amend_reaction_metrics(destination: Path, *, parent: Path) -> Path:
     return result
 
 
+def qualify_pooled_reaction(
+    destination: Path,
+    *,
+    pooled_bundle: Path,
+    t02a_amendment: Path,
+    t07s_amendment: Path,
+    fold_assignment: Path,
+) -> Path:
+    """Run and fully verify the frozen one-fold CPU T07R-A0 qualification."""
+
+    _supported_preflight()
+    settings = {
+        "pooled_bundle": pooled_bundle,
+        "t02a_amendment": t02a_amendment,
+        "t07s_amendment": t07s_amendment,
+        "fold_assignment": fold_assignment,
+    }
+    result = qualify_pooled_reaction_likelihood(destination, **settings)
+    verify_pooled_reaction_likelihood(result, **settings)
+    return result
+
+
 def qualify_raw_noise(
     destination: Path,
     *,
@@ -260,6 +286,8 @@ def validate_contract(path: Path) -> dict[str, Any]:
             "complete_denominator_dm_reaction_recovery_v2",
         }:
             selected = ReactionRecoveryQualificationBundle
+        elif payload.get("method") == "pooled_target_reaction_dm_likelihood_v1":
+            selected = PooledReactionLikelihoodBundle
         elif payload.get("method") == "t07s_interval_metric_amendment_v2":
             selected = ReactionRecoveryMetricAmendment
         elif payload.get("method") == "t07s_interval_metric_amendment_v1":
@@ -270,6 +298,8 @@ def validate_contract(path: Path) -> dict[str, Any]:
             selected = ReactionRecoveryTestReceipt
         elif "r0_false_selection_guard_pass" in payload:
             selected = ReactionRecoveryTestReceiptV1
+        elif "estimator_parity_pass" in payload and "real_pooled_noninferiority_pass" in payload:
+            selected = PooledReactionLikelihoodReceipt
         else:
             discriminators = (
                 ("compiled_run_id", CompiledRunContract),

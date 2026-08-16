@@ -80,6 +80,9 @@ corrected R0 table from persisted coefficients, recomputes R1 from the
 preserved model, replays all 4,000 target-bootstrap selections, checks copied
 parent bytes, and reruns all protected numerical invariants.
 
-T07R-A0 may proceed only from this unified dev25 authority. Its scope remains
+T07R-A0 proceeded from this unified dev25 authority in dev26. Estimator parity
+passed, but the predeclared real fold selected update 0 and failed
+noninferiority; the adapter is retired. See the
+[authoritative T07R-A0 record](t07r-a0-pooled-likelihood.md). Its scope remains
 a pooled relative guide-representation likelihood qualification, not absolute
 clone growth or proliferation.
