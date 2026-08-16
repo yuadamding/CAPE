@@ -27,6 +27,8 @@ from .contracts import (
     ParticleEngineTestReceipt,
     PooledFiniteMeasureBundle,
     PreparedRepresentation,
+    RawCountMassNoiseBundle,
+    RawCountMassNoiseReceipt,
     ResolvedConfig,
     SealedRunManifest,
     SelectionManifest,
@@ -39,6 +41,7 @@ from .data import build_pooled_finite_measures, verify_pooled_finite_measures
 from .errors import ContractError, IntegrityError
 from .evaluation import evaluate_run, seal_run
 from .inference import V4Run, finalize_inference, open_inference_run
+from .noise import qualify_raw_count_mass_noise, verify_raw_count_mass_noise
 from .numerics import (
     qualify_particle_engine as run_particle_engine_qualification,
 )
@@ -127,6 +130,43 @@ def qualify_particle_engine(destination: Path) -> Path:
     return result
 
 
+def qualify_raw_noise(
+    destination: Path,
+    *,
+    pooled_bundle: Path,
+    count_store: Path,
+    **settings: Any,
+) -> Path:
+    """Run and fully verify the independent T02A noise qualification."""
+
+    _supported_preflight()
+    result = qualify_raw_count_mass_noise(
+        destination,
+        pooled_bundle=pooled_bundle,
+        count_store=count_store,
+        **settings,
+    )
+    verify_raw_count_mass_noise(
+        result,
+        pooled_bundle=pooled_bundle,
+        count_store=count_store,
+    )
+    return result
+
+
+def verify_raw_noise(
+    path: Path, *, pooled_bundle: Path, count_store: Path
+) -> RawCountMassNoiseBundle:
+    """Fully verify an existing T02A bundle and both immutable parents."""
+
+    _supported_preflight()
+    return verify_raw_count_mass_noise(
+        path,
+        pooled_bundle=pooled_bundle,
+        count_store=count_store,
+    )
+
+
 def validate_contract(path: Path) -> dict[str, Any]:
     """Validate canonical JSON syntax and reject non-object contracts."""
 
@@ -144,6 +184,7 @@ def validate_contract(path: Path) -> dict[str, Any]:
         discriminators = (
             ("compiled_run_id", CompiledRunContract),
             ("qualification_id", ParticleEngineQualificationBundle),
+            ("noise_id", RawCountMassNoiseBundle),
             ("representation_id", CountRepresentationBundle),
             ("pooled_data_id", PooledFiniteMeasureBundle),
             ("test_contract_id", ComponentTestContract),
@@ -151,6 +192,7 @@ def validate_contract(path: Path) -> dict[str, Any]:
                 "ou_largest_grid_variance_relative_error",
                 ParticleEngineTestReceipt,
             ),
+            ("interval_log_mass_rmse_q95", RawCountMassNoiseReceipt),
             ("receipt_id", ComponentTestReceipt),
             ("prepared_id", PreparedRepresentation),
             ("evaluation_id", EvaluationBundleManifest),

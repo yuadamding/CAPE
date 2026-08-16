@@ -300,6 +300,97 @@ class ParticleEngineTestReceipt(StrictModel):
             raise ValueError("A passing T04 receipt must satisfy every fixed numerical gate.")
         return self
 
+    @property
+    def stabilized_absolute_log_mass_pass(self) -> bool:
+        """Correct interpretation of the frozen legacy wire-field name."""
+
+        return self.stabilized_log_weight_pass
+
+
+class RawCountMassNoiseBundle(StrictModel):
+    """Immutable T02A raw-count and relative-mass noise-floor bundle."""
+
+    schema_version: int = 1
+    noise_id: str
+    test_contract_id: str
+    pooled_data_id: str
+    count_store_sha256: Sha256
+    feature_index_hash: Sha256
+    environment_hash: Sha256
+    source_checkpoint: str = Field(min_length=1)
+    terminal_checkpoint: str = Field(min_length=1)
+    split_repeats: int = Field(ge=100)
+    mass_bootstrap_repeats: int = Field(ge=100)
+    split_seed_start: int = Field(ge=0)
+    mass_seed_start: int = Field(ge=0)
+    variable_gene_count: int = Field(ge=2)
+    top_gene_count: int = Field(ge=1)
+    rank_top_k: int = Field(ge=1)
+    variable_genes: ArtifactRef
+    raw_split_metrics: ArtifactRef
+    raw_repeat_summary: ArtifactRef
+    raw_target_summary: ArtifactRef
+    mass_bootstrap: ArtifactRef
+    mass_guide_noise: ArtifactRef
+    mass_target_noise: ArtifactRef
+    frozen_thresholds: ArtifactRef
+    test_receipt: ArtifactRef
+
+    @model_validator(mode="after")
+    def validate_noise_bundle(self) -> RawCountMassNoiseBundle:
+        expected = self.identity(id_field="noise_id")
+        if self.noise_id != expected:
+            raise ValueError(f"noise_id mismatch: expected {expected}.")
+        if self.source_checkpoint == self.terminal_checkpoint:
+            raise ValueError("T02A source and terminal checkpoints must differ.")
+        if self.top_gene_count > self.variable_gene_count:
+            raise ValueError("Top-gene overlap cannot exceed its frozen gene universe.")
+        return self
+
+
+class RawCountMassNoiseReceipt(StrictModel):
+    """Complete T02A calibration decision and frozen noise floors."""
+
+    schema_version: int = 1
+    receipt_id: str
+    test_contract_id: str
+    status: Literal["pass", "fail_retired"]
+    retained_guides: int = Field(ge=1)
+    perturbation_targets: int = Field(ge=1)
+    split_repeats: int = Field(ge=100)
+    mass_bootstrap_repeats: int = Field(ge=100)
+    target_balanced_hellinger_q95: float = Field(ge=0)
+    control_hellinger_q95: float = Field(ge=0)
+    target_balanced_js_q95: float = Field(ge=0)
+    target_balanced_deviance_q95: float = Field(ge=0)
+    target_balanced_spearman_q05: float = Field(ge=-1, le=1)
+    target_balanced_top_gene_overlap_q05: float = Field(ge=0, le=1)
+    interval_log_mass_rmse_q95: float = Field(ge=0)
+    expansion_sign_accuracy_q05: float = Field(ge=0, le=1)
+    guide_rank_spearman_q05: float = Field(ge=-1, le=1)
+    target_rank_spearman_q05: float = Field(ge=-1, le=1)
+    top_k_overlap_q05: float = Field(ge=0, le=1)
+    bottom_k_overlap_q05: float = Field(ge=0, le=1)
+    raw_invariants_pass: bool
+    mass_invariants_pass: bool
+    protected_metrics_frozen: bool
+    config_hash: Sha256
+    implementation_hash: Sha256
+    environment_hash: Sha256
+
+    @model_validator(mode="after")
+    def validate_noise_receipt(self) -> RawCountMassNoiseReceipt:
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
+        if self.status == "pass" and not (
+            self.raw_invariants_pass
+            and self.mass_invariants_pass
+            and self.protected_metrics_frozen
+        ):
+            raise ValueError("A passing T02A receipt must freeze both complete noise floors.")
+        return self
+
 
 class ComponentTestContract(StrictModel):
     """Frozen component-wise qualification contract."""
@@ -1003,7 +1094,7 @@ class CompiledRunContract(StrictModel):
     schema_version: int = 1
     compiled_run_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev20"] = "4.0.dev20"
+    recipe_version: Literal["4.0.dev21"] = "4.0.dev21"
     recipe_wheel_hash: Sha256
     frozen_credo_artifact_hash: Sha256
     environment_lock_hash: Sha256
@@ -1070,7 +1161,7 @@ class InferenceBundleManifest(StrictModel):
     compiled_run_id: str
     selected_checkpoint_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev20"] = "4.0.dev20"
+    recipe_version: Literal["4.0.dev21"] = "4.0.dev21"
     selected_family: Literal[
         "configured_checkpoint",
         "gene_decoder_selected",

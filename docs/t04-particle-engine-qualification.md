@@ -11,8 +11,10 @@ mean-field, and lifecycle truths. This unlocks the synthetic T05S drift and
 T07S reaction tests. It does not qualify any trainable drift, diffusion,
 reaction, pooled Renz model, decoder, context mechanism, or biological claim.
 
-The exact test identity is `T04_PARTICLE_ENGINE`. Its channel contract is
-fixed drift, fixed diffusion, fixed reaction, ecology off, and decoder off.
+The exact test identity is `T04_PARTICLE_ENGINE`. Its generic trainable-channel
+contract is fixed drift, fixed diffusion, fixed reaction, trainable ecology
+off, and decoder off. A separate fixed-truth test qualifies absolute-mass pool
+context aggregation; it does not fit or qualify an ecological mechanism.
 There is no optimizer, checkpoint selection, post-selection refit, cohort,
 representation, or GPU.
 
@@ -47,7 +49,7 @@ particle implementation.
 | Primary metric | largest-grid OU variance relative error |
 | OU variance limit | less than 10% |
 | Reaction limit | relative error at most `1e-4` |
-| Ecology limit | absolute-weight reference error at most `1e-12` |
+| Fixed pool-aggregation limit | absolute-weight reference error at most `1e-12` |
 | Protected behavior | normalized weights, declared mass, ordering, replay, resume |
 
 ### Deterministic drift
@@ -97,7 +99,7 @@ Particle weights remain normalized separately; reconstructed absolute
 weights `relative_mass × normalized_particle_weight` must sum to each
 declared mass.
 
-### Absolute-weight ecology
+### Fixed absolute-weight pool aggregation
 
 Two fixed states `[-1, +1]` begin with exposures `[9, 1]`. The physical-pool
 mean is recomputed from absolute guide mass before each reaction update. A
@@ -149,9 +151,9 @@ scientific metrics agree, but it is not the promotion authority.
 | OU coarsest combined error | 0.0493619 | diagnostic | — |
 | OU finest combined error | 0.00496401 | less than coarsest | pass |
 | Depletion/doubling maximum relative error | `5.59e-16` | `1e-4` | pass |
-| Absolute-weight ecology maximum error | 0 | `1e-12` | pass |
+| Fixed pool-aggregation maximum error | 0 | `1e-12` | pass |
 | Normalized-context negative-control gap | greater than `1e-2` | at least `1e-2` | pass |
-| Stabilized log weights | finite and reference-equal | required | pass |
+| Stabilized absolute series log mass | finite and reference-equal | required | pass |
 | Deterministic replay | bitwise equal | required | pass |
 | Interrupted/resumed replay | bitwise equal | required | pass |
 
@@ -231,3 +233,21 @@ semantics. It does not establish that these channels are identifiable or
 learnable from a biological cohort. The next eligible actions are T02A
 raw-count/mass noise qualification and isolated synthetic T05S/T07S channel
 recovery. Pooled Renz dynamics remain blocked by T01.
+
+## Dev21 interpretation amendment
+
+The immutable dev20 wire fields `ecology_absolute_weight_max_error` and
+`stabilized_log_weight_pass` are legacy names. The first is the fixed
+pool-aggregation reference error, not qualification of trainable ecology. The
+second tested stabilized **pool-level absolute series log masses**, including
+the `[1000, 998]` contrast; it did not test particle-level log weights. Dev21 keeps
+the field readable for exact receipt compatibility and exposes the correctly
+named `stabilized_absolute_log_mass_pass` interpretation in Python. Future
+receipt schemas should use only the corrected name.
+
+T04 qualified one homogeneous shared diagonal diffusion vector. It did not
+evaluate state-, perturbation-, or time-dependent diffusion. It also tested
+constant scalar reaction and a fixed state-mean pool summary, not joint
+state-dependent reaction/selection or nonlinear particle-level ecology. CPU
+float64 replay is qualified; CUDA/FP32 parity requires a separate
+`T04G_DEVICE_PARITY` receipt before CUDA scientific use.

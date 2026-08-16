@@ -94,6 +94,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="run the independent T04 fixed-truth numerical qualification",
     )
     particle_engine.add_argument("--output", type=_path, required=True)
+    raw_noise = sub.add_parser(
+        "qualify-raw-noise",
+        help="run the independent T02A raw-count and relative-mass noise qualification",
+    )
+    raw_noise.add_argument("--pooled-bundle", type=_path, required=True)
+    raw_noise.add_argument("--count-store", type=_path, required=True)
+    raw_noise.add_argument("--output", type=_path, required=True)
+    raw_noise.add_argument("--split-repeats", type=int, default=100)
+    raw_noise.add_argument("--mass-bootstrap-repeats", type=int, default=100)
+    raw_noise.add_argument("--split-seed-start", type=int, default=20_260_821)
+    raw_noise.add_argument("--mass-seed-start", type=int, default=21_260_821)
+    raw_noise.add_argument("--variable-gene-count", type=int, default=2_000)
+    raw_noise.add_argument("--top-gene-count", type=int, default=50)
+    raw_noise.add_argument("--rank-top-k", type=int, default=20)
     open_parser = sub.add_parser("open-run")
     open_parser.add_argument("run", type=_path)
     open_parser.add_argument("--device", default="cpu")
@@ -184,6 +198,19 @@ def main(argv: list[str] | None = None) -> int:
         )
     elif command == "qualify-particle-engine":
         result = api.qualify_particle_engine(args.output)
+    elif command == "qualify-raw-noise":
+        result = api.qualify_raw_noise(
+            args.output,
+            pooled_bundle=args.pooled_bundle,
+            count_store=args.count_store,
+            split_repeats=args.split_repeats,
+            mass_bootstrap_repeats=args.mass_bootstrap_repeats,
+            split_seed_start=args.split_seed_start,
+            mass_seed_start=args.mass_seed_start,
+            variable_gene_count=args.variable_gene_count,
+            top_gene_count=args.top_gene_count,
+            rank_top_k=args.rank_top_k,
+        )
     elif command == "finalize":
         result = api.finalize(args.config)
     elif command == "evaluate":

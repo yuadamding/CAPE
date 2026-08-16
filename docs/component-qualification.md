@@ -1,6 +1,6 @@
 # Component-wise qualification program
 
-Status: authoritative development order for `4.0.0.dev20`. This page defines
+Status: authoritative development order for `4.0.0.dev21`. This page defines
 software promotion, not a biological claim.
 
 CREDO V4 is qualified as three dependency tracks rather than one large training
@@ -15,8 +15,9 @@ Independent raw-count track:
 T00 → T02A raw-count and mass noise floors
 
 Software/synthetic track:
-T04 particle engine → T05S drift → T06S diffusion
-                    └→ T07S reaction → T08S finite measure
+T04 particle engine → T05S drift ───────────────┐
+                    └→ T07S reaction ───────────┼→ T08S finite measure
+T04D state-dependent diffusion → T06S diffusion ┘
 ```
 
 T04 is an independent numerical prerequisite for learned dynamics. A failed
@@ -47,7 +48,9 @@ independent biological replicates.
 
 T04 is a fixed-truth numerical exception to the learned-component rule: it has
 no optimizer or post-selection refit. It passes only by matching analytic
-drift, OU, reaction, ecology, and lifecycle truths under frozen tolerances.
+drift, OU, constant scalar reaction, fixed pool aggregation, and lifecycle
+truths under frozen tolerances. It does not qualify trainable ecology or
+trainable coefficient recovery.
 
 ## Channel isolation
 
@@ -68,6 +71,9 @@ drift, OU, reaction, ecology, and lifecycle truths under frozen tolerances.
 | T13 | fixed | fixed | fixed | fixed | fixed |
 
 T00–T03 expose no drift, diffusion, reaction, ecology, or decoder channel.
+For T04, `Ecology = off` means that trainable ecology is absent. Its separate
+fixed-truth check qualifies only mean aggregation from stabilized absolute
+series log masses.
 
 ## T00 pooled finite-measure contract
 
@@ -118,10 +124,12 @@ model; its null calibration and bootstrap entries are explicitly
 |---|---|---|---|
 | T00 | implemented; eight focused tests pass | external Renz receipt passes | T00 only |
 | T01 | v1/v2 retired; v3 not implemented | both failed; dimension 0 in 4/4 folds | general test open; pooled path blocked |
-| T02A | specification only | raw-count/mass receipt not run | eligible after T00 |
+| T02A | implemented and fully verified | Renz 100-repeat receipt passes | thresholds frozen; no model promoted |
 | T02B | latent primitives only | not run | blocked by T01 |
 | T03 | identifiability/null hardening exists as engineering code | not run under this ladder | blocked |
 | T04 | implemented and fixed-truth qualified | cohort-independent | synthetic T05S/T07S eligible |
+| T04G | specification only | not run | required before CUDA scientific use |
+| T04D | not implemented | not run | required before full state-dependent T06S |
 | T05–T13 | partial numerical/model primitives exist | not run under this ladder | dependency-specific |
 
 The external T00 Renz receipt retains 495 source-eligible guides (445
@@ -153,10 +161,19 @@ T04 now routes analytic fixed truths through the same streaming particle
 kernel used by inference. Its committed qualification uses 50 seeds over the
 64/256/1,024/4,096-particle and 8/16/32/64-step OU grid. Deterministic drift
 was exact, largest-grid OU variance error was 0.004459, reaction relative
-error was below `6e-16`, absolute-weight ecology matched exactly, the
+error was below `6e-16`, fixed absolute-weight pool aggregation matched exactly, the
 normalized-within-guide negative control failed as required, and interrupted
 resume was bitwise identical. See the
 [detailed T04 record](t04-particle-engine-qualification.md).
+
+T02A consumed the exact passed T00 population and complete common-34,699 raw
+CountStore. One hundred balanced cell split-halves at both checkpoints and 100
+Jeffreys-smoothed multinomial catalog bootstraps completed. The frozen
+target-balanced interval log-mass RMSE margin is 0.132578 and the minimum
+detectable absolute interval effect is 0.289973 natural-log units. T02A pass
+means the measurement-noise calibration is complete; it does not promote a
+model or authorize pooled state dynamics. See the
+[detailed T02A record](t02a-raw-count-mass-noise.md).
 
 Synthetic values reported outside a committed component directory are useful
 design evidence but are not promotion evidence. Every subsequent stage must

@@ -1,5 +1,16 @@
 # Changelog
 
+## 4.0.0.dev21 — 2026-08-15
+
+- preserve the immutable T04 result while clarifying that trainable ecology is
+  off, fixed absolute-mass pool aggregation is qualified, and the legacy
+  `stabilized_log_weight_pass` field means stabilized absolute series log mass;
+- add the independent T02A raw-count split-half and relative-mass sampling
+  qualification with 100 deterministic repeats, perturbation-target-balanced
+  summaries, separately reported controls, and frozen pre-model thresholds;
+- bind T02A to the exact T00 population, complete CountStore, numerical
+  environment, implementation files, atomic evidence bundle, and full verifier.
+
 ## 4.0.0.dev20 — 2026-08-15
 
 - split component dependencies into pooled real-data, raw-count, and

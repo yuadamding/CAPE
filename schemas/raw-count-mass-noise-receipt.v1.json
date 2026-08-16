@@ -1,0 +1,172 @@
+{
+  "$id": "https://credo.local/schemas/raw-count-mass-noise-receipt.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Complete T02A calibration decision and frozen noise floors.",
+  "properties": {
+    "bottom_k_overlap_q05": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Bottom K Overlap Q05",
+      "type": "number"
+    },
+    "config_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Config Hash",
+      "type": "string"
+    },
+    "control_hellinger_q95": {
+      "minimum": 0,
+      "title": "Control Hellinger Q95",
+      "type": "number"
+    },
+    "environment_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Environment Hash",
+      "type": "string"
+    },
+    "expansion_sign_accuracy_q05": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Expansion Sign Accuracy Q05",
+      "type": "number"
+    },
+    "guide_rank_spearman_q05": {
+      "maximum": 1,
+      "minimum": -1,
+      "title": "Guide Rank Spearman Q05",
+      "type": "number"
+    },
+    "implementation_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Implementation Hash",
+      "type": "string"
+    },
+    "interval_log_mass_rmse_q95": {
+      "minimum": 0,
+      "title": "Interval Log Mass Rmse Q95",
+      "type": "number"
+    },
+    "mass_bootstrap_repeats": {
+      "minimum": 100,
+      "title": "Mass Bootstrap Repeats",
+      "type": "integer"
+    },
+    "mass_invariants_pass": {
+      "title": "Mass Invariants Pass",
+      "type": "boolean"
+    },
+    "perturbation_targets": {
+      "minimum": 1,
+      "title": "Perturbation Targets",
+      "type": "integer"
+    },
+    "protected_metrics_frozen": {
+      "title": "Protected Metrics Frozen",
+      "type": "boolean"
+    },
+    "raw_invariants_pass": {
+      "title": "Raw Invariants Pass",
+      "type": "boolean"
+    },
+    "receipt_id": {
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "retained_guides": {
+      "minimum": 1,
+      "title": "Retained Guides",
+      "type": "integer"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "split_repeats": {
+      "minimum": 100,
+      "title": "Split Repeats",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail_retired"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "target_balanced_deviance_q95": {
+      "minimum": 0,
+      "title": "Target Balanced Deviance Q95",
+      "type": "number"
+    },
+    "target_balanced_hellinger_q95": {
+      "minimum": 0,
+      "title": "Target Balanced Hellinger Q95",
+      "type": "number"
+    },
+    "target_balanced_js_q95": {
+      "minimum": 0,
+      "title": "Target Balanced Js Q95",
+      "type": "number"
+    },
+    "target_balanced_spearman_q05": {
+      "maximum": 1,
+      "minimum": -1,
+      "title": "Target Balanced Spearman Q05",
+      "type": "number"
+    },
+    "target_balanced_top_gene_overlap_q05": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Target Balanced Top Gene Overlap Q05",
+      "type": "number"
+    },
+    "target_rank_spearman_q05": {
+      "maximum": 1,
+      "minimum": -1,
+      "title": "Target Rank Spearman Q05",
+      "type": "number"
+    },
+    "test_contract_id": {
+      "title": "Test Contract Id",
+      "type": "string"
+    },
+    "top_k_overlap_q05": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Top K Overlap Q05",
+      "type": "number"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "test_contract_id",
+    "status",
+    "retained_guides",
+    "perturbation_targets",
+    "split_repeats",
+    "mass_bootstrap_repeats",
+    "target_balanced_hellinger_q95",
+    "control_hellinger_q95",
+    "target_balanced_js_q95",
+    "target_balanced_deviance_q95",
+    "target_balanced_spearman_q05",
+    "target_balanced_top_gene_overlap_q05",
+    "interval_log_mass_rmse_q95",
+    "expansion_sign_accuracy_q05",
+    "guide_rank_spearman_q05",
+    "target_rank_spearman_q05",
+    "top_k_overlap_q05",
+    "bottom_k_overlap_q05",
+    "raw_invariants_pass",
+    "mass_invariants_pass",
+    "protected_metrics_frozen",
+    "config_hash",
+    "implementation_hash",
+    "environment_hash"
+  ],
+  "title": "RawCountMassNoiseReceipt",
+  "type": "object"
+}

@@ -233,7 +233,7 @@ toml = [
 
 [[package]]
 name = "credo-count-sde-v4"
-version = "4.0.0.dev20"
+version = "4.0.0.dev21"
 source = { editable = "." }
 dependencies = [
     { name = "h5py" },

@@ -16,11 +16,13 @@ Implemented in this repository:
 - CLI/API, full content/reload verification, correction/context audit helpers;
 - CPU regression, leakage, corruption, fault, resume, compatibility, and wheel CI.
 
-Dev20 retains the component-qualified boundary introduced in dev18: the T00
+Dev21 retains the component-qualified boundary introduced in dev18: the T00
 pooled finite-measure contract, public API/CLI, strict channel-isolation
 contract, and focused invariants. The external pooled Renz adapter passed T00
 with 495 guides and 277,200 cells. T04 independently passed its fixed-truth
-numerical qualification; no pooled Renz T01–T13 component is promoted. See
+numerical qualification. T02A now freezes the independent raw-count and
+relative-mass sampling noise surface from 100 repeats without a learned model;
+no pooled Renz dynamics component is promoted. See
 [component qualification](component-qualification.md).
 
 T01 v1 and v2 are implemented fail-closed and have been exercised on the
@@ -29,8 +31,11 @@ folds because every low-rank candidate worsened source-only count likelihood.
 The raw Hellinger candidates were 0.204–0.256 nats/count worse; centered
 residual Hellinger candidates were 0.178–0.238 worse. These are retired
 candidates, not a representation qualification; downstream tests remain
-blocked only on the pooled real-data representation path. T02A raw-count/mass
-noise floors and synthetic T04–T07 remain independent.
+blocked only on the pooled real-data representation path. The independent
+T02A raw-count/mass calibration passes with a target-balanced interval
+log-mass RMSE q95 of 0.132578 and minimum detectable absolute interval effect
+of 0.289973. Synthetic T04–T07 remains independent. See the
+[detailed T02A record](t02a-raw-count-mass-noise.md).
 
 T04 routes non-trainable analytic truths through the production streaming
 Euler–Maruyama engine. It qualifies deterministic drift, OU moments over a
@@ -41,7 +46,7 @@ variance relative error is 0.004459. This is numerical software evidence; it
 does not qualify a learned channel or biological model. See the
 [detailed T04 record](t04-particle-engine-qualification.md).
 
-Local acceptance result: 117 tests passed with one CUDA-only skip and 86.7746%
+Local acceptance result: 121 tests passed with one CUDA-only skip and 86.89%
 coverage; `receipts/local-validation.json` is the machine authority. Ruff,
 mypy, generated-schema, documentation-link, wheel
 namespace/license, clean-wheel lifecycle, and frozen-CREDO preflight checks
@@ -94,7 +99,7 @@ conditional-interaction, and joint nulls, freezes fold and seed identities,
 and strengthens noninteraction comparators. That T03 code remains unqualified
 until T01, T02, and the prescribed pooled pilot pass.
 
-Deliberately not asserted complete in `4.0.0.dev20`:
+Deliberately not asserted complete in `4.0.0.dev21`:
 
 - stable CREDO entry-point discovery;
 - in-repository real-cohort adapters, biological thresholds, or biological claims;
@@ -140,5 +145,5 @@ authority.
 
 Exact future use depends on the branch commit, `REPOSITORY.sha256`, the
 wheel/sdist bytes, generated schemas, and the local validation receipt. A clean
-dev20 commit and release receipt are necessary—but not sufficient—before any
+dev21 commit and release receipt are necessary—but not sufficient—before any
 pilot deployment or stable promotion.

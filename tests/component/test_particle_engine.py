@@ -54,6 +54,7 @@ def test_t04_fixed_truth_qualification_passes_every_channel_gate(
     assert receipt.ou_largest_grid_variance_relative_error < 0.10
     assert receipt.reaction_max_relative_error < 1e-4
     assert receipt.ecology_absolute_weight_max_error <= 1e-12
+    assert receipt.stabilized_absolute_log_mass_pass
 
 
 def test_t04_ou_grid_and_negative_control_are_complete(qualified_t04: Path) -> None:

@@ -1,7 +1,7 @@
 # T01 count-native representation qualification
 
 Last verified: 2026-08-15. Status: authoritative engineering record for the
-T01-v1/v2 implementations introduced in `4.0.0.dev19` and retained by dev20;
+T01-v1/v2 implementations introduced in `4.0.0.dev19` and retained by dev21;
 both real Renz candidates are retired. This document defines software and
 development evidence, not a biological claim.
 
@@ -214,14 +214,24 @@ p_i=\operatorname{softmax}(b+Wz_i),
 \]
 
 with one training-P4 intercept `b`, ridge penalties on `W` and `z`, and exact
-dimension-zero nesting at `W=0`. Feature selection must be recomputed inside
-each outer fold from P4 outer-training rows only. This is a design candidate,
-not yet a frozen or executed T01-v3 receipt.
+dimension-zero nesting at `W=0`. During candidate selection, feature selection
+and the intercept may use only fit-cell `x_enc` counts. Fit `x_score`, inner
+`x_enc`, inner `x_score`, held-out-guide P4, and every P60 count are forbidden.
+The global null and every learned dimension are scored on the identical frozen
+feature set and intercept. This is a design candidate, not yet a frozen or
+executed T01-v3 receipt.
+
+For an inner cell, latent inference uses only `x_enc`; `z_i` is then frozen and
+only `x_score` contributes to held-out likelihood. After fitting, the latent
+gauge must be canonicalized by centering, deterministic SVD rotation, singular
+value order, positive largest-magnitude loading sign, and unit training-latent
+variance. This prevents rotationally equivalent fits from producing unstable
+artifacts or downstream coefficient penalties.
 
 The candidate dimensions remain `0, 8, 16, 32, 48`. A prospective frozen
-feature rule is at least 100 training-P4 counts, at least 20 nonzero
-training-P4 cells, then the top 4,096 genes by multinomial deviance, recomputed
-inside each outer fold. The smallest dimension within a frozen tolerance of
+feature rule is at least 100 fit-encoding counts, at least 20 nonzero
+fit-encoding cells, then the top 4,096 genes by multinomial deviance, recomputed
+inside each inner fit partition. The smallest dimension within a frozen tolerance of
 the best qualifying held-out-count likelihood is selected.
 
 Before one real fold is opened, v3 must pass three synthetic tests: select

@@ -1,0 +1,184 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/raw-count-mass-noise-bundle.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Immutable T02A raw-count and relative-mass noise-floor bundle.",
+  "properties": {
+    "count_store_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Count Store Sha256",
+      "type": "string"
+    },
+    "environment_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Environment Hash",
+      "type": "string"
+    },
+    "feature_index_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Feature Index Hash",
+      "type": "string"
+    },
+    "frozen_thresholds": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "mass_bootstrap": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "mass_bootstrap_repeats": {
+      "minimum": 100,
+      "title": "Mass Bootstrap Repeats",
+      "type": "integer"
+    },
+    "mass_guide_noise": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "mass_seed_start": {
+      "minimum": 0,
+      "title": "Mass Seed Start",
+      "type": "integer"
+    },
+    "mass_target_noise": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "noise_id": {
+      "title": "Noise Id",
+      "type": "string"
+    },
+    "pooled_data_id": {
+      "title": "Pooled Data Id",
+      "type": "string"
+    },
+    "rank_top_k": {
+      "minimum": 1,
+      "title": "Rank Top K",
+      "type": "integer"
+    },
+    "raw_repeat_summary": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "raw_split_metrics": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "raw_target_summary": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "source_checkpoint": {
+      "minLength": 1,
+      "title": "Source Checkpoint",
+      "type": "string"
+    },
+    "split_repeats": {
+      "minimum": 100,
+      "title": "Split Repeats",
+      "type": "integer"
+    },
+    "split_seed_start": {
+      "minimum": 0,
+      "title": "Split Seed Start",
+      "type": "integer"
+    },
+    "terminal_checkpoint": {
+      "minLength": 1,
+      "title": "Terminal Checkpoint",
+      "type": "string"
+    },
+    "test_contract_id": {
+      "title": "Test Contract Id",
+      "type": "string"
+    },
+    "test_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "top_gene_count": {
+      "minimum": 1,
+      "title": "Top Gene Count",
+      "type": "integer"
+    },
+    "variable_gene_count": {
+      "minimum": 2,
+      "title": "Variable Gene Count",
+      "type": "integer"
+    },
+    "variable_genes": {
+      "$ref": "#/$defs/ArtifactRef"
+    }
+  },
+  "required": [
+    "noise_id",
+    "test_contract_id",
+    "pooled_data_id",
+    "count_store_sha256",
+    "feature_index_hash",
+    "environment_hash",
+    "source_checkpoint",
+    "terminal_checkpoint",
+    "split_repeats",
+    "mass_bootstrap_repeats",
+    "split_seed_start",
+    "mass_seed_start",
+    "variable_gene_count",
+    "top_gene_count",
+    "rank_top_k",
+    "variable_genes",
+    "raw_split_metrics",
+    "raw_repeat_summary",
+    "raw_target_summary",
+    "mass_bootstrap",
+    "mass_guide_noise",
+    "mass_target_noise",
+    "frozen_thresholds",
+    "test_receipt"
+  ],
+  "title": "RawCountMassNoiseBundle",
+  "type": "object"
+}
