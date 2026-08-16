@@ -1,6 +1,6 @@
 # Component-wise qualification program
 
-Status: authoritative development order for `4.0.0.dev22`. This page defines
+Status: authoritative development order for `4.0.0.dev23`. This page defines
 software promotion, not a biological claim.
 
 CREDO V4 is qualified as three dependency tracks rather than one large training
@@ -130,7 +130,9 @@ model; its null calibration and bootstrap entries are explicitly
 | T04 | implemented and fixed-truth qualified | cohort-independent | synthetic T05S/T07S eligible |
 | T04G | specification only | not run | required before CUDA scientific use |
 | T04D | not implemented | not run | required before full state-dependent T06S |
-| T05–T13 | partial numerical/model primitives exist | not run under this ladder | dependency-specific |
+| T05S | specification only | not run | independently eligible after T04 |
+| T07S | implemented; R0/R1 passed | cohort-independent | T07R-A protocol design eligible |
+| T05R–T13 | partial numerical/model primitives exist | not run under this ladder | dependency-specific |
 
 The external T00 Renz receipt retains 495 source-eligible guides (445
 targeting and 50 controls), 150 perturbation targets, and 277,200 cells. Both
@@ -165,6 +167,18 @@ error was below `6e-16`, fixed absolute-weight pool aggregation matched exactly,
 normalized-within-guide negative control failed as required, and interrupted
 resume was bitwise identical. See the
 [detailed T04 record](t04-particle-engine-qualification.md).
+
+T07S trains only target constant-reaction contrasts through the production
+complete-denominator count likelihood while every state, ecology, decoder,
+pool-intercept, and concentration channel remains fixed. Fifty-nine
+zero-reaction refits froze the false-improvement margin; 60 independent null
+audit refits produced zero false promotions (one-sided 95% upper bound
+0.048703). The nonzero R1 test selected update 100 and was freshly refit. Its
+target-balanced RMSE delta against zero reaction was -0.567863 with
+target-bootstrap interval [-0.695670, -0.410235]; raw reaction RMSE was
+0.017233 and sign accuracy was 1.0. This qualifies learned constant scalar
+reaction in synthetic complete catalogs only. See the
+[detailed T07S record](t07s-reaction-recovery.md).
 
 T02A consumed the exact passed T00 population and complete common-34,699 raw
 CountStore. One hundred balanced cell split-halves at both checkpoints and 100

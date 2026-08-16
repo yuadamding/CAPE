@@ -1,0 +1,191 @@
+{
+  "$id": "https://credo.local/schemas/reaction-recovery-test-receipt.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Complete T07S R0-null and R1-nonzero decision surface.",
+  "properties": {
+    "config_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Config Hash",
+      "type": "string"
+    },
+    "control_target_mask_max_abs_error": {
+      "minimum": 0,
+      "title": "Control Target Mask Max Abs Error",
+      "type": "number"
+    },
+    "environment_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Environment Hash",
+      "type": "string"
+    },
+    "fixed_channel_max_abs_change": {
+      "minimum": 0,
+      "title": "Fixed Channel Max Abs Change",
+      "type": "number"
+    },
+    "implementation_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Implementation Hash",
+      "type": "string"
+    },
+    "probability_normalization_max_abs_error": {
+      "minimum": 0,
+      "title": "Probability Normalization Max Abs Error",
+      "type": "number"
+    },
+    "protected_metrics_pass": {
+      "title": "Protected Metrics Pass",
+      "type": "boolean"
+    },
+    "r0_audit_false_promotion_upper_95": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "R0 Audit False Promotion Upper 95",
+      "type": "number"
+    },
+    "r0_audit_false_promotions": {
+      "minimum": 0,
+      "title": "R0 Audit False Promotions",
+      "type": "integer"
+    },
+    "r0_audit_repeats": {
+      "minimum": 59,
+      "title": "R0 Audit Repeats",
+      "type": "integer"
+    },
+    "r0_calibration_repeats": {
+      "minimum": 59,
+      "title": "R0 Calibration Repeats",
+      "type": "integer"
+    },
+    "r0_false_selection_guard_pass": {
+      "title": "R0 False Selection Guard Pass",
+      "type": "boolean"
+    },
+    "r0_required_margin": {
+      "minimum": 0,
+      "title": "R0 Required Margin",
+      "type": "number"
+    },
+    "r1_channel_activity": {
+      "minimum": 0,
+      "title": "R1 Channel Activity",
+      "type": "number"
+    },
+    "r1_channel_activity_pass": {
+      "title": "R1 Channel Activity Pass",
+      "type": "boolean"
+    },
+    "r1_margin_pass": {
+      "title": "R1 Margin Pass",
+      "type": "boolean"
+    },
+    "r1_point_delta": {
+      "title": "R1 Point Delta",
+      "type": "number"
+    },
+    "r1_post_selection_refit_pass": {
+      "title": "R1 Post Selection Refit Pass",
+      "type": "boolean"
+    },
+    "r1_reaction_rmse": {
+      "minimum": 0,
+      "title": "R1 Reaction Rmse",
+      "type": "number"
+    },
+    "r1_selected_update": {
+      "minimum": 0,
+      "title": "R1 Selected Update",
+      "type": "integer"
+    },
+    "r1_sign_accuracy": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "R1 Sign Accuracy",
+      "type": "number"
+    },
+    "r1_target_bootstrap_interval": {
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "title": "R1 Target Bootstrap Interval",
+      "type": "array"
+    },
+    "receipt_id": {
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "rollout_mass_max_relative_error": {
+      "minimum": 0,
+      "title": "Rollout Mass Max Relative Error",
+      "type": "number"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail_retired"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "test_contract_id": {
+      "title": "Test Contract Id",
+      "type": "string"
+    },
+    "update_zero_selectable": {
+      "const": true,
+      "default": true,
+      "title": "Update Zero Selectable",
+      "type": "boolean"
+    },
+    "weighted_gauge_max_abs_error": {
+      "minimum": 0,
+      "title": "Weighted Gauge Max Abs Error",
+      "type": "number"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "test_contract_id",
+    "status",
+    "r0_calibration_repeats",
+    "r0_audit_repeats",
+    "r0_required_margin",
+    "r0_audit_false_promotions",
+    "r0_audit_false_promotion_upper_95",
+    "r0_false_selection_guard_pass",
+    "r1_selected_update",
+    "r1_post_selection_refit_pass",
+    "r1_point_delta",
+    "r1_target_bootstrap_interval",
+    "r1_margin_pass",
+    "r1_reaction_rmse",
+    "r1_sign_accuracy",
+    "r1_channel_activity",
+    "r1_channel_activity_pass",
+    "weighted_gauge_max_abs_error",
+    "rollout_mass_max_relative_error",
+    "probability_normalization_max_abs_error",
+    "control_target_mask_max_abs_error",
+    "fixed_channel_max_abs_change",
+    "protected_metrics_pass",
+    "config_hash",
+    "implementation_hash",
+    "environment_hash"
+  ],
+  "title": "ReactionRecoveryTestReceipt",
+  "type": "object"
+}

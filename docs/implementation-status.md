@@ -16,13 +16,14 @@ Implemented in this repository:
 - CLI/API, full content/reload verification, correction/context audit helpers;
 - CPU regression, leakage, corruption, fault, resume, compatibility, and wheel CI.
 
-Dev22 retains the component-qualified boundary introduced in dev18: the T00
+Dev23 retains the component-qualified boundary introduced in dev18: the T00
 pooled finite-measure contract, public API/CLI, strict channel-isolation
 contract, and focused invariants. The external pooled Renz adapter passed T00
 with 495 guides and 277,200 cells. T04 independently passed its fixed-truth
 numerical qualification. T02A now freezes the independent raw-count and
-relative-mass sampling noise surface from 100 repeats without a learned model;
-no pooled Renz dynamics component is promoted. See
+relative-mass sampling noise surface from 100 repeats without a learned model.
+T07S separately passes learned constant-reaction recovery on synthetic
+complete-denominator catalogs; no pooled Renz dynamics component is promoted. See
 [component qualification](component-qualification.md).
 
 T01 v1 and v2 are implemented fail-closed and have been exercised on the
@@ -47,7 +48,18 @@ variance relative error is 0.004459. This is numerical software evidence; it
 does not qualify a learned channel or biological model. See the
 [detailed T04 record](t04-particle-engine-qualification.md).
 
-Local acceptance result: 126 tests passed with one CUDA-only skip and 86.38%
+T07S isolates target constant reaction as the sole trainable channel. It uses
+119 independent zero-truth refits split into calibration and audit sets,
+retains update 0, selects on separate validation catalogs, performs a fresh
+post-selection refit, and evaluates independent test catalogs once. The R1
+target-balanced RMSE delta is -0.567863 with target-bootstrap interval
+[-0.695670, -0.410235]; reaction RMSE is 0.017233 and all 12 nonzero signs are
+recovered. Fixed channels, the complete-denominator gauge, probability sums,
+control mask, and streaming relative masses pass their tolerances. This is
+software/synthetic qualification, not evidence about a cohort. See the
+[detailed T07S record](t07s-reaction-recovery.md).
+
+Local acceptance result: 130 tests passed with one CUDA-only skip and 86.66%
 coverage; `receipts/local-validation.json` is the machine authority. Ruff,
 mypy, generated-schema, documentation-link, wheel
 namespace/license, clean-wheel lifecycle, and frozen-CREDO preflight checks
@@ -100,7 +112,7 @@ conditional-interaction, and joint nulls, freezes fold and seed identities,
 and strengthens noninteraction comparators. That T03 code remains unqualified
 until T01, T02, and the prescribed pooled pilot pass.
 
-Deliberately not asserted complete in `4.0.0.dev22`:
+Deliberately not asserted complete in `4.0.0.dev23`:
 
 - stable CREDO entry-point discovery;
 - in-repository real-cohort adapters, biological thresholds, or biological claims;
@@ -146,5 +158,5 @@ authority.
 
 Exact future use depends on the branch commit, `REPOSITORY.sha256`, the
 wheel/sdist bytes, generated schemas, and the local validation receipt. A clean
-dev22 commit and release receipt are necessary—but not sufficient—before any
+dev23 commit and release receipt are necessary—but not sufficient—before any
 pilot deployment or stable promotion.

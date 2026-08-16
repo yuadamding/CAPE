@@ -76,6 +76,11 @@ def main() -> None:
     t02a_interpretation_review = Path(
         "/home/yding1995/.codex/attachments/801c74d4-66df-455e-8b14-0c6730dce794/pasted-text.txt"
     )
+    t07s_review = Path(
+        "/home/yding1995/.codex/attachments/8b562990-5737-48e1-8374-4dc608aa0541/pasted-text.txt"
+    )
+    t07s_evidence = workspace / "credo_v4_t07s_reaction_recovery_20260815"
+    t07s_report = workspace / "CREDO_V4_T07S_REACTION_RECOVERY_20260815_RUN_REPORT.md"
     receipt = {
         "schema_version": 1,
         "status": "engineering_only",
@@ -108,6 +113,18 @@ def main() -> None:
             if t02a_interpretation_review.is_file()
             else None
         ),
+        "t07s_review_sha256": sha256_file(t07s_review) if t07s_review.is_file() else None,
+        "t07s_qualification_sha256": (
+            sha256_file(t07s_evidence / "reaction-recovery.json")
+            if (t07s_evidence / "reaction-recovery.json").is_file()
+            else None
+        ),
+        "t07s_test_receipt_sha256": (
+            sha256_file(t07s_evidence / "TEST_RECEIPT.json")
+            if (t07s_evidence / "TEST_RECEIPT.json").is_file()
+            else None
+        ),
+        "t07s_run_report_sha256": sha256_file(t07s_report) if t07s_report.is_file() else None,
         "tests_passed": args.tests_passed,
         "coverage_percent": args.coverage_percent,
         "distributions": distributions,

@@ -94,6 +94,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="run the independent T04 fixed-truth numerical qualification",
     )
     particle_engine.add_argument("--output", type=_path, required=True)
+    reaction = sub.add_parser(
+        "qualify-reaction",
+        help="run the independent T07S learned constant-reaction qualification",
+    )
+    reaction.add_argument("--output", type=_path, required=True)
     raw_noise = sub.add_parser(
         "qualify-raw-noise",
         help="run the independent T02A raw-count and relative-mass noise qualification",
@@ -206,6 +211,8 @@ def main(argv: list[str] | None = None) -> int:
         )
     elif command == "qualify-particle-engine":
         result = api.qualify_particle_engine(args.output)
+    elif command == "qualify-reaction":
+        result = api.qualify_reaction(args.output)
     elif command == "qualify-raw-noise":
         result = api.qualify_raw_noise(
             args.output,

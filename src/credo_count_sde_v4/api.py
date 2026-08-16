@@ -32,6 +32,8 @@ from .contracts import (
     RawCountMassNoiseAmendmentReceipt,
     RawCountMassNoiseBundle,
     RawCountMassNoiseReceipt,
+    ReactionRecoveryQualificationBundle,
+    ReactionRecoveryTestReceipt,
     ResolvedConfig,
     SealedRunManifest,
     SelectionManifest,
@@ -58,6 +60,7 @@ from .numerics import (
 )
 from .persistence import LifecycleLedger, verify_directory
 from .prepare import prepare_representation
+from .reaction import qualify_reaction_recovery, verify_reaction_recovery_qualification
 from .representation import qualify_count_representation, verify_count_representation
 from .store import CountStore
 from .training import resume_training, train_model
@@ -135,6 +138,15 @@ def qualify_particle_engine(destination: Path) -> Path:
     _supported_preflight()
     result = run_particle_engine_qualification(destination)
     verify_particle_engine_qualification(result)
+    return result
+
+
+def qualify_reaction(destination: Path) -> Path:
+    """Run and fully verify the independent T07S learned-reaction test."""
+
+    _supported_preflight()
+    result = qualify_reaction_recovery(destination)
+    verify_reaction_recovery_qualification(result)
     return result
 
 
@@ -225,32 +237,37 @@ def validate_contract(path: Path) -> dict[str, Any]:
     if "calibration_id" in payload and "rows" in payload:
         selected = StateSelectionCalibrationResults
     else:
-        discriminators = (
-            ("compiled_run_id", CompiledRunContract),
-            ("qualification_id", ParticleEngineQualificationBundle),
-            ("noise_id", RawCountMassNoiseBundle),
-            ("parent_bundle_verified", RawCountMassNoiseAmendmentReceipt),
-            ("amendment_id", RawCountMassNoiseAmendment),
-            ("representation_id", CountRepresentationBundle),
-            ("pooled_data_id", PooledFiniteMeasureBundle),
-            ("test_contract_id", ComponentTestContract),
-            (
-                "ou_largest_grid_variance_relative_error",
-                ParticleEngineTestReceipt,
-            ),
-            ("interval_log_mass_rmse_q95", RawCountMassNoiseReceipt),
-            ("receipt_role", ComponentTestReceiptV2),
-            ("receipt_id", ComponentTestReceipt),
-            ("prepared_id", PreparedRepresentation),
-            ("evaluation_id", EvaluationBundleManifest),
-            ("run_id", InferenceBundleManifest),
-            ("sealed_id", SealedRunManifest),
-            ("selection_id", SelectionManifest),
-            ("calibration_id", StateSelectionCalibration),
-            ("store_id", CountStoreManifest),
-            ("study_id", SemanticStudySnapshot),
-        )
-        selected = next((model for field, model in discriminators if field in payload), None)
+        if payload.get("method") == "complete_denominator_dm_reaction_recovery_v1":
+            selected = ReactionRecoveryQualificationBundle
+        elif "r0_false_selection_guard_pass" in payload:
+            selected = ReactionRecoveryTestReceipt
+        else:
+            discriminators = (
+                ("compiled_run_id", CompiledRunContract),
+                ("qualification_id", ParticleEngineQualificationBundle),
+                ("noise_id", RawCountMassNoiseBundle),
+                ("parent_bundle_verified", RawCountMassNoiseAmendmentReceipt),
+                ("amendment_id", RawCountMassNoiseAmendment),
+                ("representation_id", CountRepresentationBundle),
+                ("pooled_data_id", PooledFiniteMeasureBundle),
+                ("test_contract_id", ComponentTestContract),
+                (
+                    "ou_largest_grid_variance_relative_error",
+                    ParticleEngineTestReceipt,
+                ),
+                ("interval_log_mass_rmse_q95", RawCountMassNoiseReceipt),
+                ("receipt_role", ComponentTestReceiptV2),
+                ("receipt_id", ComponentTestReceipt),
+                ("prepared_id", PreparedRepresentation),
+                ("evaluation_id", EvaluationBundleManifest),
+                ("run_id", InferenceBundleManifest),
+                ("sealed_id", SealedRunManifest),
+                ("selection_id", SelectionManifest),
+                ("calibration_id", StateSelectionCalibration),
+                ("store_id", CountStoreManifest),
+                ("study_id", SemanticStudySnapshot),
+            )
+            selected = next((model for field, model in discriminators if field in payload), None)
     if selected is None:
         raise ValueError("Unknown contract discriminator.")
     selected.model_validate(payload)

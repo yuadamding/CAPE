@@ -8,7 +8,7 @@ count_state → count_measure → count_context
 ```
 
 It is a sibling of, not a modification to, the frozen CREDO checkout. Version
-`4.0.0.dev22` is engineering software; it is not a biological result and cannot
+`4.0.0.dev23` is engineering software; it is not a biological result and cannot
 be relabeled as stable `4.0`.
 
 Implemented surfaces include strict hash-bound contracts, sparse count storage,
@@ -17,11 +17,11 @@ likelihood, separate state/fitness/context channels, immutable checkpoint and
 resume, streaming inference, four-branch contrasts, one-shot evaluation, and a
 sealed aggregate. The repository contains no cohort adapter or biological data.
 
-Dev21 retains the two immutable, failed T01 Hellinger candidates and the
+Dev23 retains the two immutable, failed T01 Hellinger candidates and the
 passed T04 fixed-pool particle-engine qualification, then adds the completed
 T02A raw-count and relative-mass noise calibration. T01 blocks the
 pooled real-data state-dynamics path; it does not block T02A raw-count/mass
-noise qualification or the synthetic T04–T07 numerical path. T00 has an
+noise qualification or the passed synthetic T04/T07S numerical path. T00 has an
 explicit, immutable pooled finite-measure API and receipt. The T03 source ×
 target hardening is engineering code, not a qualified real-cohort result.
 
@@ -41,6 +41,9 @@ credo-v4 verify /tmp/credo-v4-demo/work/sealed --level full
 # Independent component test; no cohort or GPU is used.
 credo-v4 qualify-particle-engine --output /tmp/T04_PARTICLE_ENGINE
 
+# Learned constant-reaction recovery; synthetic CPU catalogs only.
+credo-v4 qualify-reaction --output /tmp/T07S_REACTION_RECOVERY
+
 # Independent T02A calibration against a passed T00 bundle and raw CountStore.
 credo-v4 qualify-raw-noise \
   --pooled-bundle /path/to/T00_pooled_data_contract \
@@ -53,7 +56,8 @@ See [architecture](docs/architecture.md), [contracts](docs/contracts.md),
 [component qualification](docs/component-qualification.md),
 [the detailed T01 record](docs/t01-representation-qualification.md),
 [the detailed T02A record](docs/t02a-raw-count-mass-noise.md),
-[the detailed T04 record](docs/t04-particle-engine-qualification.md), and
+[the detailed T04 record](docs/t04-particle-engine-qualification.md),
+[the detailed T07S record](docs/t07s-reaction-recovery.md), and
 [release policy](docs/release.md).
 
 Current verification status is recorded in

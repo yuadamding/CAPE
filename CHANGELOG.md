@@ -1,5 +1,17 @@
 # Changelog
 
+## 4.0.0.dev23 — 2026-08-15
+
+- add the independent T07S learned constant-reaction qualification through the
+  production complete-denominator Dirichlet–multinomial objective, relative-
+  fitness gauge, and streaming mass rollout;
+- calibrate the zero-reaction guard with 59 genuine refits and adjudicate it
+  on 60 independent audit refits before opening the nonzero recovery test;
+- retain update 0, select on separate synthetic validation catalogs, refit from
+  a fresh initialization, and evaluate once on independent test catalogs;
+- persist null effects, target-bootstrap draws, selected safe tensors,
+  row-level recovery metrics, typed receipts, and a recomputing verifier.
+
 ## 4.0.0.dev22 — 2026-08-15
 
 - preserve the immutable T02A v2 qualification while adding a derived,
