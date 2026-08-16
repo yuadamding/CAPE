@@ -43,10 +43,10 @@
       "type": "object"
     }
   },
-  "$id": "https://credo.local/schemas/reaction-recovery-metric-amendment.v1.json",
+  "$id": "https://credo.local/schemas/reaction-recovery-metric-amendment.v2.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Legacy dev24 R1-only metric amendment retained for contract validation.",
+  "description": "Immutable duration-correct R0/R1 evidence amendment over dev23 T07S.",
   "properties": {
     "amendment_id": {
       "title": "Amendment Id",
@@ -56,6 +56,9 @@
       "$ref": "#/$defs/ArtifactRef"
     },
     "component_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "corrected_null_interval_refits": {
       "$ref": "#/$defs/ArtifactRef"
     },
     "environment_hash": {
@@ -69,8 +72,11 @@
       "title": "False Promotion Upper Limit",
       "type": "number"
     },
+    "legacy_null_refits": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
     "method": {
-      "const": "t07s_interval_metric_amendment_v1",
+      "const": "t07s_interval_metric_amendment_v2",
       "title": "Method",
       "type": "string"
     },
@@ -82,8 +88,11 @@
     "null_model_effects": {
       "$ref": "#/$defs/ArtifactRef"
     },
-    "null_refits": {
-      "$ref": "#/$defs/ArtifactRef"
+    "optimizer_rerun": {
+      "const": false,
+      "default": false,
+      "title": "Optimizer Rerun",
+      "type": "boolean"
     },
     "parent_artifacts_manifest_sha256": {
       "pattern": "^[0-9a-f]{64}$",
@@ -99,6 +108,11 @@
       "title": "Parent Qualification Id",
       "type": "string"
     },
+    "r0_metric_estimand": {
+      "const": "centered_interval_log_frequency_change",
+      "title": "R0 Metric Estimand",
+      "type": "string"
+    },
     "recovery_curve": {
       "$ref": "#/$defs/ArtifactRef"
     },
@@ -106,8 +120,8 @@
       "$ref": "#/$defs/ArtifactRef"
     },
     "schema_version": {
-      "const": 1,
-      "default": 1,
+      "const": 2,
+      "default": 2,
       "title": "Schema Version",
       "type": "integer"
     },
@@ -128,9 +142,11 @@
     "parent_bundle_sha256",
     "parent_artifacts_manifest_sha256",
     "metric_estimand",
+    "r0_metric_estimand",
     "false_promotion_upper_limit",
     "environment_hash",
-    "null_refits",
+    "legacy_null_refits",
+    "corrected_null_interval_refits",
     "null_model_effects",
     "recovery_curve",
     "recovery_series",
@@ -140,6 +156,6 @@
     "test_receipt",
     "component_receipt"
   ],
-  "title": "ReactionRecoveryMetricAmendmentV1",
+  "title": "ReactionRecoveryMetricAmendment",
   "type": "object"
 }

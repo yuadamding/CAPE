@@ -1,5 +1,18 @@
 # Changelog
 
+## 4.0.0.dev25 — 2026-08-16
+
+- preserve the dev23 model and dev24 R1 correction while deriving a new
+  duration-correct `NULL_INTERVAL_REFITS.parquet` from persisted null seeds,
+  selected updates, and coefficient vectors without any optimizer rerun;
+- compute the R0 margin and false-promotion audit in the same centered interval
+  log-frequency-change units as R1, retaining the unchanged 0/60 decision and
+  one-sided upper bound 0.048703 under the frozen 0.05 limit;
+- add typed v3 receipt and v2 amendment contracts binding both legacy and
+  corrected null tables, their estimand, and `optimizer_rerun=false`;
+- faithfully recreate the legacy dev23 null metric in regression tests and
+  require its nonzero-selected deltas to differ from the corrected derivation.
+
 ## 4.0.0.dev24 — 2026-08-16
 
 - correct the T07S endpoint estimand to compare duration-integrated centered

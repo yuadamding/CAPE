@@ -117,8 +117,8 @@
       "type": "string"
     },
     "recipe_version": {
-      "const": "4.0.dev24",
-      "default": "4.0.dev24",
+      "const": "4.0.dev25",
+      "default": "4.0.dev25",
       "title": "Recipe Version",
       "type": "string"
     },

@@ -1,8 +1,9 @@
 # T07S learned constant-reaction recovery
 
 Last verified: 2026-08-16. Status: immutable dev23 training/parameter-recovery
-record. Its primary endpoint RMSE table is superseded by the
-[dev24 duration-correct amendment](t07s-reaction-metric-amendment.md).
+record. Its primary endpoint RMSE table is superseded by the dev24 R1
+correction and the authoritative
+[dev25 unified R0/R1 amendment](t07s-null-interval-amendment.md).
 
 The committed external evidence directory is
 `credo_v4_t07s_reaction_recovery_20260815`. Its qualification ID is

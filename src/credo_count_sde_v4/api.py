@@ -33,9 +33,11 @@ from .contracts import (
     RawCountMassNoiseBundle,
     RawCountMassNoiseReceipt,
     ReactionRecoveryMetricAmendment,
+    ReactionRecoveryMetricAmendmentV1,
     ReactionRecoveryQualificationBundle,
     ReactionRecoveryTestReceipt,
     ReactionRecoveryTestReceiptV1,
+    ReactionRecoveryTestReceiptV3,
     ResolvedConfig,
     SealedRunManifest,
     SelectionManifest,
@@ -258,8 +260,12 @@ def validate_contract(path: Path) -> dict[str, Any]:
             "complete_denominator_dm_reaction_recovery_v2",
         }:
             selected = ReactionRecoveryQualificationBundle
-        elif payload.get("method") == "t07s_interval_metric_amendment_v1":
+        elif payload.get("method") == "t07s_interval_metric_amendment_v2":
             selected = ReactionRecoveryMetricAmendment
+        elif payload.get("method") == "t07s_interval_metric_amendment_v1":
+            selected = ReactionRecoveryMetricAmendmentV1
+        elif payload.get("schema_version") == 3 and "r0_false_promotion_guard_pass" in payload:
+            selected = ReactionRecoveryTestReceiptV3
         elif "r0_false_promotion_guard_pass" in payload:
             selected = ReactionRecoveryTestReceipt
         elif "r0_false_selection_guard_pass" in payload:

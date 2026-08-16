@@ -1,6 +1,6 @@
 # Component-wise qualification program
 
-Status: authoritative development order for `4.0.0.dev24`. This page defines
+Status: authoritative development order for `4.0.0.dev25`. This page defines
 software promotion, not a biological claim.
 
 CREDO V4 is qualified as three dependency tracks rather than one large training
@@ -177,14 +177,15 @@ audit refits produced zero false promotions (one-sided 95% upper bound
 0.048703 under the frozen 0.05 gate). Nonzero checkpoints were internally
 selected in 9/59 calibration and 4/60 audit refits, so this is a false-
 promotion—not false-selection—guard. The nonzero R1 test selected update 100
-and was freshly refit. Dev24 reuses that model without optimizer work and
-correctly compares duration-integrated reaction with endpoint change. Its
+and was freshly refit. Dev25 reuses that model without optimizer work and
+correctly evaluates both R0 and R1 in duration-integrated endpoint units. Its
 target-balanced RMSE is 0.033191 versus 0.706508 for zero reaction, a delta of
 -0.673317 with target-bootstrap interval [-0.829965, -0.482187]. Raw reaction RMSE was
 0.017233 and sign accuracy was 1.0. This qualifies learned constant scalar
 reaction in synthetic complete catalogs only. See the
 [dev23 training record](t07s-reaction-recovery.md) and authoritative
-[dev24 metric amendment](t07s-reaction-metric-amendment.md).
+[dev24 R1 amendment](t07s-reaction-metric-amendment.md) and authoritative
+[dev25 unified R0/R1 amendment](t07s-null-interval-amendment.md).
 
 T02A consumed the exact passed T00 population and complete common-34,699 raw
 CountStore. One hundred balanced cell split-halves at both checkpoints and 100

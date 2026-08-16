@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 import torch
 
+from credo_count_sde_v4.api import validate_contract
 from credo_count_sde_v4.canonical import canonical_json_bytes, contract_id, path_manifest
 from credo_count_sde_v4.contracts import (
     ComponentTestContract,
@@ -17,6 +18,7 @@ from credo_count_sde_v4.contracts import (
     ReactionRecoveryQualificationBundle,
     ReactionRecoveryTestReceipt,
     ReactionRecoveryTestReceiptV1,
+    ReactionRecoveryTestReceiptV3,
 )
 from credo_count_sde_v4.errors import IntegrityError
 from credo_count_sde_v4.persistence import artifact_ref
@@ -28,8 +30,11 @@ from credo_count_sde_v4.reaction import (
 )
 from credo_count_sde_v4.reaction.qualification import (
     _bootstrap_from_draws,
+    _catalog,
+    _false_promotion_upper,
     _losses,
     _new_model,
+    _observed_relative_effect,
     _recovery_rows,
     _target_metrics,
 )
@@ -58,6 +63,54 @@ def _make_legacy_parent(current: Path, destination: Path) -> Path:
     current_receipt = ReactionRecoveryTestReceipt.model_validate_json(
         (destination / "TEST_RECEIPT.json").read_text()
     )
+    corrected_null = pd.read_parquet(destination / "NULL_REFITS.parquet")
+    effects = pd.read_parquet(destination / "NULL_MODEL_EFFECTS.parquet")
+    legacy_null_rows: list[dict[str, object]] = []
+    zero = tuple(0.0 for _ in range(13))
+    for summary in corrected_null.itertuples():
+        fitted = effects.loc[
+            (effects.partition == summary.partition) & (effects.repeat == summary.repeat)
+        ].sort_values("target_index")
+        model = _new_model(3)
+        with torch.no_grad():
+            model.target_fitness.copy_(
+                torch.tensor(fitted.fitted_raw_fitness.to_numpy(), dtype=torch.float64)
+            )
+        test = _catalog(zero, pools=3, seed=int(summary.seed) + 2, catalog="null_test")
+        ordered = test.sort_values("series_index", kind="stable").reset_index(drop=True)
+        target_index = torch.tensor(ordered.target_index.to_numpy(), dtype=torch.int64)
+        pool_index = torch.tensor(ordered.pool_index.to_numpy(), dtype=torch.int64)
+        control = torch.tensor(ordered.is_control.to_numpy(), dtype=torch.bool)
+        exposure = torch.tensor(
+            ordered.source_count.to_numpy(dtype=np.float64) + 0.5,
+            dtype=torch.float64,
+        )
+        with torch.no_grad():
+            predicted_rate = model.relative_fitness(
+                target_index, pool_index, control, exposure
+            ).numpy()
+        observed_interval = _observed_relative_effect(ordered)
+        legacy_series = ordered.copy()
+        legacy_series["observed_relative_fitness"] = observed_interval
+        legacy_series["predicted_relative_fitness"] = predicted_rate
+        legacy_series["baseline_relative_fitness"] = 0.0
+        legacy_series["new_squared_error"] = np.square(predicted_rate - observed_interval)
+        legacy_series["baseline_squared_error"] = np.square(observed_interval)
+        legacy_target = _target_metrics(legacy_series)
+        new, baseline, delta = _losses(legacy_target)
+        legacy_null_rows.append(
+            {
+                "partition": summary.partition,
+                "repeat": int(summary.repeat),
+                "seed": int(summary.seed),
+                "selected_update": int(summary.selected_update),
+                "new_target_balanced_rmse": new,
+                "baseline_target_balanced_rmse": baseline,
+                "delta": delta,
+            }
+        )
+    legacy_null = pd.DataFrame(legacy_null_rows)
+    legacy_null.to_parquet(destination / "NULL_REFITS.parquet", index=False)
     series = pd.read_parquet(destination / "RECOVERY_SERIES.parquet")
     old = series.drop(
         columns=[
@@ -69,9 +122,7 @@ def _make_legacy_parent(current: Path, destination: Path) -> Path:
             "baseline_squared_error",
         ]
     )
-    old["observed_relative_fitness"] = series[
-        "observed_centered_interval_log_frequency_change"
-    ]
+    old["observed_relative_fitness"] = series["observed_centered_interval_log_frequency_change"]
     old["predicted_relative_fitness"] = series["predicted_centered_relative_fitness_rate"]
     old["baseline_relative_fitness"] = 0.0
     old["new_squared_error"] = np.square(
@@ -85,6 +136,11 @@ def _make_legacy_parent(current: Path, destination: Path) -> Path:
     del new_loss, baseline_loss
     draws = pd.read_parquet(destination / "BOOTSTRAP_TARGET_DRAWS.parquet")
     interval, _ = _bootstrap_from_draws(target, draws)
+    calibration = legacy_null.loc[legacy_null.partition == "calibration", "delta"].to_numpy()
+    legacy_margin = max(0.0, -float(np.quantile(calibration, 0.05, method="lower")))
+    audit = legacy_null.loc[legacy_null.partition == "audit", "delta"].to_numpy()
+    legacy_false_promotions = int(np.sum(audit < -legacy_margin))
+    legacy_false_upper = _false_promotion_upper(legacy_false_promotions, len(audit))
     legacy_receipt_payload = {
         "schema_version": 1,
         "receipt_id": "pending",
@@ -92,15 +148,15 @@ def _make_legacy_parent(current: Path, destination: Path) -> Path:
         "status": "pass",
         "r0_calibration_repeats": current_receipt.r0_calibration_repeats,
         "r0_audit_repeats": current_receipt.r0_audit_repeats,
-        "r0_required_margin": current_receipt.r0_required_margin,
-        "r0_audit_false_promotions": current_receipt.r0_audit_false_promotions,
-        "r0_audit_false_promotion_upper_95": current_receipt.r0_audit_false_promotion_upper_95,
+        "r0_required_margin": legacy_margin,
+        "r0_audit_false_promotions": legacy_false_promotions,
+        "r0_audit_false_promotion_upper_95": legacy_false_upper,
         "r0_false_selection_guard_pass": True,
         "r1_selected_update": current_receipt.r1_selected_update,
         "r1_post_selection_refit_pass": True,
         "r1_point_delta": point_delta,
         "r1_target_bootstrap_interval": interval,
-        "r1_margin_pass": interval[1] < -current_receipt.r0_required_margin,
+        "r1_margin_pass": interval[1] < -legacy_margin,
         "r1_reaction_rmse": current_receipt.r1_reaction_rmse,
         "r1_sign_accuracy": current_receipt.r1_sign_accuracy,
         "r1_channel_activity": current_receipt.r1_channel_activity,
@@ -128,6 +184,12 @@ def _make_legacy_parent(current: Path, destination: Path) -> Path:
     bundle_payload["method"] = "complete_denominator_dm_reaction_recovery_v1"
     for field, name, schema_id, media_type in (
         (
+            "null_refits",
+            "NULL_REFITS.parquet",
+            "credo.t07s_null_refits",
+            "application/x-parquet",
+        ),
+        (
             "recovery_series",
             "RECOVERY_SERIES.parquet",
             "credo.t07s_series",
@@ -152,9 +214,7 @@ def _make_legacy_parent(current: Path, destination: Path) -> Path:
             schema_id=schema_id,
             media_type=media_type,
         ).model_dump(mode="json")
-    bundle_payload["qualification_id"] = contract_id(
-        bundle_payload, id_field="qualification_id"
-    )
+    bundle_payload["qualification_id"] = contract_id(bundle_payload, id_field="qualification_id")
     bundle = ReactionRecoveryQualificationBundle.model_validate(bundle_payload)
     _write_json(destination / "reaction-recovery.json", bundle.model_dump(mode="json"))
     _write_json(
@@ -184,7 +244,7 @@ def legacy_t07s(qualified_t07s: Path, tmp_path_factory: pytest.TempPathFactory) 
 
 @pytest.fixture(scope="module")
 def amended_t07s(legacy_t07s: Path, tmp_path_factory: pytest.TempPathFactory) -> Path:
-    destination = tmp_path_factory.mktemp("t07s-amendment") / "dev24-amendment"
+    destination = tmp_path_factory.mktemp("t07s-amendment") / "dev25-amendment"
     amend_reaction_recovery_metrics(destination, parent=legacy_t07s)
     return destination
 
@@ -274,23 +334,36 @@ def test_t07s_interval_prediction_multiplies_rate_by_duration() -> None:
     np.testing.assert_allclose(ratio, targeting.duration, atol=0.0, rtol=0.0)
 
 
-def test_dev24_amendment_reuses_parent_model_and_corrects_metric(
+def test_dev25_amendment_reuses_parent_model_and_corrects_r0_r1_metrics(
     amended_t07s: Path, legacy_t07s: Path
 ) -> None:
-    amendment = verify_reaction_recovery_metric_amendment(
-        amended_t07s, parent=legacy_t07s
-    )
-    receipt = ReactionRecoveryTestReceipt.model_validate_json(
+    amendment = verify_reaction_recovery_metric_amendment(amended_t07s, parent=legacy_t07s)
+    receipt = ReactionRecoveryTestReceiptV3.model_validate_json(
         (amended_t07s / "TEST_RECEIPT.json").read_text()
     )
     assert isinstance(amendment, ReactionRecoveryMetricAmendment)
     assert receipt.r0_false_promotion_guard_pass
+    assert receipt.r0_metric_estimand == "centered_interval_log_frequency_change"
+    assert receipt.optimizer_rerun is False
     assert receipt.r0_calibration_nonzero_checkpoint_selections == 9
     assert receipt.r0_audit_nonzero_checkpoint_selections == 4
     assert receipt.r0_audit_false_promotion_upper_95 < 0.05
     assert receipt.r1_interval_effect_target_balanced_rmse < 0.04
     assert receipt.r1_point_delta < -0.6
     assert receipt.r1_target_bootstrap_interval[1] < -0.45
+    legacy = pd.read_parquet(amended_t07s / "NULL_REFITS.parquet")
+    corrected = pd.read_parquet(amended_t07s / "NULL_INTERVAL_REFITS.parquet")
+    nonzero = corrected.selected_update.ne(0)
+    assert (
+        corrected.loc[nonzero, "interval_effect_rmse_delta"].ne(legacy.loc[nonzero, "delta"]).any()
+    )
+    calibration = corrected.loc[
+        corrected.partition == "calibration", "interval_effect_rmse_delta"
+    ].to_numpy()
+    corrected_margin = max(0.0, -float(np.quantile(calibration, 0.05, method="lower")))
+    audit = corrected.loc[corrected.partition == "audit", "interval_effect_rmse_delta"].to_numpy()
+    assert receipt.r0_required_margin == corrected_margin
+    assert receipt.r0_audit_false_promotions == int(np.sum(audit < -corrected_margin))
     parent_link = json.loads((amended_t07s / "PARENT_LINK.json").read_text())
     assert parent_link["optimizer_rerun"] is False
     assert (amended_t07s / "SELECTED_MODEL.safetensors").read_bytes() == (
@@ -298,7 +371,7 @@ def test_dev24_amendment_reuses_parent_model_and_corrects_metric(
     ).read_bytes()
 
 
-def test_dev24_amendment_is_no_clobber_and_parent_tamper_evident(
+def test_dev25_amendment_is_no_clobber_and_parent_tamper_evident(
     amended_t07s: Path, legacy_t07s: Path
 ) -> None:
     with pytest.raises(FileExistsError):
@@ -312,6 +385,40 @@ def test_dev24_amendment_is_no_clobber_and_parent_tamper_evident(
     finally:
         parent_model.write_bytes(original)
     verify_reaction_recovery_metric_amendment(amended_t07s, parent=legacy_t07s)
+
+    corrected_null = amended_t07s / "NULL_INTERVAL_REFITS.parquet"
+    corrected_original = corrected_null.read_bytes()
+    corrected_null.write_bytes(corrected_original + b"\n")
+    try:
+        with pytest.raises(IntegrityError, match="Artifact mismatch"):
+            verify_reaction_recovery_metric_amendment(amended_t07s, parent=legacy_t07s)
+    finally:
+        corrected_null.write_bytes(corrected_original)
+    verify_reaction_recovery_metric_amendment(amended_t07s, parent=legacy_t07s)
+
+
+def test_reaction_contract_dispatch_preserves_v1_and_selects_dev25_v2_v3(
+    amended_t07s: Path, legacy_t07s: Path, tmp_path: Path
+) -> None:
+    legacy = validate_contract(legacy_t07s / "reaction-recovery.json")
+    amendment_payload = json.loads((amended_t07s / "reaction-recovery-amendment.json").read_text())
+    amendment = validate_contract(amended_t07s / "reaction-recovery-amendment.json")
+    receipt = validate_contract(amended_t07s / "TEST_RECEIPT.json")
+    dev24_payload = dict(amendment_payload)
+    dev24_payload["schema_version"] = 1
+    dev24_payload["method"] = "t07s_interval_metric_amendment_v1"
+    dev24_payload["null_refits"] = dev24_payload.pop("legacy_null_refits")
+    dev24_payload.pop("corrected_null_interval_refits")
+    dev24_payload.pop("r0_metric_estimand")
+    dev24_payload.pop("optimizer_rerun")
+    dev24_payload["amendment_id"] = contract_id(dev24_payload, id_field="amendment_id")
+    dev24_contract = tmp_path / "dev24-amendment.json"
+    _write_json(dev24_contract, dev24_payload)
+    validated_dev24 = validate_contract(dev24_contract)
+    assert legacy["contract_type"] == "ReactionRecoveryQualificationBundle"
+    assert validated_dev24["contract_type"] == "ReactionRecoveryMetricAmendmentV1"
+    assert amendment["contract_type"] == "ReactionRecoveryMetricAmendment"
+    assert receipt["contract_type"] == "ReactionRecoveryTestReceiptV3"
 
 
 def test_t07s_protects_gauge_controls_and_fixed_channels(qualified_t07s: Path) -> None:

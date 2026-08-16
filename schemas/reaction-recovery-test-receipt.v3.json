@@ -1,0 +1,298 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/reaction-recovery-test-receipt.v3.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Unified dev25 T07S decision surface with duration-correct R0 and R1.",
+  "properties": {
+    "config_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Config Hash",
+      "type": "string"
+    },
+    "control_target_mask_max_abs_error": {
+      "minimum": 0,
+      "title": "Control Target Mask Max Abs Error",
+      "type": "number"
+    },
+    "corrected_null_interval_refits": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "environment_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Environment Hash",
+      "type": "string"
+    },
+    "fixed_channel_max_abs_change": {
+      "minimum": 0,
+      "title": "Fixed Channel Max Abs Change",
+      "type": "number"
+    },
+    "implementation_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Implementation Hash",
+      "type": "string"
+    },
+    "legacy_null_refits": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "optimizer_rerun": {
+      "const": false,
+      "default": false,
+      "title": "Optimizer Rerun",
+      "type": "boolean"
+    },
+    "parent_qualification_id": {
+      "title": "Parent Qualification Id",
+      "type": "string"
+    },
+    "probability_normalization_max_abs_error": {
+      "minimum": 0,
+      "title": "Probability Normalization Max Abs Error",
+      "type": "number"
+    },
+    "protected_metrics_pass": {
+      "title": "Protected Metrics Pass",
+      "type": "boolean"
+    },
+    "r0_audit_false_promotion_upper_95": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "R0 Audit False Promotion Upper 95",
+      "type": "number"
+    },
+    "r0_audit_false_promotions": {
+      "minimum": 0,
+      "title": "R0 Audit False Promotions",
+      "type": "integer"
+    },
+    "r0_audit_nonzero_checkpoint_selection_rate": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "R0 Audit Nonzero Checkpoint Selection Rate",
+      "type": "number"
+    },
+    "r0_audit_nonzero_checkpoint_selections": {
+      "minimum": 0,
+      "title": "R0 Audit Nonzero Checkpoint Selections",
+      "type": "integer"
+    },
+    "r0_audit_repeats": {
+      "minimum": 59,
+      "title": "R0 Audit Repeats",
+      "type": "integer"
+    },
+    "r0_calibration_nonzero_checkpoint_selections": {
+      "minimum": 0,
+      "title": "R0 Calibration Nonzero Checkpoint Selections",
+      "type": "integer"
+    },
+    "r0_calibration_repeats": {
+      "minimum": 59,
+      "title": "R0 Calibration Repeats",
+      "type": "integer"
+    },
+    "r0_false_promotion_guard_pass": {
+      "title": "R0 False Promotion Guard Pass",
+      "type": "boolean"
+    },
+    "r0_metric_estimand": {
+      "const": "centered_interval_log_frequency_change",
+      "title": "R0 Metric Estimand",
+      "type": "string"
+    },
+    "r0_required_margin": {
+      "minimum": 0,
+      "title": "R0 Required Margin",
+      "type": "number"
+    },
+    "r1_channel_activity": {
+      "minimum": 0,
+      "title": "R1 Channel Activity",
+      "type": "number"
+    },
+    "r1_channel_activity_pass": {
+      "title": "R1 Channel Activity Pass",
+      "type": "boolean"
+    },
+    "r1_interval_effect_target_balanced_rmse": {
+      "minimum": 0,
+      "title": "R1 Interval Effect Target Balanced Rmse",
+      "type": "number"
+    },
+    "r1_margin_pass": {
+      "title": "R1 Margin Pass",
+      "type": "boolean"
+    },
+    "r1_metric_estimand": {
+      "const": "centered_interval_log_frequency_change",
+      "title": "R1 Metric Estimand",
+      "type": "string"
+    },
+    "r1_point_delta": {
+      "title": "R1 Point Delta",
+      "type": "number"
+    },
+    "r1_post_selection_refit_pass": {
+      "title": "R1 Post Selection Refit Pass",
+      "type": "boolean"
+    },
+    "r1_reaction_rmse": {
+      "minimum": 0,
+      "title": "R1 Reaction Rmse",
+      "type": "number"
+    },
+    "r1_selected_update": {
+      "minimum": 0,
+      "title": "R1 Selected Update",
+      "type": "integer"
+    },
+    "r1_sign_accuracy": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "R1 Sign Accuracy",
+      "type": "number"
+    },
+    "r1_target_bootstrap_interval": {
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "title": "R1 Target Bootstrap Interval",
+      "type": "array"
+    },
+    "r1_zero_baseline_interval_effect_target_balanced_rmse": {
+      "minimum": 0,
+      "title": "R1 Zero Baseline Interval Effect Target Balanced Rmse",
+      "type": "number"
+    },
+    "receipt_id": {
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "rollout_mass_max_relative_error": {
+      "minimum": 0,
+      "title": "Rollout Mass Max Relative Error",
+      "type": "number"
+    },
+    "schema_version": {
+      "const": 3,
+      "default": 3,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail_retired"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "test_contract_id": {
+      "title": "Test Contract Id",
+      "type": "string"
+    },
+    "update_zero_selectable": {
+      "const": true,
+      "default": true,
+      "title": "Update Zero Selectable",
+      "type": "boolean"
+    },
+    "weighted_gauge_max_abs_error": {
+      "minimum": 0,
+      "title": "Weighted Gauge Max Abs Error",
+      "type": "number"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "test_contract_id",
+    "parent_qualification_id",
+    "status",
+    "r0_calibration_repeats",
+    "r0_audit_repeats",
+    "r0_required_margin",
+    "r0_calibration_nonzero_checkpoint_selections",
+    "r0_audit_nonzero_checkpoint_selections",
+    "r0_audit_nonzero_checkpoint_selection_rate",
+    "r0_audit_false_promotions",
+    "r0_audit_false_promotion_upper_95",
+    "r0_false_promotion_guard_pass",
+    "r0_metric_estimand",
+    "legacy_null_refits",
+    "corrected_null_interval_refits",
+    "r1_metric_estimand",
+    "r1_selected_update",
+    "r1_post_selection_refit_pass",
+    "r1_interval_effect_target_balanced_rmse",
+    "r1_zero_baseline_interval_effect_target_balanced_rmse",
+    "r1_point_delta",
+    "r1_target_bootstrap_interval",
+    "r1_margin_pass",
+    "r1_reaction_rmse",
+    "r1_sign_accuracy",
+    "r1_channel_activity",
+    "r1_channel_activity_pass",
+    "weighted_gauge_max_abs_error",
+    "rollout_mass_max_relative_error",
+    "probability_normalization_max_abs_error",
+    "control_target_mask_max_abs_error",
+    "fixed_channel_max_abs_change",
+    "protected_metrics_pass",
+    "config_hash",
+    "implementation_hash",
+    "environment_hash"
+  ],
+  "title": "ReactionRecoveryTestReceiptV3",
+  "type": "object"
+}

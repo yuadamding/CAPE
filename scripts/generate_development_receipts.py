@@ -88,6 +88,13 @@ def main() -> None:
     t07s_metric_report = (
         workspace / "CREDO_V4_T07S_REACTION_METRIC_AMENDMENT_20260816_RUN_REPORT.md"
     )
+    t07s_null_interval_review = Path(
+        "/home/yding1995/.codex/attachments/5811dc54-2142-49eb-8fb8-486d3ea1a699/pasted-text.txt"
+    )
+    t07s_null_interval_amendment = workspace / "credo_v4_t07s_null_interval_amendment_20260816"
+    t07s_null_interval_report = (
+        workspace / "CREDO_V4_T07S_NULL_INTERVAL_AMENDMENT_20260816_RUN_REPORT.md"
+    )
     receipt = {
         "schema_version": 1,
         "status": "engineering_only",
@@ -147,6 +154,22 @@ def main() -> None:
         ),
         "t07s_metric_run_report_sha256": (
             sha256_file(t07s_metric_report) if t07s_metric_report.is_file() else None
+        ),
+        "t07s_null_interval_review_sha256": (
+            sha256_file(t07s_null_interval_review) if t07s_null_interval_review.is_file() else None
+        ),
+        "t07s_null_interval_amendment_sha256": (
+            sha256_file(t07s_null_interval_amendment / "reaction-recovery-amendment.json")
+            if (t07s_null_interval_amendment / "reaction-recovery-amendment.json").is_file()
+            else None
+        ),
+        "t07s_null_interval_test_receipt_sha256": (
+            sha256_file(t07s_null_interval_amendment / "TEST_RECEIPT.json")
+            if (t07s_null_interval_amendment / "TEST_RECEIPT.json").is_file()
+            else None
+        ),
+        "t07s_null_interval_run_report_sha256": (
+            sha256_file(t07s_null_interval_report) if t07s_null_interval_report.is_file() else None
         ),
         "tests_passed": args.tests_passed,
         "coverage_percent": args.coverage_percent,

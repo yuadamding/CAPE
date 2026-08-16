@@ -1,7 +1,14 @@
 # T07S-A duration-correct reaction metric amendment
 
-Last verified: 2026-08-16. Status: authoritative dev24 correction of the
-synthetic T07S-A endpoint metric; no cohort or biological claim.
+Last verified: 2026-08-16. Status: immutable dev24 R1 correction, superseded as
+the unified decision authority by the
+[dev25 R0/R1 amendment](t07s-null-interval-amendment.md); no cohort or
+biological claim.
+
+Dev24 fixed the primary nonzero R1 endpoint but retained the dev23
+rate-versus-interval `NULL_REFITS.parquet` for its R0 margin. The numerical
+decision was unchanged, but the mixed-unit evidence wiring means this page and
+bundle remain provenance records rather than the final unified metric authority.
 
 ## Why an amendment was required
 

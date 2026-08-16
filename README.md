@@ -8,7 +8,7 @@ count_state → count_measure → count_context
 ```
 
 It is a sibling of, not a modification to, the frozen CREDO checkout. Version
-`4.0.0.dev24` is engineering software; it is not a biological result and cannot
+`4.0.0.dev25` is engineering software; it is not a biological result and cannot
 be relabeled as stable `4.0`.
 
 Implemented surfaces include strict hash-bound contracts, sparse count storage,
@@ -17,11 +17,12 @@ likelihood, separate state/fitness/context channels, immutable checkpoint and
 resume, streaming inference, four-branch contrasts, one-shot evaluation, and a
 sealed aggregate. The repository contains no cohort adapter or biological data.
 
-Dev24 retains the two immutable, failed T01 Hellinger candidates, passed T04
+Dev25 retains the two immutable, failed T01 Hellinger candidates, passed T04
 fixed-pool particle-engine qualification, and completed T02A calibration. It
-adds a no-retraining amendment that corrects dev23 T07S endpoint time units,
-separates nonzero checkpoint selection from false promotion, and tightens the
-false-promotion upper limit to 0.05. T01 blocks the
+adds a no-retraining amendment that places both dev23 T07S null and nonzero
+tests in duration-integrated endpoint units, separates nonzero checkpoint
+selection from false promotion, and retains the tightened 0.05 false-promotion
+limit. T01 blocks the
 pooled real-data state-dynamics path; it does not block T02A raw-count/mass
 noise qualification or the passed synthetic T04/T07S numerical path. T00 has an
 explicit, immutable pooled finite-measure API and receipt. The T03 source ×
@@ -65,7 +66,8 @@ See [architecture](docs/architecture.md), [contracts](docs/contracts.md),
 [the detailed T02A record](docs/t02a-raw-count-mass-noise.md),
 [the detailed T04 record](docs/t04-particle-engine-qualification.md),
 [the dev23 T07S record](docs/t07s-reaction-recovery.md),
-[the authoritative dev24 metric amendment](docs/t07s-reaction-metric-amendment.md), and
+[the dev24 R1 amendment](docs/t07s-reaction-metric-amendment.md),
+[the authoritative dev25 unified R0/R1 amendment](docs/t07s-null-interval-amendment.md), and
 [release policy](docs/release.md).
 
 Current verification status is recorded in
