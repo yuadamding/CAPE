@@ -1,7 +1,8 @@
 # T07S learned constant-reaction recovery
 
-Last verified: 2026-08-15. Status: authoritative synthetic-component protocol
-and result for `4.0.0.dev23`; it is not a cohort or biological result.
+Last verified: 2026-08-16. Status: immutable dev23 training/parameter-recovery
+record. Its primary endpoint RMSE table is superseded by the
+[dev24 duration-correct amendment](t07s-reaction-metric-amendment.md).
 
 The committed external evidence directory is
 `credo_v4_t07s_reaction_recovery_20260815`. Its qualification ID is
@@ -10,6 +11,11 @@ and its detailed receipt ID is
 `a4d204c9580ce3ddc386816f40578ad61562bf0c6528df43e5c6b704061fef8d`.
 
 ## Decision
+
+The learned constant target-reaction parameters, R0 false-promotion audit, and
+protected invariants pass. The dev23 R1 endpoint delta below mixed per-time
+rates with cumulative interval changes and is retained only as historical
+evidence; it must not be cited as the numerical authority.
 
 T07S passes both required regimes:
 
@@ -93,9 +99,11 @@ the same target draw to the learned reaction and zero-reaction baseline.
 | maximum weighted-gauge error | 3.82e-17 |
 | maximum rollout mass relative error | 1.33e-15 |
 
-The zero margin is the observed result of this exact R0 selector: update 0
-prevents an improvement under the frozen null catalogs. It is not a biological
-effect size and must not be replaced by the T02A value `0.132578`.
+The zero margin is the observed result of this exact R0 protocol. Update 0 did
+not prevent every nonzero internal checkpoint selection: 9/59 calibration and
+4/60 audit refits selected a nonzero update. It did prevent false promotion in
+the audit (0/60). The margin is not a biological effect size and must not be
+replaced by the T02A value `0.132578`.
 
 ## Promotion boundary
 

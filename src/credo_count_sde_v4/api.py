@@ -32,8 +32,10 @@ from .contracts import (
     RawCountMassNoiseAmendmentReceipt,
     RawCountMassNoiseBundle,
     RawCountMassNoiseReceipt,
+    ReactionRecoveryMetricAmendment,
     ReactionRecoveryQualificationBundle,
     ReactionRecoveryTestReceipt,
+    ReactionRecoveryTestReceiptV1,
     ResolvedConfig,
     SealedRunManifest,
     SelectionManifest,
@@ -60,7 +62,12 @@ from .numerics import (
 )
 from .persistence import LifecycleLedger, verify_directory
 from .prepare import prepare_representation
-from .reaction import qualify_reaction_recovery, verify_reaction_recovery_qualification
+from .reaction import (
+    amend_reaction_recovery_metrics,
+    qualify_reaction_recovery,
+    verify_reaction_recovery_metric_amendment,
+    verify_reaction_recovery_qualification,
+)
 from .representation import qualify_count_representation, verify_count_representation
 from .store import CountStore
 from .training import resume_training, train_model
@@ -147,6 +154,15 @@ def qualify_reaction(destination: Path) -> Path:
     _supported_preflight()
     result = qualify_reaction_recovery(destination)
     verify_reaction_recovery_qualification(result)
+    return result
+
+
+def amend_reaction_metrics(destination: Path, *, parent: Path) -> Path:
+    """Correct T07S interval units while preserving the immutable parent tensors."""
+
+    _supported_preflight()
+    result = amend_reaction_recovery_metrics(destination, parent=parent)
+    verify_reaction_recovery_metric_amendment(result, parent=parent)
     return result
 
 
@@ -237,10 +253,17 @@ def validate_contract(path: Path) -> dict[str, Any]:
     if "calibration_id" in payload and "rows" in payload:
         selected = StateSelectionCalibrationResults
     else:
-        if payload.get("method") == "complete_denominator_dm_reaction_recovery_v1":
+        if payload.get("method") in {
+            "complete_denominator_dm_reaction_recovery_v1",
+            "complete_denominator_dm_reaction_recovery_v2",
+        }:
             selected = ReactionRecoveryQualificationBundle
-        elif "r0_false_selection_guard_pass" in payload:
+        elif payload.get("method") == "t07s_interval_metric_amendment_v1":
+            selected = ReactionRecoveryMetricAmendment
+        elif "r0_false_promotion_guard_pass" in payload:
             selected = ReactionRecoveryTestReceipt
+        elif "r0_false_selection_guard_pass" in payload:
+            selected = ReactionRecoveryTestReceiptV1
         else:
             discriminators = (
                 ("compiled_run_id", CompiledRunContract),

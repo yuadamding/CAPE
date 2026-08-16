@@ -99,6 +99,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="run the independent T07S learned constant-reaction qualification",
     )
     reaction.add_argument("--output", type=_path, required=True)
+    reaction_amendment = sub.add_parser(
+        "amend-reaction",
+        help="derive duration-correct T07S metrics without retraining the parent model",
+    )
+    reaction_amendment.add_argument("--t07s-bundle", type=_path, required=True)
+    reaction_amendment.add_argument("--output", type=_path, required=True)
     raw_noise = sub.add_parser(
         "qualify-raw-noise",
         help="run the independent T02A raw-count and relative-mass noise qualification",
@@ -213,6 +219,8 @@ def main(argv: list[str] | None = None) -> int:
         result = api.qualify_particle_engine(args.output)
     elif command == "qualify-reaction":
         result = api.qualify_reaction(args.output)
+    elif command == "amend-reaction":
+        result = api.amend_reaction_metrics(args.output, parent=args.t07s_bundle)
     elif command == "qualify-raw-noise":
         result = api.qualify_raw_noise(
             args.output,

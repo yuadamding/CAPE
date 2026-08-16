@@ -313,7 +313,10 @@ class ReactionRecoveryQualificationBundle(StrictModel):
     schema_version: int = 1
     qualification_id: str
     test_contract_id: str
-    method: Literal["complete_denominator_dm_reaction_recovery_v1"]
+    method: Literal[
+        "complete_denominator_dm_reaction_recovery_v1",
+        "complete_denominator_dm_reaction_recovery_v2",
+    ]
     environment_hash: Sha256
     null_calibration_repeats: int = Field(ge=59)
     null_audit_repeats: int = Field(ge=59)
@@ -341,8 +344,8 @@ class ReactionRecoveryQualificationBundle(StrictModel):
         return self
 
 
-class ReactionRecoveryTestReceipt(StrictModel):
-    """Complete T07S R0-null and R1-nonzero decision surface."""
+class ReactionRecoveryTestReceiptV1(StrictModel):
+    """Legacy dev23 T07S receipt retained for immutable-parent verification."""
 
     schema_version: int = 1
     receipt_id: str
@@ -375,7 +378,7 @@ class ReactionRecoveryTestReceipt(StrictModel):
     environment_hash: Sha256
 
     @model_validator(mode="after")
-    def validate_reaction_receipt(self) -> ReactionRecoveryTestReceipt:
+    def validate_reaction_receipt(self) -> ReactionRecoveryTestReceiptV1:
         expected = self.identity(id_field="receipt_id")
         if self.receipt_id != expected:
             raise ValueError(f"receipt_id mismatch: expected {expected}.")
@@ -391,6 +394,101 @@ class ReactionRecoveryTestReceipt(StrictModel):
         )
         if self.status == "pass" and not all(gates):
             raise ValueError("A passing T07S receipt must satisfy every recovery gate.")
+        return self
+
+
+class ReactionRecoveryTestReceipt(StrictModel):
+    """Duration-correct dev24 T07S R0-null and R1-nonzero decision surface."""
+
+    schema_version: Literal[2] = 2
+    receipt_id: str
+    test_contract_id: str
+    parent_qualification_id: str | None = None
+    status: Literal["pass", "fail_retired"]
+    r0_calibration_repeats: int = Field(ge=59)
+    r0_audit_repeats: int = Field(ge=59)
+    r0_required_margin: float = Field(ge=0)
+    r0_calibration_nonzero_checkpoint_selections: int = Field(ge=0)
+    r0_audit_nonzero_checkpoint_selections: int = Field(ge=0)
+    r0_audit_nonzero_checkpoint_selection_rate: float = Field(ge=0, le=1)
+    r0_audit_false_promotions: int = Field(ge=0)
+    r0_audit_false_promotion_upper_95: float = Field(ge=0, le=1)
+    r0_false_promotion_guard_pass: bool
+    r1_metric_estimand: Literal["centered_interval_log_frequency_change"]
+    r1_selected_update: int = Field(ge=0)
+    r1_post_selection_refit_pass: bool
+    r1_interval_effect_target_balanced_rmse: float = Field(ge=0)
+    r1_zero_baseline_interval_effect_target_balanced_rmse: float = Field(ge=0)
+    r1_point_delta: float
+    r1_target_bootstrap_interval: tuple[float, float]
+    r1_margin_pass: bool
+    r1_reaction_rmse: float = Field(ge=0)
+    r1_sign_accuracy: float = Field(ge=0, le=1)
+    r1_channel_activity: float = Field(ge=0)
+    r1_channel_activity_pass: bool
+    weighted_gauge_max_abs_error: float = Field(ge=0)
+    rollout_mass_max_relative_error: float = Field(ge=0)
+    probability_normalization_max_abs_error: float = Field(ge=0)
+    control_target_mask_max_abs_error: float = Field(ge=0)
+    fixed_channel_max_abs_change: float = Field(ge=0)
+    protected_metrics_pass: bool
+    update_zero_selectable: Literal[True] = True
+    config_hash: Sha256
+    implementation_hash: Sha256
+    environment_hash: Sha256
+
+    @model_validator(mode="after")
+    def validate_reaction_receipt(self) -> ReactionRecoveryTestReceipt:
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
+        lower, upper = self.r1_target_bootstrap_interval
+        if lower > upper:
+            raise ValueError("Reaction target-bootstrap interval must be ordered.")
+        if self.r0_audit_nonzero_checkpoint_selections > self.r0_audit_repeats:
+            raise ValueError("Audit nonzero-checkpoint selections exceed the audit repeats.")
+        expected_rate = self.r0_audit_nonzero_checkpoint_selections / self.r0_audit_repeats
+        if abs(self.r0_audit_nonzero_checkpoint_selection_rate - expected_rate) > 1e-15:
+            raise ValueError("Audit nonzero-checkpoint selection rate is inconsistent.")
+        gates = (
+            self.r0_false_promotion_guard_pass,
+            self.r1_post_selection_refit_pass,
+            self.r1_margin_pass,
+            self.r1_channel_activity_pass,
+            self.protected_metrics_pass,
+        )
+        if self.status == "pass" and not all(gates):
+            raise ValueError("A passing T07S receipt must satisfy every recovery gate.")
+        return self
+
+
+class ReactionRecoveryMetricAmendment(StrictModel):
+    """Immutable duration-correct metric amendment over a dev23 T07S parent."""
+
+    schema_version: Literal[1] = 1
+    amendment_id: str
+    method: Literal["t07s_interval_metric_amendment_v1"]
+    parent_qualification_id: str
+    parent_bundle_sha256: Sha256
+    parent_artifacts_manifest_sha256: Sha256
+    metric_estimand: Literal["centered_interval_log_frequency_change"]
+    false_promotion_upper_limit: Literal[0.05]
+    environment_hash: Sha256
+    null_refits: ArtifactRef
+    null_model_effects: ArtifactRef
+    recovery_curve: ArtifactRef
+    recovery_series: ArtifactRef
+    target_metrics: ArtifactRef
+    bootstrap_target_draws: ArtifactRef
+    selected_model: ArtifactRef
+    test_receipt: ArtifactRef
+    component_receipt: ArtifactRef
+
+    @model_validator(mode="after")
+    def validate_reaction_metric_amendment(self) -> ReactionRecoveryMetricAmendment:
+        expected = self.identity(id_field="amendment_id")
+        if self.amendment_id != expected:
+            raise ValueError(f"amendment_id mismatch: expected {expected}.")
         return self
 
 
@@ -1313,7 +1411,7 @@ class CompiledRunContract(StrictModel):
     schema_version: int = 1
     compiled_run_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev23"] = "4.0.dev23"
+    recipe_version: Literal["4.0.dev24"] = "4.0.dev24"
     recipe_wheel_hash: Sha256
     frozen_credo_artifact_hash: Sha256
     environment_lock_hash: Sha256
@@ -1380,7 +1478,7 @@ class InferenceBundleManifest(StrictModel):
     compiled_run_id: str
     selected_checkpoint_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev23"] = "4.0.dev23"
+    recipe_version: Literal["4.0.dev24"] = "4.0.dev24"
     selected_family: Literal[
         "configured_checkpoint",
         "gene_decoder_selected",

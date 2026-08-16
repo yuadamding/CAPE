@@ -43,43 +43,40 @@
       "type": "object"
     }
   },
-  "$id": "https://credo.local/schemas/reaction-recovery-qualification-bundle.v1.json",
+  "$id": "https://credo.local/schemas/reaction-recovery-metric-amendment.v1.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Immutable T07S learned constant-reaction qualification bundle.",
+  "description": "Immutable duration-correct metric amendment over a dev23 T07S parent.",
   "properties": {
+    "amendment_id": {
+      "title": "Amendment Id",
+      "type": "string"
+    },
     "bootstrap_target_draws": {
       "$ref": "#/$defs/ArtifactRef"
     },
-    "candidate_updates": {
-      "items": {
-        "type": "integer"
-      },
-      "title": "Candidate Updates",
-      "type": "array"
+    "component_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
     },
     "environment_hash": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Environment Hash",
       "type": "string"
     },
+    "false_promotion_upper_limit": {
+      "const": 0.05,
+      "title": "False Promotion Upper Limit",
+      "type": "number"
+    },
     "method": {
-      "enum": [
-        "complete_denominator_dm_reaction_recovery_v1",
-        "complete_denominator_dm_reaction_recovery_v2"
-      ],
+      "const": "t07s_interval_metric_amendment_v1",
       "title": "Method",
       "type": "string"
     },
-    "null_audit_repeats": {
-      "minimum": 59,
-      "title": "Null Audit Repeats",
-      "type": "integer"
-    },
-    "null_calibration_repeats": {
-      "minimum": 59,
-      "title": "Null Calibration Repeats",
-      "type": "integer"
+    "metric_estimand": {
+      "const": "centered_interval_log_frequency_change",
+      "title": "Metric Estimand",
+      "type": "string"
     },
     "null_model_effects": {
       "$ref": "#/$defs/ArtifactRef"
@@ -87,13 +84,18 @@
     "null_refits": {
       "$ref": "#/$defs/ArtifactRef"
     },
-    "pool_count": {
-      "minimum": 2,
-      "title": "Pool Count",
-      "type": "integer"
+    "parent_artifacts_manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Parent Artifacts Manifest Sha256",
+      "type": "string"
     },
-    "qualification_id": {
-      "title": "Qualification Id",
+    "parent_bundle_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Parent Bundle Sha256",
+      "type": "string"
+    },
+    "parent_qualification_id": {
+      "title": "Parent Qualification Id",
       "type": "string"
     },
     "recovery_curve": {
@@ -103,6 +105,7 @@
       "$ref": "#/$defs/ArtifactRef"
     },
     "schema_version": {
+      "const": 1,
       "default": 1,
       "title": "Schema Version",
       "type": "integer"
@@ -110,32 +113,22 @@
     "selected_model": {
       "$ref": "#/$defs/ArtifactRef"
     },
-    "target_count": {
-      "minimum": 4,
-      "title": "Target Count",
-      "type": "integer"
-    },
     "target_metrics": {
       "$ref": "#/$defs/ArtifactRef"
-    },
-    "test_contract_id": {
-      "title": "Test Contract Id",
-      "type": "string"
     },
     "test_receipt": {
       "$ref": "#/$defs/ArtifactRef"
     }
   },
   "required": [
-    "qualification_id",
-    "test_contract_id",
+    "amendment_id",
     "method",
+    "parent_qualification_id",
+    "parent_bundle_sha256",
+    "parent_artifacts_manifest_sha256",
+    "metric_estimand",
+    "false_promotion_upper_limit",
     "environment_hash",
-    "null_calibration_repeats",
-    "null_audit_repeats",
-    "candidate_updates",
-    "target_count",
-    "pool_count",
     "null_refits",
     "null_model_effects",
     "recovery_curve",
@@ -143,8 +136,9 @@
     "target_metrics",
     "bootstrap_target_draws",
     "selected_model",
-    "test_receipt"
+    "test_receipt",
+    "component_receipt"
   ],
-  "title": "ReactionRecoveryQualificationBundle",
+  "title": "ReactionRecoveryMetricAmendment",
   "type": "object"
 }

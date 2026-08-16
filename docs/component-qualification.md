@@ -1,6 +1,6 @@
 # Component-wise qualification program
 
-Status: authoritative development order for `4.0.0.dev23`. This page defines
+Status: authoritative development order for `4.0.0.dev24`. This page defines
 software promotion, not a biological claim.
 
 CREDO V4 is qualified as three dependency tracks rather than one large training
@@ -131,7 +131,8 @@ model; its null calibration and bootstrap entries are explicitly
 | T04G | specification only | not run | required before CUDA scientific use |
 | T04D | not implemented | not run | required before full state-dependent T06S |
 | T05S | specification only | not run | independently eligible after T04 |
-| T07S | implemented; R0/R1 passed | cohort-independent | T07R-A protocol design eligible |
+| T07S-A | implemented; duration-correct R0/R1 passed | cohort-independent | T07R-A0 design eligible |
+| T07S-B | not run | cohort-independent | state-dependent reaction remains unqualified |
 | T05R–T13 | partial numerical/model primitives exist | not run under this ladder | dependency-specific |
 
 The external T00 Renz receipt retains 495 source-eligible guides (445
@@ -168,17 +169,22 @@ normalized-within-guide negative control failed as required, and interrupted
 resume was bitwise identical. See the
 [detailed T04 record](t04-particle-engine-qualification.md).
 
-T07S trains only target constant-reaction contrasts through the production
+T07S-A trains only target constant-reaction contrasts through the production
 complete-denominator count likelihood while every state, ecology, decoder,
 pool-intercept, and concentration channel remains fixed. Fifty-nine
 zero-reaction refits froze the false-improvement margin; 60 independent null
 audit refits produced zero false promotions (one-sided 95% upper bound
-0.048703). The nonzero R1 test selected update 100 and was freshly refit. Its
-target-balanced RMSE delta against zero reaction was -0.567863 with
-target-bootstrap interval [-0.695670, -0.410235]; raw reaction RMSE was
+0.048703 under the frozen 0.05 gate). Nonzero checkpoints were internally
+selected in 9/59 calibration and 4/60 audit refits, so this is a false-
+promotion—not false-selection—guard. The nonzero R1 test selected update 100
+and was freshly refit. Dev24 reuses that model without optimizer work and
+correctly compares duration-integrated reaction with endpoint change. Its
+target-balanced RMSE is 0.033191 versus 0.706508 for zero reaction, a delta of
+-0.673317 with target-bootstrap interval [-0.829965, -0.482187]. Raw reaction RMSE was
 0.017233 and sign accuracy was 1.0. This qualifies learned constant scalar
 reaction in synthetic complete catalogs only. See the
-[detailed T07S record](t07s-reaction-recovery.md).
+[dev23 training record](t07s-reaction-recovery.md) and authoritative
+[dev24 metric amendment](t07s-reaction-metric-amendment.md).
 
 T02A consumed the exact passed T00 population and complete common-34,699 raw
 CountStore. One hundred balanced cell split-halves at both checkpoints and 100

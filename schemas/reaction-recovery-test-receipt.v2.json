@@ -1,8 +1,8 @@
 {
-  "$id": "https://credo.local/schemas/reaction-recovery-test-receipt.v1.json",
+  "$id": "https://credo.local/schemas/reaction-recovery-test-receipt.v2.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Legacy dev23 T07S receipt retained for immutable-parent verification.",
+  "description": "Duration-correct dev24 T07S R0-null and R1-nonzero decision surface.",
   "properties": {
     "config_hash": {
       "pattern": "^[0-9a-f]{64}$",
@@ -29,6 +29,18 @@
       "title": "Implementation Hash",
       "type": "string"
     },
+    "parent_qualification_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parent Qualification Id"
+    },
     "probability_normalization_max_abs_error": {
       "minimum": 0,
       "title": "Probability Normalization Max Abs Error",
@@ -49,9 +61,25 @@
       "title": "R0 Audit False Promotions",
       "type": "integer"
     },
+    "r0_audit_nonzero_checkpoint_selection_rate": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "R0 Audit Nonzero Checkpoint Selection Rate",
+      "type": "number"
+    },
+    "r0_audit_nonzero_checkpoint_selections": {
+      "minimum": 0,
+      "title": "R0 Audit Nonzero Checkpoint Selections",
+      "type": "integer"
+    },
     "r0_audit_repeats": {
       "minimum": 59,
       "title": "R0 Audit Repeats",
+      "type": "integer"
+    },
+    "r0_calibration_nonzero_checkpoint_selections": {
+      "minimum": 0,
+      "title": "R0 Calibration Nonzero Checkpoint Selections",
       "type": "integer"
     },
     "r0_calibration_repeats": {
@@ -59,8 +87,8 @@
       "title": "R0 Calibration Repeats",
       "type": "integer"
     },
-    "r0_false_selection_guard_pass": {
-      "title": "R0 False Selection Guard Pass",
+    "r0_false_promotion_guard_pass": {
+      "title": "R0 False Promotion Guard Pass",
       "type": "boolean"
     },
     "r0_required_margin": {
@@ -77,9 +105,19 @@
       "title": "R1 Channel Activity Pass",
       "type": "boolean"
     },
+    "r1_interval_effect_target_balanced_rmse": {
+      "minimum": 0,
+      "title": "R1 Interval Effect Target Balanced Rmse",
+      "type": "number"
+    },
     "r1_margin_pass": {
       "title": "R1 Margin Pass",
       "type": "boolean"
+    },
+    "r1_metric_estimand": {
+      "const": "centered_interval_log_frequency_change",
+      "title": "R1 Metric Estimand",
+      "type": "string"
     },
     "r1_point_delta": {
       "title": "R1 Point Delta",
@@ -119,6 +157,11 @@
       "title": "R1 Target Bootstrap Interval",
       "type": "array"
     },
+    "r1_zero_baseline_interval_effect_target_balanced_rmse": {
+      "minimum": 0,
+      "title": "R1 Zero Baseline Interval Effect Target Balanced Rmse",
+      "type": "number"
+    },
     "receipt_id": {
       "title": "Receipt Id",
       "type": "string"
@@ -129,7 +172,8 @@
       "type": "number"
     },
     "schema_version": {
-      "default": 1,
+      "const": 2,
+      "default": 2,
       "title": "Schema Version",
       "type": "integer"
     },
@@ -164,11 +208,17 @@
     "r0_calibration_repeats",
     "r0_audit_repeats",
     "r0_required_margin",
+    "r0_calibration_nonzero_checkpoint_selections",
+    "r0_audit_nonzero_checkpoint_selections",
+    "r0_audit_nonzero_checkpoint_selection_rate",
     "r0_audit_false_promotions",
     "r0_audit_false_promotion_upper_95",
-    "r0_false_selection_guard_pass",
+    "r0_false_promotion_guard_pass",
+    "r1_metric_estimand",
     "r1_selected_update",
     "r1_post_selection_refit_pass",
+    "r1_interval_effect_target_balanced_rmse",
+    "r1_zero_baseline_interval_effect_target_balanced_rmse",
     "r1_point_delta",
     "r1_target_bootstrap_interval",
     "r1_margin_pass",
@@ -186,6 +236,6 @@
     "implementation_hash",
     "environment_hash"
   ],
-  "title": "ReactionRecoveryTestReceiptV1",
+  "title": "ReactionRecoveryTestReceipt",
   "type": "object"
 }

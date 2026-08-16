@@ -1,5 +1,18 @@
 # Changelog
 
+## 4.0.0.dev24 — 2026-08-16
+
+- correct the T07S endpoint estimand to compare duration-integrated centered
+  relative reaction with centered interval log-frequency change;
+- derive a no-retraining amendment that preserves the dev23 selected model,
+  selection curve, null fits, and bootstrap target selections byte-for-byte;
+- report nonzero checkpoint selections separately from false promotions and
+  tighten the one-sided false-promotion upper limit from 0.15 to 0.05;
+- add explicit interval-unit fields, typed v2 receipt/amendment schemas, a
+  duration regression test, and a recomputing parent-bound verifier;
+- distinguish T07S-A constant target-average reaction from the unrun T07S-B
+  state-dependent centered-reaction component.
+
 ## 4.0.0.dev23 — 2026-08-15
 
 - add the independent T07S learned constant-reaction qualification through the

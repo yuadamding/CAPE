@@ -81,6 +81,13 @@ def main() -> None:
     )
     t07s_evidence = workspace / "credo_v4_t07s_reaction_recovery_20260815"
     t07s_report = workspace / "CREDO_V4_T07S_REACTION_RECOVERY_20260815_RUN_REPORT.md"
+    t07s_metric_review = Path(
+        "/home/yding1995/.codex/attachments/75263066-934c-4192-96ad-aa9d6d980a75/pasted-text.txt"
+    )
+    t07s_metric_amendment = workspace / "credo_v4_t07s_reaction_metric_amendment_20260816_r2"
+    t07s_metric_report = (
+        workspace / "CREDO_V4_T07S_REACTION_METRIC_AMENDMENT_20260816_RUN_REPORT.md"
+    )
     receipt = {
         "schema_version": 1,
         "status": "engineering_only",
@@ -125,6 +132,22 @@ def main() -> None:
             else None
         ),
         "t07s_run_report_sha256": sha256_file(t07s_report) if t07s_report.is_file() else None,
+        "t07s_metric_review_sha256": (
+            sha256_file(t07s_metric_review) if t07s_metric_review.is_file() else None
+        ),
+        "t07s_metric_amendment_sha256": (
+            sha256_file(t07s_metric_amendment / "reaction-recovery-amendment.json")
+            if (t07s_metric_amendment / "reaction-recovery-amendment.json").is_file()
+            else None
+        ),
+        "t07s_metric_test_receipt_sha256": (
+            sha256_file(t07s_metric_amendment / "TEST_RECEIPT.json")
+            if (t07s_metric_amendment / "TEST_RECEIPT.json").is_file()
+            else None
+        ),
+        "t07s_metric_run_report_sha256": (
+            sha256_file(t07s_metric_report) if t07s_metric_report.is_file() else None
+        ),
         "tests_passed": args.tests_passed,
         "coverage_percent": args.coverage_percent,
         "distributions": distributions,

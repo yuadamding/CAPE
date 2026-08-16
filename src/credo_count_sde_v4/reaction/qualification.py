@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import platform
+import shutil
 from importlib import metadata
 from pathlib import Path
 from typing import Any
@@ -18,8 +19,10 @@ from ..contracts import (
     ComponentTestContract,
     ComponentTestReceiptV2,
     ModelConfig,
+    ReactionRecoveryMetricAmendment,
     ReactionRecoveryQualificationBundle,
     ReactionRecoveryTestReceipt,
+    ReactionRecoveryTestReceiptV1,
     RunIntent,
 )
 from ..errors import IntegrityError
@@ -35,7 +38,8 @@ from ..persistence import (
 )
 
 _TEST_ID = "T07S_REACTION_RECOVERY"
-_METHOD = "complete_denominator_dm_reaction_recovery_v1"
+_METHOD = "complete_denominator_dm_reaction_recovery_v2"
+_AMENDMENT_METHOD = "t07s_interval_metric_amendment_v1"
 _TARGET_EFFECTS = (
     0.0,
     -1.10,
@@ -60,7 +64,7 @@ _NULL_SEED_START = 20_260_823
 _RECOVERY_SEED_START = 21_260_823
 _BOOTSTRAP_SEED = 22_260_823
 _BOOTSTRAP_DRAWS = 4000
-_FALSE_PROMOTION_UPPER_LIMIT = 0.15
+_FALSE_PROMOTION_UPPER_LIMIT = 0.05
 _MINIMUM_CHANNEL_ACTIVITY = 0.20
 _REACTION_RMSE_LIMIT = 0.10
 _GAUGE_TOLERANCE = 1e-12
@@ -276,16 +280,19 @@ def _recovery_rows(model: CountSDEModel, frame: pd.DataFrame) -> pd.DataFrame:
     values = _tensors(ordered)
     exposure = values["source"].to(torch.float64) + 0.5
     with torch.no_grad():
-        predicted = model.relative_fitness(
+        predicted_rate = model.relative_fitness(
             values["target"], values["pool"], values["control"], exposure
         ).numpy()
-    observed = _observed_relative_effect(ordered)
+    observed_interval_change = _observed_relative_effect(ordered)
+    duration = ordered.duration.to_numpy(dtype=np.float64)
+    predicted_interval_change = duration * predicted_rate
     result = ordered.copy()
-    result["observed_relative_fitness"] = observed
-    result["predicted_relative_fitness"] = predicted
-    result["baseline_relative_fitness"] = 0.0
-    result["new_squared_error"] = np.square(predicted - observed)
-    result["baseline_squared_error"] = np.square(observed)
+    result["observed_centered_interval_log_frequency_change"] = observed_interval_change
+    result["predicted_centered_interval_log_frequency_change"] = predicted_interval_change
+    result["baseline_centered_interval_log_frequency_change"] = 0.0
+    result["predicted_centered_relative_fitness_rate"] = predicted_rate
+    result["new_squared_error"] = np.square(predicted_interval_change - observed_interval_change)
+    result["baseline_squared_error"] = np.square(observed_interval_change)
     return result
 
 
@@ -377,6 +384,21 @@ def _bootstrap(
     return pd.DataFrame(rows), (interval[0], interval[1]), deltas
 
 
+def _bootstrap_from_draws(
+    target: pd.DataFrame, draws: pd.DataFrame
+) -> tuple[tuple[float, float], list[float]]:
+    """Recompute paired target-bootstrap deltas from persisted selections."""
+
+    lookup = target.set_index("target_index")
+    deltas: list[float] = []
+    for _, group in draws.groupby("draw", sort=True):
+        sampled = group.sort_values("position").target_index.to_numpy(dtype=np.int64)
+        metrics = lookup.loc[sampled]
+        deltas.append(float(np.sqrt(metrics.new_mse.mean()) - np.sqrt(metrics.baseline_mse.mean())))
+    interval = tuple(float(value) for value in np.quantile(deltas, [0.025, 0.975]))
+    return (interval[0], interval[1]), deltas
+
+
 def _protected_metrics(model: CountSDEModel, frame: pd.DataFrame) -> dict[str, float]:
     """Recompute fixed-channel, gauge, probability, and rollout invariants."""
 
@@ -448,6 +470,12 @@ def _run_qualification() -> dict[str, Any]:
     audit = null.loc[null.partition == "audit", "delta"].to_numpy()
     false_promotions = int(np.sum(audit < -required_margin))
     false_upper = _false_promotion_upper(false_promotions, len(audit))
+    calibration_nonzero_selections = int(
+        (null.loc[null.partition == "calibration", "selected_update"] != 0).sum()
+    )
+    audit_nonzero_selections = int(
+        (null.loc[null.partition == "audit", "selected_update"] != 0).sum()
+    )
 
     train = _catalog(_TARGET_EFFECTS, pools=3, seed=_RECOVERY_SEED_START, catalog="recovery_train")
     validation = _catalog(
@@ -481,6 +509,8 @@ def _run_qualification() -> dict[str, Any]:
         "required_margin": required_margin,
         "false_promotions": false_promotions,
         "false_promotion_upper": false_upper,
+        "calibration_nonzero_selections": calibration_nonzero_selections,
+        "audit_nonzero_selections": audit_nonzero_selections,
         "curve": curve,
         "selected_update": selected_update,
         "model": model,
@@ -521,6 +551,8 @@ def _config(environment: dict[str, str]) -> dict[str, Any]:
         "bootstrap_seed": _BOOTSTRAP_SEED,
         "bootstrap_draws": _BOOTSTRAP_DRAWS,
         "false_promotion_upper_limit": _FALSE_PROMOTION_UPPER_LIMIT,
+        "primary_metric_estimand": "centered_interval_log_frequency_change",
+        "predicted_interval_effect": "duration_times_centered_relative_fitness_rate",
         "minimum_channel_activity": _MINIMUM_CHANNEL_ACTIVITY,
         "reaction_rmse_limit": _REACTION_RMSE_LIMIT,
         "gauge_tolerance": _GAUGE_TOLERANCE,
@@ -557,7 +589,7 @@ def qualify_reaction_recovery(destination: Path) -> Path:
         "test_contract_id": "pending",
         "test_id": _TEST_ID,
         "component": "trainable_constant_relative_fitness",
-        "primary_metric": "target_balanced_relative_fitness_rmse",
+        "primary_metric": "interval_effect_target_balanced_rmse",
         "primary_baseline": "zero_reaction",
         "required_margin": result["required_margin"],
         "drift": "fixed",
@@ -616,6 +648,10 @@ def qualify_reaction_recovery(destination: Path) -> Path:
                 "required_margin": result["required_margin"],
                 "audit_false_promotions": result["false_promotions"],
                 "audit_false_promotion_upper_95": result["false_promotion_upper"],
+                "calibration_nonzero_checkpoint_selections": result[
+                    "calibration_nonzero_selections"
+                ],
+                "audit_nonzero_checkpoint_selections": result["audit_nonzero_selections"],
                 "upper_limit": _FALSE_PROMOTION_UPPER_LIMIT,
             },
         )
@@ -623,7 +659,7 @@ def qualify_reaction_recovery(destination: Path) -> Path:
             temp / "BOOTSTRAP_RESULTS.json",
             {
                 "schema_version": 1,
-                "unit": "synthetic_target",
+                "unit": "synthetic_target_centered_interval_log_frequency_change",
                 "draws": _BOOTSTRAP_DRAWS,
                 "seed": _BOOTSTRAP_SEED,
                 "point_delta": result["point_delta"],
@@ -661,18 +697,32 @@ def qualify_reaction_recovery(destination: Path) -> Path:
             },
         )
         receipt_payload = {
-            "schema_version": 1,
+            "schema_version": 2,
             "receipt_id": "pending",
             "test_contract_id": contract.test_contract_id,
+            "parent_qualification_id": None,
             "status": status,
             "r0_calibration_repeats": _NULL_CALIBRATION_REPEATS,
             "r0_audit_repeats": _NULL_AUDIT_REPEATS,
             "r0_required_margin": result["required_margin"],
+            "r0_calibration_nonzero_checkpoint_selections": result[
+                "calibration_nonzero_selections"
+            ],
+            "r0_audit_nonzero_checkpoint_selections": result["audit_nonzero_selections"],
+            "r0_audit_nonzero_checkpoint_selection_rate": result[
+                "audit_nonzero_selections"
+            ]
+            / _NULL_AUDIT_REPEATS,
             "r0_audit_false_promotions": result["false_promotions"],
             "r0_audit_false_promotion_upper_95": result["false_promotion_upper"],
-            "r0_false_selection_guard_pass": r0_pass,
+            "r0_false_promotion_guard_pass": r0_pass,
+            "r1_metric_estimand": "centered_interval_log_frequency_change",
             "r1_selected_update": result["selected_update"],
             "r1_post_selection_refit_pass": True,
+            "r1_interval_effect_target_balanced_rmse": result["new_loss"],
+            "r1_zero_baseline_interval_effect_target_balanced_rmse": result[
+                "baseline_loss"
+            ],
             "r1_point_delta": result["point_delta"],
             "r1_target_bootstrap_interval": result["bootstrap_interval"],
             "r1_margin_pass": r1_margin_pass,
@@ -794,6 +844,437 @@ def qualify_reaction_recovery(destination: Path) -> Path:
 
     publish_directory(destination, writer)
     verify_reaction_recovery_qualification(destination)
+    return destination
+
+
+_DEV23_METRIC_COLUMNS = (
+    "observed_relative_fitness",
+    "predicted_relative_fitness",
+    "baseline_relative_fitness",
+    "new_squared_error",
+    "baseline_squared_error",
+)
+_DEV24_METRIC_COLUMNS = (
+    "observed_centered_interval_log_frequency_change",
+    "predicted_centered_interval_log_frequency_change",
+    "baseline_centered_interval_log_frequency_change",
+    "predicted_centered_relative_fitness_rate",
+    "new_squared_error",
+    "baseline_squared_error",
+)
+
+
+def _verified_dev23_parent(
+    parent: Path,
+) -> tuple[ReactionRecoveryQualificationBundle, ReactionRecoveryTestReceiptV1]:
+    """Verify and bind the immutable dev23 parent without invoking its old evaluator."""
+
+    verify_directory(parent)
+    bundle = ReactionRecoveryQualificationBundle.model_validate_json(
+        (parent / "reaction-recovery.json").read_text()
+    )
+    receipt = ReactionRecoveryTestReceiptV1.model_validate_json(
+        (parent / "TEST_RECEIPT.json").read_text()
+    )
+    if bundle.method != "complete_denominator_dm_reaction_recovery_v1":
+        raise IntegrityError("The metric amendment requires an immutable dev23 T07S-v1 parent.")
+    if receipt.test_contract_id != bundle.test_contract_id or receipt.status != "pass":
+        raise IntegrityError("The dev23 T07S parent receipt does not bind a passing parent bundle.")
+    link = json.loads((parent / "QUALIFICATION_LINK.json").read_text())
+    if link != {
+        "schema_version": 1,
+        "qualification_id": bundle.qualification_id,
+        "receipt_id": receipt.receipt_id,
+    }:
+        raise IntegrityError("The dev23 T07S parent link is inconsistent.")
+    for reference in (
+        bundle.null_refits,
+        bundle.null_model_effects,
+        bundle.recovery_curve,
+        bundle.recovery_series,
+        bundle.target_metrics,
+        bundle.bootstrap_target_draws,
+        bundle.selected_model,
+        bundle.test_receipt,
+    ):
+        artifact = parent / reference.relative_uri
+        if (
+            artifact.stat().st_size != reference.size_bytes
+            or sha256_file(artifact) != reference.sha256
+        ):
+            raise IntegrityError(
+                f"The dev23 parent artifact differs from its reference: {reference.relative_uri}."
+            )
+    return bundle, receipt
+
+
+def _amended_result(parent: Path) -> dict[str, Any]:
+    bundle, parent_receipt = _verified_dev23_parent(parent)
+    null = pd.read_parquet(parent / bundle.null_refits.relative_uri)
+    effects = pd.read_parquet(parent / bundle.null_model_effects.relative_uri)
+    curve = pd.read_parquet(parent / bundle.recovery_curve.relative_uri)
+    draws = pd.read_parquet(parent / bundle.bootstrap_target_draws.relative_uri)
+    legacy_series = pd.read_parquet(parent / bundle.recovery_series.relative_uri)
+    missing = set(_DEV23_METRIC_COLUMNS) - set(legacy_series.columns)
+    if missing:
+        raise IntegrityError(f"The dev23 recovery series lacks legacy metric columns: {missing}.")
+    raw_series = legacy_series.drop(columns=list(_DEV23_METRIC_COLUMNS))
+    model = _new_model(bundle.pool_count)
+    model.load_state_dict(
+        load_tensor_file(parent / bundle.selected_model.relative_uri), strict=True
+    )
+    recovery = _recovery_rows(model, raw_series)
+    target = _target_metrics(recovery)
+    new_loss, baseline_loss, point_delta = _losses(target)
+    interval, bootstrap_deltas = _bootstrap_from_draws(target, draws)
+
+    calibration = null.loc[null.partition == "calibration", "delta"].to_numpy()
+    margin = max(0.0, -float(np.quantile(calibration, 0.05, method="lower")))
+    audit = null.loc[null.partition == "audit", "delta"].to_numpy()
+    false_promotions = int(np.sum(audit < -margin))
+    false_upper = _false_promotion_upper(false_promotions, len(audit))
+    calibration_nonzero = int(
+        (null.loc[null.partition == "calibration", "selected_update"] != 0).sum()
+    )
+    audit_nonzero = int(
+        (null.loc[null.partition == "audit", "selected_update"] != 0).sum()
+    )
+    selected_update = int(curve.loc[curve.selected, "update"].iloc[0])
+    if selected_update != parent_receipt.r1_selected_update:
+        raise IntegrityError("The dev23 selected update differs from its immutable receipt.")
+
+    fitted = model.target_fitness.detach().numpy()
+    truth = np.asarray(_TARGET_EFFECTS)
+    reaction_rmse = float(np.sqrt(np.mean(np.square(fitted[1:] - truth[1:]))))
+    sign_accuracy = float(np.mean(np.sign(fitted[1:]) == np.sign(truth[1:])))
+    channel_activity = float(np.sqrt(np.mean(np.square(fitted[1:]))))
+    protected = _protected_metrics(model, raw_series)
+    return {
+        "parent_bundle": bundle,
+        "parent_receipt": parent_receipt,
+        "null": null,
+        "null_effects": effects,
+        "curve": curve,
+        "draws": draws,
+        "model": model,
+        "raw_series": raw_series,
+        "recovery": recovery,
+        "target": target,
+        "new_loss": new_loss,
+        "baseline_loss": baseline_loss,
+        "point_delta": point_delta,
+        "bootstrap_interval": interval,
+        "bootstrap_deltas": bootstrap_deltas,
+        "required_margin": margin,
+        "false_promotions": false_promotions,
+        "false_promotion_upper": false_upper,
+        "calibration_nonzero_selections": calibration_nonzero,
+        "audit_nonzero_selections": audit_nonzero,
+        "selected_update": selected_update,
+        "reaction_rmse": reaction_rmse,
+        "sign_accuracy": sign_accuracy,
+        "channel_activity": channel_activity,
+        "gauge_error": protected["gauge_error"],
+        "probability_error": protected["probability_error"],
+        "rollout_error": protected["rollout_error"],
+        "control_error": protected["control_error"],
+        "weight_error": protected["weight_error"],
+        "fixed_change": protected["fixed_change"],
+    }
+
+
+def amend_reaction_recovery_metrics(destination: Path, *, parent: Path) -> Path:
+    """Publish the duration-correct dev24 metric authority without retraining."""
+
+    if destination.exists():
+        raise FileExistsError(f"Committed destination already exists: {destination}.")
+    result = _amended_result(parent)
+    parent_bundle = result["parent_bundle"]
+    environment_hash, environment = _environment_identity()
+    implementation_hash, implementation_files = _implementation_identity()
+    parent_bundle_sha = sha256_file(parent / "reaction-recovery.json")
+    parent_manifest_sha = sha256_file(parent / "artifacts.json")
+    config = {
+        "schema_version": 1,
+        "method": _AMENDMENT_METHOD,
+        "device": "cpu",
+        "dtype": "float64",
+        "parent_qualification_id": parent_bundle.qualification_id,
+        "parent_bundle_sha256": parent_bundle_sha,
+        "parent_artifacts_manifest_sha256": parent_manifest_sha,
+        "selected_model_reused_without_optimizer": True,
+        "primary_metric_estimand": "centered_interval_log_frequency_change",
+        "predicted_interval_effect": "duration_times_centered_relative_fitness_rate",
+        "false_promotion_upper_limit": _FALSE_PROMOTION_UPPER_LIMIT,
+        "bootstrap_seed": _BOOTSTRAP_SEED,
+        "bootstrap_draws": _BOOTSTRAP_DRAWS,
+        "environment": environment,
+    }
+    config_hash = sha256_bytes(canonical_json_bytes(config))
+    contract_payload = {
+        "schema_version": 1,
+        "test_contract_id": "pending",
+        "test_id": _TEST_ID,
+        "component": "constant_target_reaction_interval_metric_amendment",
+        "primary_metric": "interval_effect_target_balanced_rmse",
+        "primary_baseline": "zero_reaction",
+        "required_margin": result["required_margin"],
+        "drift": "fixed",
+        "diffusion": "fixed",
+        "reaction": "trainable",
+        "ecology": "off",
+        "decoder": "off",
+        "update_zero_selectable": True,
+        "post_selection_refit_required": True,
+    }
+    contract_payload["test_contract_id"] = contract_id(
+        contract_payload, id_field="test_contract_id"
+    )
+    contract = ComponentTestContract.model_validate(contract_payload)
+    r0_pass = result["false_promotion_upper"] <= _FALSE_PROMOTION_UPPER_LIMIT
+    r1_margin_pass = result["bootstrap_interval"][1] < -result["required_margin"]
+    channel_pass = (
+        result["channel_activity"] >= _MINIMUM_CHANNEL_ACTIVITY
+        and result["reaction_rmse"] <= _REACTION_RMSE_LIMIT
+        and result["sign_accuracy"] == 1.0
+    )
+    protected_pass = (
+        result["fixed_change"] == 0.0
+        and result["gauge_error"] <= _GAUGE_TOLERANCE
+        and result["probability_error"] <= _GAUGE_TOLERANCE
+        and result["rollout_error"] <= _ROLLOUT_TOLERANCE
+        and result["control_error"] == 0.0
+        and result["weight_error"] <= _GAUGE_TOLERANCE
+    )
+    status = (
+        "pass" if r0_pass and r1_margin_pass and channel_pass and protected_pass else "fail_retired"
+    )
+
+    def writer(temp: Path) -> None:
+        copy_names = (
+            "NULL_REFITS.parquet",
+            "NULL_MODEL_EFFECTS.parquet",
+            "RECOVERY_CURVE.parquet",
+            "BOOTSTRAP_TARGET_DRAWS.parquet",
+            "SELECTED_MODEL.safetensors",
+        )
+        for name in copy_names:
+            shutil.copyfile(parent / name, temp / name)
+        result["recovery"].to_parquet(temp / "RECOVERY_SERIES.parquet", index=False)
+        result["target"].to_parquet(temp / "TARGET_METRICS.parquet", index=False)
+        _write_json(temp / "CONFIG.json", config)
+        _write_json(temp / "TEST_CONTRACT.json", contract.model_dump(mode="json"))
+        _write_json(
+            temp / "PARENT_LINK.json",
+            {
+                "schema_version": 1,
+                "parent_qualification_id": parent_bundle.qualification_id,
+                "parent_bundle_sha256": parent_bundle_sha,
+                "parent_artifacts_manifest_sha256": parent_manifest_sha,
+                "selected_model_sha256": sha256_file(parent / "SELECTED_MODEL.safetensors"),
+                "optimizer_rerun": False,
+            },
+        )
+        _write_json(
+            temp / "IMPLEMENTATION.sha256",
+            {
+                "schema_version": 1,
+                "implementation_hash": implementation_hash,
+                "files": implementation_files,
+            },
+        )
+        _write_json(
+            temp / "NULL_CALIBRATION.json",
+            {
+                "schema_version": 2,
+                "calibration_repeats": _NULL_CALIBRATION_REPEATS,
+                "audit_repeats": _NULL_AUDIT_REPEATS,
+                "required_margin": result["required_margin"],
+                "calibration_nonzero_checkpoint_selections": result[
+                    "calibration_nonzero_selections"
+                ],
+                "audit_nonzero_checkpoint_selections": result["audit_nonzero_selections"],
+                "audit_false_promotions": result["false_promotions"],
+                "audit_false_promotion_upper_95": result["false_promotion_upper"],
+                "upper_limit": _FALSE_PROMOTION_UPPER_LIMIT,
+                "parent_null_rows_reused": True,
+            },
+        )
+        _write_json(
+            temp / "BOOTSTRAP_RESULTS.json",
+            {
+                "schema_version": 2,
+                "unit": "synthetic_target_centered_interval_log_frequency_change",
+                "draws": _BOOTSTRAP_DRAWS,
+                "seed": _BOOTSTRAP_SEED,
+                "new_target_balanced_rmse": result["new_loss"],
+                "zero_baseline_target_balanced_rmse": result["baseline_loss"],
+                "point_delta": result["point_delta"],
+                "interval": result["bootstrap_interval"],
+            },
+        )
+        _write_json(
+            temp / "CHANNEL_ACTIVITY.json",
+            {
+                "schema_version": 1,
+                "reaction_rms": result["channel_activity"],
+                "minimum": _MINIMUM_CHANNEL_ACTIVITY,
+                "reaction_rmse": result["reaction_rmse"],
+                "sign_accuracy": result["sign_accuracy"],
+                "fixed_channel_max_abs_change": result["fixed_change"],
+            },
+        )
+        _write_json(
+            temp / "MODEL_CARD.json",
+            {
+                "schema_version": 2,
+                "family": "constant_target_average_relative_reaction",
+                "intent": "count_measure",
+                "trained_parameters": ["target_fitness"],
+                "metric_estimand": "centered_interval_log_frequency_change",
+                "state_dependent_centered_reaction": "not_qualified",
+                "selected_model_reused_without_optimizer": True,
+                "biological_claims": False,
+            },
+        )
+        receipt_payload = {
+            "schema_version": 2,
+            "receipt_id": "pending",
+            "test_contract_id": contract.test_contract_id,
+            "parent_qualification_id": parent_bundle.qualification_id,
+            "status": status,
+            "r0_calibration_repeats": _NULL_CALIBRATION_REPEATS,
+            "r0_audit_repeats": _NULL_AUDIT_REPEATS,
+            "r0_required_margin": result["required_margin"],
+            "r0_calibration_nonzero_checkpoint_selections": result[
+                "calibration_nonzero_selections"
+            ],
+            "r0_audit_nonzero_checkpoint_selections": result["audit_nonzero_selections"],
+            "r0_audit_nonzero_checkpoint_selection_rate": result[
+                "audit_nonzero_selections"
+            ]
+            / _NULL_AUDIT_REPEATS,
+            "r0_audit_false_promotions": result["false_promotions"],
+            "r0_audit_false_promotion_upper_95": result["false_promotion_upper"],
+            "r0_false_promotion_guard_pass": r0_pass,
+            "r1_metric_estimand": "centered_interval_log_frequency_change",
+            "r1_selected_update": result["selected_update"],
+            "r1_post_selection_refit_pass": True,
+            "r1_interval_effect_target_balanced_rmse": result["new_loss"],
+            "r1_zero_baseline_interval_effect_target_balanced_rmse": result[
+                "baseline_loss"
+            ],
+            "r1_point_delta": result["point_delta"],
+            "r1_target_bootstrap_interval": result["bootstrap_interval"],
+            "r1_margin_pass": r1_margin_pass,
+            "r1_reaction_rmse": result["reaction_rmse"],
+            "r1_sign_accuracy": result["sign_accuracy"],
+            "r1_channel_activity": result["channel_activity"],
+            "r1_channel_activity_pass": channel_pass,
+            "weighted_gauge_max_abs_error": result["gauge_error"],
+            "rollout_mass_max_relative_error": result["rollout_error"],
+            "probability_normalization_max_abs_error": result["probability_error"],
+            "control_target_mask_max_abs_error": result["control_error"],
+            "fixed_channel_max_abs_change": result["fixed_change"],
+            "protected_metrics_pass": protected_pass,
+            "update_zero_selectable": True,
+            "config_hash": config_hash,
+            "implementation_hash": implementation_hash,
+            "environment_hash": environment_hash,
+        }
+        receipt_payload["receipt_id"] = contract_id(receipt_payload, id_field="receipt_id")
+        receipt = ReactionRecoveryTestReceipt.model_validate(receipt_payload)
+        _write_json(temp / "TEST_RECEIPT.json", receipt.model_dump(mode="json"))
+        component_payload = {
+            "schema_version": 2,
+            "receipt_id": "pending",
+            "test_id": _TEST_ID,
+            "receipt_role": "model_comparison",
+            "status": status,
+            "primary_metric": contract.primary_metric,
+            "primary_baseline": contract.primary_baseline,
+            "point_delta": result["point_delta"],
+            "bootstrap_interval": result["bootstrap_interval"],
+            "required_margin": result["required_margin"],
+            "channel_activity": result["channel_activity"],
+            "estimand": None,
+            "quantile_probability": None,
+            "quantile_value": None,
+            "repeat_count": None,
+            "sampling_method": None,
+            "protected_metrics_pass": protected_pass,
+            "selected_update": result["selected_update"],
+            "input_hashes": {
+                "parent_qualification": parent_bundle_sha,
+                "parent_artifacts_manifest": parent_manifest_sha,
+                "environment": environment_hash,
+            },
+            "config_hash": config_hash,
+            "implementation_hash": implementation_hash,
+        }
+        component_payload["receipt_id"] = contract_id(
+            component_payload, id_field="receipt_id"
+        )
+        component = ComponentTestReceiptV2.model_validate(component_payload)
+        _write_json(temp / "COMPONENT_RECEIPT.json", component.model_dump(mode="json"))
+
+        refs = {
+            "null_refits": ("NULL_REFITS.parquet", "credo.t07s_null_refits"),
+            "null_model_effects": ("NULL_MODEL_EFFECTS.parquet", "credo.t07s_null_effects"),
+            "recovery_curve": ("RECOVERY_CURVE.parquet", "credo.t07s_curve"),
+            "recovery_series": ("RECOVERY_SERIES.parquet", "credo.t07s_interval_series"),
+            "target_metrics": ("TARGET_METRICS.parquet", "credo.t07s_interval_targets"),
+            "bootstrap_target_draws": (
+                "BOOTSTRAP_TARGET_DRAWS.parquet",
+                "credo.t07s_bootstrap_draws",
+            ),
+            "selected_model": ("SELECTED_MODEL.safetensors", "credo.t07s_model"),
+            "test_receipt": ("TEST_RECEIPT.json", "credo.t07s_test_receipt_v2"),
+            "component_receipt": ("COMPONENT_RECEIPT.json", "credo.component_receipt_v2"),
+        }
+        amendment_payload: dict[str, Any] = {
+            "schema_version": 1,
+            "amendment_id": "pending",
+            "method": _AMENDMENT_METHOD,
+            "parent_qualification_id": parent_bundle.qualification_id,
+            "parent_bundle_sha256": parent_bundle_sha,
+            "parent_artifacts_manifest_sha256": parent_manifest_sha,
+            "metric_estimand": "centered_interval_log_frequency_change",
+            "false_promotion_upper_limit": _FALSE_PROMOTION_UPPER_LIMIT,
+            "environment_hash": environment_hash,
+        }
+        for field, (name, schema_id) in refs.items():
+            media_type = "application/x-parquet"
+            if name.endswith(".json"):
+                media_type = "application/json"
+            elif name.endswith(".safetensors"):
+                media_type = "application/x-safetensors"
+            amendment_payload[field] = artifact_ref(
+                temp, temp / name, schema_id=schema_id, media_type=media_type
+            ).model_dump(mode="json")
+        amendment_payload["amendment_id"] = contract_id(
+            amendment_payload, id_field="amendment_id"
+        )
+        amendment = ReactionRecoveryMetricAmendment.model_validate(amendment_payload)
+        _write_json(
+            temp / "reaction-recovery-amendment.json", amendment.model_dump(mode="json")
+        )
+        _write_json(
+            temp / "QUALIFICATION_LINK.json",
+            {
+                "schema_version": 2,
+                "amendment_id": amendment.amendment_id,
+                "parent_qualification_id": parent_bundle.qualification_id,
+                "receipt_id": receipt.receipt_id,
+            },
+        )
+        checksums = path_manifest(temp)
+        (temp / "SHA256SUMS").write_text(
+            "".join(f"{row['sha256']}  {row['path']}\n" for row in checksums)
+        )
+
+    publish_directory(destination, writer)
+    verify_reaction_recovery_metric_amendment(destination, parent=parent)
     return destination
 
 
@@ -921,6 +1402,12 @@ def verify_reaction_recovery_qualification(path: Path) -> ReactionRecoveryQualif
     audit = null.loc[null.partition == "audit", "delta"].to_numpy()
     false_promotions = int(np.sum(audit < -margin))
     false_upper = _false_promotion_upper(false_promotions, len(audit))
+    calibration_nonzero_selections = int(
+        (null.loc[null.partition == "calibration", "selected_update"] != 0).sum()
+    )
+    audit_nonzero_selections = int(
+        (null.loc[null.partition == "audit", "selected_update"] != 0).sum()
+    )
 
     curve = pd.read_parquet(path / bundle.recovery_curve.relative_uri).sort_values("update")
     if (
@@ -942,9 +1429,10 @@ def verify_reaction_recovery_qualification(path: Path) -> ReactionRecoveryQualif
     )
     raw_series = series.drop(
         columns=[
-            "observed_relative_fitness",
-            "predicted_relative_fitness",
-            "baseline_relative_fitness",
+            "observed_centered_interval_log_frequency_change",
+            "predicted_centered_interval_log_frequency_change",
+            "baseline_centered_interval_log_frequency_change",
+            "predicted_centered_relative_fitness_rate",
             "new_squared_error",
             "baseline_squared_error",
         ]
@@ -955,7 +1443,6 @@ def verify_reaction_recovery_qualification(path: Path) -> ReactionRecoveryQualif
     expected_target = _target_metrics(expected_series)
     _assert_frame_close(target, expected_target, name="target metrics")
     new_loss, baseline_loss, point_delta = _losses(target)
-    del new_loss, baseline_loss
     draws = pd.read_parquet(path / bundle.bootstrap_target_draws.relative_uri).sort_values(
         ["draw", "position"], kind="stable"
     )
@@ -994,9 +1481,24 @@ def verify_reaction_recovery_qualification(path: Path) -> ReactionRecoveryQualif
     )
     numeric = (
         abs(receipt.r0_required_margin - margin) <= 1e-12
+        and receipt.r0_calibration_nonzero_checkpoint_selections
+        == calibration_nonzero_selections
+        and receipt.r0_audit_nonzero_checkpoint_selections == audit_nonzero_selections
+        and abs(
+            receipt.r0_audit_nonzero_checkpoint_selection_rate
+            - audit_nonzero_selections / len(audit)
+        )
+        <= 1e-15
         and receipt.r0_audit_false_promotions == false_promotions
         and abs(receipt.r0_audit_false_promotion_upper_95 - false_upper) <= 1e-12
+        and receipt.r0_false_promotion_guard_pass == r0_pass
+        and receipt.r1_metric_estimand == "centered_interval_log_frequency_change"
         and receipt.r1_selected_update == selected
+        and abs(receipt.r1_interval_effect_target_balanced_rmse - new_loss) <= 1e-12
+        and abs(
+            receipt.r1_zero_baseline_interval_effect_target_balanced_rmse - baseline_loss
+        )
+        <= 1e-12
         and abs(receipt.r1_point_delta - point_delta) <= 1e-12
         and np.allclose(receipt.r1_target_bootstrap_interval, interval, atol=1e-12, rtol=1e-12)
         and abs(receipt.r1_reaction_rmse - reaction_rmse) <= 1e-12
@@ -1023,3 +1525,199 @@ def verify_reaction_recovery_qualification(path: Path) -> ReactionRecoveryQualif
     ):
         raise IntegrityError("T07S generic component receipt differs from detailed evidence.")
     return bundle
+
+
+def verify_reaction_recovery_metric_amendment(
+    path: Path, *, parent: Path
+) -> ReactionRecoveryMetricAmendment:
+    """Verify dev24 bytes and recompute corrected metrics from the immutable parent."""
+
+    verify_directory(path)
+    parent_bundle, _ = _verified_dev23_parent(parent)
+    amendment = ReactionRecoveryMetricAmendment.model_validate_json(
+        (path / "reaction-recovery-amendment.json").read_text()
+    )
+    receipt = ReactionRecoveryTestReceipt.model_validate_json(
+        (path / "TEST_RECEIPT.json").read_text()
+    )
+    component = ComponentTestReceiptV2.model_validate_json(
+        (path / "COMPONENT_RECEIPT.json").read_text()
+    )
+    contract = ComponentTestContract.model_validate_json((path / "TEST_CONTRACT.json").read_text())
+    parent_bundle_sha = sha256_file(parent / "reaction-recovery.json")
+    parent_manifest_sha = sha256_file(parent / "artifacts.json")
+    if (
+        amendment.parent_qualification_id != parent_bundle.qualification_id
+        or amendment.parent_bundle_sha256 != parent_bundle_sha
+        or amendment.parent_artifacts_manifest_sha256 != parent_manifest_sha
+        or receipt.parent_qualification_id != parent_bundle.qualification_id
+    ):
+        raise IntegrityError("The T07S metric amendment differs from its immutable parent.")
+    if (
+        contract.test_id != _TEST_ID
+        or receipt.test_contract_id != contract.test_contract_id
+        or component.test_id != _TEST_ID
+        or component.status != receipt.status
+    ):
+        raise IntegrityError("The T07S metric-amendment contracts and receipts are inconsistent.")
+    for reference in (
+        amendment.null_refits,
+        amendment.null_model_effects,
+        amendment.recovery_curve,
+        amendment.recovery_series,
+        amendment.target_metrics,
+        amendment.bootstrap_target_draws,
+        amendment.selected_model,
+        amendment.test_receipt,
+        amendment.component_receipt,
+    ):
+        artifact = path / reference.relative_uri
+        if (
+            artifact.stat().st_size != reference.size_bytes
+            or sha256_file(artifact) != reference.sha256
+        ):
+            raise IntegrityError(
+                f"T07S amended artifact differs from its reference: {reference.relative_uri}."
+            )
+    copied = {
+        "NULL_REFITS.parquet": parent_bundle.null_refits,
+        "NULL_MODEL_EFFECTS.parquet": parent_bundle.null_model_effects,
+        "RECOVERY_CURVE.parquet": parent_bundle.recovery_curve,
+        "BOOTSTRAP_TARGET_DRAWS.parquet": parent_bundle.bootstrap_target_draws,
+        "SELECTED_MODEL.safetensors": parent_bundle.selected_model,
+    }
+    for name, parent_reference in copied.items():
+        if sha256_file(path / name) != parent_reference.sha256:
+            raise IntegrityError(f"T07S amendment did not preserve parent bytes: {name}.")
+    parent_link = json.loads((path / "PARENT_LINK.json").read_text())
+    if parent_link != {
+        "schema_version": 1,
+        "parent_qualification_id": parent_bundle.qualification_id,
+        "parent_bundle_sha256": parent_bundle_sha,
+        "parent_artifacts_manifest_sha256": parent_manifest_sha,
+        "selected_model_sha256": parent_bundle.selected_model.sha256,
+        "optimizer_rerun": False,
+    }:
+        raise IntegrityError("The T07S parent link does not prove no-retraining reuse.")
+    link = json.loads((path / "QUALIFICATION_LINK.json").read_text())
+    if link != {
+        "schema_version": 2,
+        "amendment_id": amendment.amendment_id,
+        "parent_qualification_id": parent_bundle.qualification_id,
+        "receipt_id": receipt.receipt_id,
+    }:
+        raise IntegrityError("The T07S amendment-to-receipt link is inconsistent.")
+
+    config = json.loads((path / "CONFIG.json").read_text())
+    if sha256_bytes(canonical_json_bytes(config)) != receipt.config_hash:
+        raise IntegrityError("The T07S amendment configuration hash differs from its receipt.")
+    implementation = json.loads((path / "IMPLEMENTATION.sha256").read_text())
+    current_implementation, current_files = _implementation_identity()
+    if (
+        implementation.get("implementation_hash") != current_implementation
+        or implementation.get("files") != current_files
+        or receipt.implementation_hash != current_implementation
+    ):
+        raise IntegrityError("The T07S amendment implementation identity differs from source.")
+    current_environment, environment = _environment_identity()
+    if (
+        current_environment != amendment.environment_hash
+        or current_environment != receipt.environment_hash
+        or config.get("environment") != environment
+    ):
+        raise IntegrityError("The T07S amendment numerical environment differs from its receipt.")
+
+    expected = _amended_result(parent)
+    series = pd.read_parquet(path / amendment.recovery_series.relative_uri)
+    target = pd.read_parquet(path / amendment.target_metrics.relative_uri)
+    draws = pd.read_parquet(path / amendment.bootstrap_target_draws.relative_uri)
+    _assert_frame_close(series, expected["recovery"], name="amended series metrics")
+    _assert_frame_close(target, expected["target"], name="amended target metrics")
+    _assert_frame_close(
+        draws.sort_values(["draw", "position"]),
+        expected["draws"].sort_values(["draw", "position"]),
+        name="preserved bootstrap selections",
+    )
+    r0_pass = expected["false_promotion_upper"] <= _FALSE_PROMOTION_UPPER_LIMIT
+    r1_margin_pass = (
+        expected["bootstrap_interval"][1] < -expected["required_margin"]
+    )
+    channel_pass = (
+        expected["channel_activity"] >= _MINIMUM_CHANNEL_ACTIVITY
+        and expected["reaction_rmse"] <= _REACTION_RMSE_LIMIT
+        and expected["sign_accuracy"] == 1.0
+    )
+    protected_pass = (
+        expected["fixed_change"] == 0.0
+        and expected["gauge_error"] <= _GAUGE_TOLERANCE
+        and expected["probability_error"] <= _GAUGE_TOLERANCE
+        and expected["rollout_error"] <= _ROLLOUT_TOLERANCE
+        and expected["control_error"] == 0.0
+        and expected["weight_error"] <= _GAUGE_TOLERANCE
+    )
+    expected_status = (
+        "pass" if r0_pass and r1_margin_pass and channel_pass and protected_pass else "fail_retired"
+    )
+    numeric = (
+        receipt.r0_calibration_repeats == _NULL_CALIBRATION_REPEATS
+        and receipt.r0_audit_repeats == _NULL_AUDIT_REPEATS
+        and abs(receipt.r0_required_margin - expected["required_margin"]) <= 1e-12
+        and receipt.r0_calibration_nonzero_checkpoint_selections
+        == expected["calibration_nonzero_selections"]
+        and receipt.r0_audit_nonzero_checkpoint_selections
+        == expected["audit_nonzero_selections"]
+        and abs(
+            receipt.r0_audit_nonzero_checkpoint_selection_rate
+            - expected["audit_nonzero_selections"] / _NULL_AUDIT_REPEATS
+        )
+        <= 1e-15
+        and receipt.r0_audit_false_promotions == expected["false_promotions"]
+        and abs(
+            receipt.r0_audit_false_promotion_upper_95 - expected["false_promotion_upper"]
+        )
+        <= 1e-12
+        and receipt.r0_false_promotion_guard_pass == r0_pass
+        and receipt.r1_metric_estimand == "centered_interval_log_frequency_change"
+        and receipt.r1_selected_update == expected["selected_update"]
+        and abs(
+            receipt.r1_interval_effect_target_balanced_rmse - expected["new_loss"]
+        )
+        <= 1e-12
+        and abs(
+            receipt.r1_zero_baseline_interval_effect_target_balanced_rmse
+            - expected["baseline_loss"]
+        )
+        <= 1e-12
+        and abs(receipt.r1_point_delta - expected["point_delta"]) <= 1e-12
+        and np.allclose(
+            receipt.r1_target_bootstrap_interval,
+            expected["bootstrap_interval"],
+            atol=1e-12,
+            rtol=1e-12,
+        )
+        and receipt.r1_margin_pass == r1_margin_pass
+        and abs(receipt.r1_reaction_rmse - expected["reaction_rmse"]) <= 1e-12
+        and abs(receipt.r1_sign_accuracy - expected["sign_accuracy"]) <= 1e-12
+        and abs(receipt.r1_channel_activity - expected["channel_activity"]) <= 1e-12
+        and receipt.r1_channel_activity_pass == channel_pass
+        and abs(receipt.weighted_gauge_max_abs_error - expected["gauge_error"]) <= 1e-12
+        and abs(receipt.rollout_mass_max_relative_error - expected["rollout_error"]) <= 1e-12
+        and abs(
+            receipt.probability_normalization_max_abs_error - expected["probability_error"]
+        )
+        <= 1e-12
+        and abs(receipt.control_target_mask_max_abs_error - expected["control_error"])
+        <= 1e-12
+        and abs(receipt.fixed_channel_max_abs_change - expected["fixed_change"]) <= 1e-12
+        and receipt.protected_metrics_pass == protected_pass
+    )
+    if not numeric or receipt.status != expected_status:
+        raise IntegrityError("The T07S amended receipt differs from recomputed statistics.")
+    if (
+        component.point_delta != receipt.r1_point_delta
+        or component.bootstrap_interval != receipt.r1_target_bootstrap_interval
+        or component.required_margin != receipt.r0_required_margin
+        or component.channel_activity != receipt.r1_channel_activity
+    ):
+        raise IntegrityError("The generic component receipt differs from amended evidence.")
+    return amendment
