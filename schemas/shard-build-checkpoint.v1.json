@@ -47,9 +47,53 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
+    "active_offsets_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Active Offsets Sha256"
+    },
+    "active_shard_index": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Active Shard Index"
+    },
+    "active_shard_nonzeros": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Active Shard Nonzeros",
+      "type": "integer"
+    },
+    "active_shard_rows": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Active Shard Rows",
+      "type": "integer"
+    },
     "build_plan_id": {
       "title": "Build Plan Id",
       "type": "string"
+    },
+    "committed_chunks": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Committed Chunks",
+      "type": "integer"
     },
     "completed_shard_hashes": {
       "items": {
@@ -89,6 +133,18 @@
       "minimum": 0,
       "title": "Source Cursor",
       "type": "integer"
+    },
+    "source_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Id"
     },
     "temporary_shard_ids": {
       "default": [],

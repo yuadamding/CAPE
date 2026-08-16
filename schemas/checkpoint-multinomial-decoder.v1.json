@@ -1,0 +1,96 @@
+{
+  "$id": "https://credo.local/schemas/checkpoint-multinomial-decoder.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Leakage-safe G04 decoder and its dimension-zero null.",
+  "properties": {
+    "checkpoints": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Checkpoints",
+      "type": "array"
+    },
+    "decoder_contract_id": {
+      "title": "Decoder Contract Id",
+      "type": "string"
+    },
+    "dimension_zero_null": {
+      "const": "checkpoint_global_frequency",
+      "default": "checkpoint_global_frequency",
+      "title": "Dimension Zero Null",
+      "type": "string"
+    },
+    "equation": {
+      "const": "softmax(checkpoint_intercept + latent_weights @ z)",
+      "default": "softmax(checkpoint_intercept + latent_weights @ z)",
+      "title": "Equation",
+      "type": "string"
+    },
+    "features": {
+      "exclusiveMinimum": 0,
+      "title": "Features",
+      "type": "integer"
+    },
+    "fit_row_ids_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Fit Row Ids Hash",
+      "type": "string"
+    },
+    "guide_parameters": {
+      "const": false,
+      "default": false,
+      "title": "Guide Parameters",
+      "type": "boolean"
+    },
+    "heldout_donor_outcomes_used": {
+      "const": false,
+      "default": false,
+      "title": "Heldout Donor Outcomes Used",
+      "type": "boolean"
+    },
+    "heldout_donor_parameters": {
+      "const": false,
+      "default": false,
+      "title": "Heldout Donor Parameters",
+      "type": "boolean"
+    },
+    "intercept_axis": {
+      "const": "checkpoint",
+      "default": "checkpoint",
+      "title": "Intercept Axis",
+      "type": "string"
+    },
+    "latent_dimension": {
+      "minimum": 0,
+      "title": "Latent Dimension",
+      "type": "integer"
+    },
+    "pseudocount": {
+      "default": 0.5,
+      "exclusiveMinimum": 0,
+      "title": "Pseudocount",
+      "type": "number"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "target_parameters": {
+      "const": false,
+      "default": false,
+      "title": "Target Parameters",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "decoder_contract_id",
+    "checkpoints",
+    "features",
+    "latent_dimension",
+    "fit_row_ids_hash"
+  ],
+  "title": "CheckpointMultinomialDecoderContract",
+  "type": "object"
+}

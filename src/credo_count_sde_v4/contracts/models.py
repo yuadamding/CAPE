@@ -218,6 +218,38 @@ class CountRepresentationBundle(StrictModel):
         return self
 
 
+class CheckpointMultinomialDecoderContract(StrictModel):
+    """Leakage-safe G04 decoder and its dimension-zero null."""
+
+    schema_version: int = 1
+    decoder_contract_id: str
+    equation: Literal["softmax(checkpoint_intercept + latent_weights @ z)"] = (
+        "softmax(checkpoint_intercept + latent_weights @ z)"
+    )
+    intercept_axis: Literal["checkpoint"] = "checkpoint"
+    dimension_zero_null: Literal["checkpoint_global_frequency"] = "checkpoint_global_frequency"
+    checkpoints: tuple[str, ...]
+    features: int = Field(gt=0)
+    latent_dimension: int = Field(ge=0)
+    pseudocount: float = Field(default=0.5, gt=0)
+    fit_row_ids_hash: Sha256
+    heldout_donor_outcomes_used: Literal[False] = False
+    guide_parameters: Literal[False] = False
+    target_parameters: Literal[False] = False
+    heldout_donor_parameters: Literal[False] = False
+
+    @model_validator(mode="after")
+    def validate_checkpoint_decoder(self) -> CheckpointMultinomialDecoderContract:
+        if not self.checkpoints or tuple(sorted(set(self.checkpoints))) != self.checkpoints:
+            raise ValueError("Checkpoint decoder checkpoints must be unique and sorted.")
+        if any(not value for value in self.checkpoints):
+            raise ValueError("Checkpoint decoder identifiers cannot be empty.")
+        expected = self.identity(id_field="decoder_contract_id")
+        if self.decoder_contract_id != expected:
+            raise ValueError(f"decoder_contract_id mismatch: expected {expected}.")
+        return self
+
+
 class ParticleEngineQualificationBundle(StrictModel):
     """Immutable T04 numerical particle-engine qualification bundle."""
 
@@ -1311,6 +1343,67 @@ class CountStoreManifest(StrictModel):
     )
 
 
+class CountStoreShard(StrictModel):
+    """One immutable row-contiguous member of a sharded count store."""
+
+    shard_id: str = Field(min_length=1)
+    relative_uri: str
+    rows: int = Field(gt=0)
+    features: int = Field(gt=0)
+    nnz: int = Field(ge=0)
+    row_id_min: int
+    row_id_max: int
+    row_ids_hash: Sha256
+    content_sha256: Sha256
+
+    _safe_uri = field_validator("relative_uri")(
+        classmethod(lambda cls, value: validate_relative_uri(value))
+    )
+
+    @model_validator(mode="after")
+    def valid_row_interval(self) -> CountStoreShard:
+        if self.row_id_max < self.row_id_min:
+            raise ValueError("Shard row interval is reversed.")
+        return self
+
+
+class ShardedCountStoreManifest(StrictModel):
+    """Catalog-independent sparse store assembled from ordered CSR shards."""
+
+    schema_version: int = 1
+    store_id: str
+    backend: Literal["csr_hdf5_sharded"] = "csr_hdf5_sharded"
+    rows: int = Field(gt=0)
+    features: int = Field(gt=0)
+    nnz: int = Field(ge=0)
+    value_dtype: Literal["int32"] = "int32"
+    row_ids_hash: Sha256
+    feature_index_hash: Sha256
+    row_locator_sha256: Sha256
+    row_locator_relative_uri: str = "row-locator.h5"
+    merkle_root: Sha256
+    shards: tuple[CountStoreShard, ...]
+
+    _safe_locator_uri = field_validator("row_locator_relative_uri")(
+        classmethod(lambda cls, value: validate_relative_uri(value))
+    )
+
+    @model_validator(mode="after")
+    def validate_store(self) -> ShardedCountStoreManifest:
+        if not self.shards:
+            raise ValueError("Sharded count store needs at least one shard.")
+        if sum(item.rows for item in self.shards) != self.rows:
+            raise ValueError("Shard rows do not sum to store rows.")
+        if sum(item.nnz for item in self.shards) != self.nnz:
+            raise ValueError("Shard nonzeros do not sum to store nonzeros.")
+        if any(item.features != self.features for item in self.shards):
+            raise ValueError("Every shard must use the store feature width.")
+        expected = self.identity(id_field="store_id")
+        if self.store_id != expected:
+            raise ValueError(f"store_id mismatch: expected {expected}.")
+        return self
+
+
 class PreparedRepresentation(StrictModel):
     schema_version: int = 1
     prepared_id: str
@@ -1732,7 +1825,7 @@ class CompiledRunContract(StrictModel):
     schema_version: int = 1
     compiled_run_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev27"] = "4.0.dev27"
+    recipe_version: Literal["4.0.dev28"] = "4.0.dev28"
     recipe_wheel_hash: Sha256
     frozen_credo_artifact_hash: Sha256
     environment_lock_hash: Sha256
@@ -1799,7 +1892,7 @@ class InferenceBundleManifest(StrictModel):
     compiled_run_id: str
     selected_checkpoint_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev27"] = "4.0.dev27"
+    recipe_version: Literal["4.0.dev28"] = "4.0.dev28"
     selected_family: Literal[
         "configured_checkpoint",
         "gene_decoder_selected",
@@ -1893,6 +1986,197 @@ class MultiplicityPlan(StrictModel):
     q: float = Field(default=0.05, gt=0, lt=1)
     families: tuple[str, ...]
     reporting_universe: str
+
+
+class ClaimRecord(StrictModel):
+    """One preregistered G14 claim key and its allowable interpretation."""
+
+    claim_id: str = Field(min_length=1)
+    component_id: str = Field(min_length=1)
+    parent_claim_ids: tuple[str, ...] = ()
+    endpoint: str = Field(min_length=1)
+    candidate: str = Field(min_length=1)
+    comparator: str = Field(min_length=1)
+    direction: Literal["lower", "higher"]
+    primary_or_secondary: Literal["primary", "secondary"]
+    claim_family: Literal["P", "M", "E", "G"]
+    resampling_unit: str = Field(min_length=1)
+    multiplicity_method: Literal[
+        "paired_max_statistic",
+        "joint_max_statistic",
+        "holm_fwer",
+        "westfall_young",
+        "bh_fdr",
+        "descriptive_only",
+    ]
+    external_independence_class: Literal[
+        "not_external",
+        "unresolved_blocked",
+        "same_data_reexpression",
+        "shared_samples_distinct_assay",
+        "distinct_samples_same_study",
+        "independent_study",
+    ] = "not_external"
+    eligible_wording: str = Field(min_length=1)
+    forbidden_wording: tuple[str, ...]
+
+    @model_validator(mode="after")
+    def validate_claim(self) -> ClaimRecord:
+        if self.claim_id in self.parent_claim_ids:
+            raise ValueError("A claim cannot be its own parent.")
+        if not self.forbidden_wording or any(not value for value in self.forbidden_wording):
+            raise ValueError("Every claim requires explicit forbidden wording.")
+        return self
+
+
+class ClaimRegistry(StrictModel):
+    """Immutable preregistered claim universe for G14."""
+
+    schema_version: int = 1
+    registry_id: str
+    frozen_before_first_relevant_outer_evaluation: Literal[True] = True
+    records: tuple[ClaimRecord, ...]
+
+    @model_validator(mode="after")
+    def validate_registry(self) -> ClaimRegistry:
+        ids = [record.claim_id for record in self.records]
+        if not ids or len(ids) != len(set(ids)):
+            raise ValueError("Claim registry IDs must be nonempty and unique.")
+        known = set(ids)
+        for record in self.records:
+            if not set(record.parent_claim_ids) <= known:
+                raise ValueError("Claim registry contains an unknown parent claim.")
+        expected = self.identity(id_field="registry_id")
+        if self.registry_id != expected:
+            raise ValueError(f"registry_id mismatch: expected {expected}.")
+        return self
+
+
+class RobustnessAxis(StrictModel):
+    axis_id: str = Field(min_length=1)
+    values: tuple[str, ...]
+    frozen_before_corresponding_outer_outcomes: Literal[True] = True
+
+    @model_validator(mode="after")
+    def validate_axis(self) -> RobustnessAxis:
+        if len(self.values) < 2 or len(self.values) != len(set(self.values)):
+            raise ValueError("A robustness axis requires at least two unique values.")
+        return self
+
+
+class G14RobustnessPlan(StrictModel):
+    schema_version: int = 1
+    plan_id: str
+    axes: tuple[RobustnessAxis, ...]
+    base_contract_hashes: tuple[Sha256, ...]
+    model_fitting: Literal[False] = False
+    model_selection: Literal[False] = False
+    threshold_adjustment: Literal[False] = False
+    target_discovery: Literal[False] = False
+    sensitivities_select_reported_model: Literal[False] = False
+
+    @model_validator(mode="after")
+    def validate_robustness_plan(self) -> G14RobustnessPlan:
+        axis_ids = [axis.axis_id for axis in self.axes]
+        if not axis_ids or len(axis_ids) != len(set(axis_ids)):
+            raise ValueError("G14 robustness axes must be nonempty and unique.")
+        if not self.base_contract_hashes:
+            raise ValueError("G14 robustness must bind at least one base contract.")
+        expected = self.identity(id_field="plan_id")
+        if self.plan_id != expected:
+            raise ValueError(f"plan_id mismatch: expected {expected}.")
+        return self
+
+
+class G14MultiplicityFamily(StrictModel):
+    family_id: Literal["P", "M", "E", "G"]
+    claim_ids: tuple[str, ...]
+    method: Literal[
+        "paired_max_statistic",
+        "joint_max_or_holm",
+        "holm_or_westfall_young",
+        "bh_fdr_locked_family",
+    ]
+    error_rate: float = Field(default=0.05, gt=0, le=0.05)
+    conditional_on_observed_donors: bool = False
+
+    @model_validator(mode="after")
+    def validate_family(self) -> G14MultiplicityFamily:
+        if not self.claim_ids or len(self.claim_ids) != len(set(self.claim_ids)):
+            raise ValueError("Multiplicity family claim IDs must be nonempty and unique.")
+        if self.family_id == "P" and not self.conditional_on_observed_donors:
+            raise ValueError("Family P inference must be conditional on observed donors.")
+        return self
+
+
+class G14MultiplicityContract(StrictModel):
+    schema_version: int = 1
+    multiplicity_contract_id: str
+    claim_registry_id: str
+    families: tuple[G14MultiplicityFamily, ...]
+    general_population_donor_claim_allowed: Literal[False] = False
+
+    @model_validator(mode="after")
+    def validate_g14_multiplicity(self) -> G14MultiplicityContract:
+        family_ids = [family.family_id for family in self.families]
+        if not family_ids or len(family_ids) != len(set(family_ids)):
+            raise ValueError("G14 multiplicity families must be nonempty and unique.")
+        claim_ids = [claim for family in self.families for claim in family.claim_ids]
+        if len(claim_ids) != len(set(claim_ids)):
+            raise ValueError("One claim cannot occur in multiple multiplicity families.")
+        expected = self.identity(id_field="multiplicity_contract_id")
+        if self.multiplicity_contract_id != expected:
+            raise ValueError(f"multiplicity_contract_id mismatch: expected {expected}.")
+        return self
+
+
+class G14SealContract(StrictModel):
+    """Final evidence-only stage; it cannot train, select, or discover."""
+
+    schema_version: int = 1
+    g14_contract_id: str
+    claim_registry_id: str
+    robustness_plan_id: str
+    multiplicity_contract_id: str
+    purpose: Literal["robustness_multiplicity_and_claim_sealing"] = (
+        "robustness_multiplicity_and_claim_sealing"
+    )
+    model_fitting: Literal[False] = False
+    model_selection: Literal[False] = False
+    threshold_adjustment: Literal[False] = False
+    target_discovery: Literal[False] = False
+    required_outputs: tuple[
+        Literal[
+            "ROBUSTNESS_MATRIX.parquet",
+            "SIMULTANEOUS_INTERVALS.parquet",
+            "MULTIPLICITY_DECISION.json",
+            "CLAIM_LEDGER.parquet",
+            "FINAL_EVIDENCE_GRAPH.json",
+            "FINAL_CLAIM_SEAL_RECEIPT.json",
+            "SHA256SUMS",
+        ],
+        ...,
+    ]
+
+    @model_validator(mode="after")
+    def validate_g14_seal(self) -> G14SealContract:
+        expected_outputs = {
+            "ROBUSTNESS_MATRIX.parquet",
+            "SIMULTANEOUS_INTERVALS.parquet",
+            "MULTIPLICITY_DECISION.json",
+            "CLAIM_LEDGER.parquet",
+            "FINAL_EVIDENCE_GRAPH.json",
+            "FINAL_CLAIM_SEAL_RECEIPT.json",
+            "SHA256SUMS",
+        }
+        if set(self.required_outputs) != expected_outputs or len(self.required_outputs) != len(
+            expected_outputs
+        ):
+            raise ValueError("G14 seal output surface is incomplete or duplicated.")
+        expected = self.identity(id_field="g14_contract_id")
+        if self.g14_contract_id != expected:
+            raise ValueError(f"g14_contract_id mismatch: expected {expected}.")
+        return self
 
 
 class CandidateSelectionPlan(StrictModel):
@@ -2285,7 +2569,37 @@ class ShardBuildCheckpoint(StrictModel):
     temporary_shard_ids: tuple[str, ...] = ()
     row_count: int = Field(ge=0)
     nonzero_count: int = Field(ge=0)
+    active_shard_index: int | None = Field(default=None, ge=0)
+    active_shard_rows: int = Field(default=0, ge=0)
+    active_shard_nonzeros: int = Field(default=0, ge=0)
+    committed_chunks: int = Field(default=0, ge=0)
+    source_id: str | None = None
+    active_offsets_sha256: Sha256 | None = None
     rng_state: ArtifactRef | None = None
+
+    @model_validator(mode="after")
+    def validate_shard_build_checkpoint(self) -> ShardBuildCheckpoint:
+        if not self.build_plan_id:
+            raise ValueError("Shard-build checkpoint requires a build-plan identity.")
+        if len(self.completed_shard_hashes) != len(set(self.completed_shard_hashes)):
+            raise ValueError("Completed shard hashes must be unique.")
+        if len(self.temporary_shard_ids) != len(set(self.temporary_shard_ids)):
+            raise ValueError("Temporary shard identities must be unique.")
+        if self.active_shard_index is None:
+            if self.active_shard_rows or self.active_shard_nonzeros:
+                raise ValueError("A finalized checkpoint cannot retain active shard counts.")
+            if self.active_offsets_sha256 is not None:
+                raise ValueError("A finalized checkpoint cannot retain active offsets.")
+        else:
+            if not self.source_id or not self.temporary_shard_ids:
+                raise ValueError("An active shard requires source and temporary-file identities.")
+            if self.active_offsets_sha256 is None:
+                raise ValueError("An active shard requires an offsets hash.")
+            if self.active_shard_rows > self.row_count:
+                raise ValueError("Active shard rows exceed total committed rows.")
+            if self.active_shard_nonzeros > self.nonzero_count:
+                raise ValueError("Active shard nonzeros exceed total committed nonzeros.")
+        return self
 
 
 class RepresentationCheckpoint(StrictModel):

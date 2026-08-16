@@ -16,7 +16,7 @@ Implemented in this repository:
 - CLI/API, full content/reload verification, correction/context audit helpers;
 - CPU regression, leakage, corruption, fault, resume, compatibility, and wheel CI.
 
-Dev27 retains the component-qualified boundary introduced in dev18: the T00
+Dev28 retains the component-qualified boundary introduced in dev18: the T00
 pooled finite-measure contract, public API/CLI, strict channel-isolation
 contract, and focused invariants. The external pooled Renz adapter passed T00
 with 495 guides and 277,200 cells. T04 independently passed its fixed-truth
@@ -77,13 +77,23 @@ software/synthetic qualification, not evidence about a cohort. See the
 [dev24 R1 amendment](t07s-reaction-metric-amendment.md) and authoritative
 [dev25 unified R0/R1 amendment](t07s-null-interval-amendment.md).
 
-Local acceptance completed with 144 CPU tests passing, one CUDA-only test
-skipped on the CPU validation host, and 86.39% combined branch coverage. The
-exact receipt is `receipts/local-validation.json`. Ruff,
+Local acceptance completed with 160 CPU tests passing and one CUDA-only test
+skipped on the CPU validation host, with 85.20% branch-aware coverage. The exact
+test and coverage results are in
+`receipts/local-validation.json`. Ruff,
 mypy, generated-schema, documentation-link, wheel
 namespace/license, clean-wheel lifecycle, and frozen-CREDO preflight checks
 passed. The wheel is reproducible under a fixed `SOURCE_DATE_EPOCH`; normalized
 sdist publication is reproducible through `scripts/normalize_sdist.py`.
+
+Dev28 adds the G00/G04/G14 infrastructure required by the GSE314342 component
+program: exact sharded CSR manifests and Merkle identities, persistent readers,
+a bounded interruption-reconciling writer, the checkpoint-conditioned
+dimension-zero multinomial null, and evidence-only claim, robustness,
+multiplicity, and seal contracts. External G00 probes passed source, feature,
+capacity, and sparse-read correctness checks but failed the frozen H100
+throughput requirement by orders of magnitude. The full CountStore and every
+real-data downstream component remain blocked.
 
 Dev7 replaced the invalid reconstructed-SVD softmax with a checkpoint-owned
 multinomial count-composition decoder. Dev10 added a deterministic
@@ -131,7 +141,7 @@ conditional-interaction, and joint nulls, freezes fold and seed identities,
 and strengthens noninteraction comparators. That T03 code remains unqualified
 until T01, T02, and the prescribed pooled pilot pass.
 
-Deliberately not asserted complete in `4.0.0.dev27`:
+Deliberately not asserted complete in `4.0.0.dev28`:
 
 - stable CREDO entry-point discovery;
 - in-repository real-cohort adapters, biological thresholds, or biological claims;
@@ -177,5 +187,5 @@ authority.
 
 Exact future use depends on the branch commit, `REPOSITORY.sha256`, the
 wheel/sdist bytes, generated schemas, and the local validation receipt. A clean
-dev27 commit and release receipt are necessary—but not sufficient—before any
+dev28 commit and release receipt are necessary—but not sufficient—before any
 pilot deployment or stable promotion.

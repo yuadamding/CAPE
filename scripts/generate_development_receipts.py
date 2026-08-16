@@ -105,6 +105,7 @@ def main() -> None:
     )
     t07r_v2_evidence = workspace / "credo_v4_renz_t07r_a0_v2_20260816"
     t07r_v2_bundle = t07r_v2_evidence / "T07R_A0_PHYSICAL_POOL_CONDITIONAL_DM_V2_R2"
+    gse314342_g00 = workspace / "credo_v4_gse314342_g00_20260816"
     receipt = {
         "schema_version": 1,
         "status": "engineering_only",
@@ -213,6 +214,31 @@ def main() -> None:
         "t07r_v2_run_report_sha256": (
             sha256_file(t07r_v2_evidence / "RUN_REPORT.md")
             if (t07r_v2_evidence / "RUN_REPORT.md").is_file()
+            else None
+        ),
+        "gse314342_g00_artifacts_manifest_sha256": (
+            sha256_file(gse314342_g00 / "ARTIFACTS.sha256")
+            if (gse314342_g00 / "ARTIFACTS.sha256").is_file()
+            else None
+        ),
+        "gse314342_g00_engineering_decision_sha256": (
+            sha256_file(gse314342_g00 / "G00_ENGINEERING_DECISION.json")
+            if (gse314342_g00 / "G00_ENGINEERING_DECISION.json").is_file()
+            else None
+        ),
+        "gse314342_g00_execution_report_sha256": (
+            sha256_file(gse314342_g00 / "G00_EXECUTION_REPORT.md")
+            if (gse314342_g00 / "G00_EXECUTION_REPORT.md").is_file()
+            else None
+        ),
+        "gse314342_g04_h100_evidence_archive_sha256": (
+            sha256_file(gse314342_g00 / "FINAL_G04_EVIDENCE_A2.tar.gz")
+            if (gse314342_g00 / "FINAL_G04_EVIDENCE_A2.tar.gz").is_file()
+            else None
+        ),
+        "gse314342_g14_contract_manifest_sha256": (
+            sha256_file(gse314342_g00 / "G14_FROZEN_CONTRACT/SHA256SUMS")
+            if (gse314342_g00 / "G14_FROZEN_CONTRACT/SHA256SUMS").is_file()
             else None
         ),
         "tests_passed": args.tests_passed,

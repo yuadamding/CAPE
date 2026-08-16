@@ -15,6 +15,8 @@ from .canonical import sha256_file
 from .compat.credo3 import verify_frozen_credo
 from .compile import compile_problem
 from .contracts import (
+    CheckpointMultinomialDecoderContract,
+    ClaimRegistry,
     CompiledRunContract,
     ComponentTestContract,
     ComponentTestReceipt,
@@ -22,6 +24,9 @@ from .contracts import (
     CountRepresentationBundle,
     CountStoreManifest,
     EvaluationBundleManifest,
+    G14MultiplicityContract,
+    G14RobustnessPlan,
+    G14SealContract,
     InferenceBundleManifest,
     LifecycleState,
     ParticleEngineQualificationBundle,
@@ -46,6 +51,7 @@ from .contracts import (
     SealedRunManifest,
     SelectionManifest,
     SemanticStudySnapshot,
+    ShardedCountStoreManifest,
     StateSelectionCalibration,
     StateSelectionCalibrationResults,
     VerifyLevel,
@@ -309,7 +315,19 @@ def validate_contract(path: Path) -> dict[str, Any]:
     if "calibration_id" in payload and "rows" in payload:
         selected = StateSelectionCalibrationResults
     else:
-        if payload.get("method") in {
+        if payload.get("backend") == "csr_hdf5_sharded":
+            selected = ShardedCountStoreManifest
+        elif "decoder_contract_id" in payload:
+            selected = CheckpointMultinomialDecoderContract
+        elif "registry_id" in payload and "records" in payload:
+            selected = ClaimRegistry
+        elif "plan_id" in payload and "axes" in payload:
+            selected = G14RobustnessPlan
+        elif "g14_contract_id" in payload:
+            selected = G14SealContract
+        elif "multiplicity_contract_id" in payload:
+            selected = G14MultiplicityContract
+        elif payload.get("method") in {
             "complete_denominator_dm_reaction_recovery_v1",
             "complete_denominator_dm_reaction_recovery_v2",
         }:

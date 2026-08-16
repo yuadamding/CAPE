@@ -1,0 +1,93 @@
+{
+  "$defs": {
+    "G14MultiplicityFamily": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Claim Ids",
+          "type": "array"
+        },
+        "conditional_on_observed_donors": {
+          "default": false,
+          "title": "Conditional On Observed Donors",
+          "type": "boolean"
+        },
+        "error_rate": {
+          "default": 0.05,
+          "exclusiveMinimum": 0,
+          "maximum": 0.05,
+          "title": "Error Rate",
+          "type": "number"
+        },
+        "family_id": {
+          "enum": [
+            "P",
+            "M",
+            "E",
+            "G"
+          ],
+          "title": "Family Id",
+          "type": "string"
+        },
+        "method": {
+          "enum": [
+            "paired_max_statistic",
+            "joint_max_or_holm",
+            "holm_or_westfall_young",
+            "bh_fdr_locked_family"
+          ],
+          "title": "Method",
+          "type": "string"
+        }
+      },
+      "required": [
+        "family_id",
+        "claim_ids",
+        "method"
+      ],
+      "title": "G14MultiplicityFamily",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/g14-multiplicity-contract.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "claim_registry_id": {
+      "title": "Claim Registry Id",
+      "type": "string"
+    },
+    "families": {
+      "items": {
+        "$ref": "#/$defs/G14MultiplicityFamily"
+      },
+      "title": "Families",
+      "type": "array"
+    },
+    "general_population_donor_claim_allowed": {
+      "const": false,
+      "default": false,
+      "title": "General Population Donor Claim Allowed",
+      "type": "boolean"
+    },
+    "multiplicity_contract_id": {
+      "title": "Multiplicity Contract Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "multiplicity_contract_id",
+    "claim_registry_id",
+    "families"
+  ],
+  "title": "G14MultiplicityContract",
+  "type": "object"
+}

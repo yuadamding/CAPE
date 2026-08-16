@@ -1,5 +1,20 @@
 # Changelog
 
+## 4.0.0.dev28 — 2026-08-16
+
+- add immutable sharded CSR manifests, Merkle verification, exact reordered and
+  duplicated reads, and process-local persistent HDF5 readers;
+- add a bounded resumable CSR shard writer that flushes payload before advancing
+  a typed checkpoint and truncates uncommitted suffixes on resume;
+- freeze the G04 checkpoint-conditioned multinomial decoder contract and its
+  checkpoint-global-frequency dimension-zero null without guide, target, or
+  held-out-donor parameters;
+- add G14 claim-registry, robustness, multiplicity, and final seal contracts
+  that are structurally evidence-only;
+- retain external GSE314342 G00 performance as a blocked engineering result:
+  exact sparse I/O and raw-only bucket planning pass, but no tested layout meets
+  the frozen H100 loader gate and the full CountStore is not built.
+
 ## 4.0.0.dev27 — 2026-08-16
 
 - preserve dev26/v1 as an immutable fixed-concentration fold-subcomposition

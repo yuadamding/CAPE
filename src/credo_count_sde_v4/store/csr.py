@@ -7,8 +7,10 @@ import os
 import shutil
 import uuid
 from collections.abc import Iterator
+from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import h5py
 import numpy as np
@@ -27,7 +29,7 @@ class SparseCountBatch:
 
     @property
     def library_sizes(self) -> np.ndarray:
-        return np.asarray(self.matrix.sum(axis=1)).reshape(-1)
+        return cast(np.ndarray, np.asarray(self.matrix.sum(axis=1)).reshape(-1))
 
     def to_dense(self, *, byte_limit: int) -> np.ndarray:
         needed = self.matrix.shape[0] * self.matrix.shape[1] * self.matrix.dtype.itemsize
@@ -152,8 +154,46 @@ class CountStore:
     def __init__(self, path: Path, manifest: CountStoreManifest | None = None) -> None:
         self.path = path
         self._manifest = manifest
+        self._handle: h5py.File | None = None
+        self._owner_pid: int | None = None
+        self._row_index_cache: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
         if path.is_symlink() or not path.is_file():
             raise IntegrityError(f"Count store is not a regular file: {path}.")
+
+    @property
+    def persistent_open(self) -> bool:
+        """Whether this process currently owns one persistent HDF5 handle."""
+
+        return self._handle is not None
+
+    def open(self) -> CountStore:
+        """Open one process-local reader handle and reuse its immutable row index."""
+
+        if self._handle is not None:
+            self._assert_process_owner()
+            return self
+        self._handle = h5py.File(self.path, "r")
+        self._owner_pid = os.getpid()
+        return self
+
+    def close(self) -> None:
+        """Close the process-local handle without discarding immutable index arrays."""
+
+        if self._handle is not None:
+            self._assert_process_owner()
+            self._handle.close()
+            self._handle = None
+            self._owner_pid = None
+
+    def _assert_process_owner(self) -> None:
+        if self._handle is not None and self._owner_pid != os.getpid():
+            raise IntegrityError("A persistent CountStore handle cannot cross a process boundary.")
+
+    def __enter__(self) -> CountStore:
+        return self.open()
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        self.close()
 
     @property
     def manifest(self) -> CountStoreManifest:
@@ -190,18 +230,42 @@ class CountStore:
         with h5py.File(self.path, "r") as handle:
             shape = tuple(map(int, handle.attrs["shape"]))
             indptr = handle["X/indptr"][:]
-            indices = handle["X/indices"][:]
             row_ids = handle["row_ids"][:]
             sorted_ids = handle["row_ids_sorted"][:]
             sorted_positions = handle["row_positions_sorted"][:]
+            raw_features = tuple(
+                FeatureKey.model_validate(json.loads(value))
+                for value in handle["features"].asstr()[:]
+            )
             if shape != (manifest.rows, manifest.features):
                 raise IntegrityError("Count-store shape mismatch.")
             if len(indptr) != shape[0] + 1 or indptr[0] != 0 or indptr[-1] != manifest.nnz:
                 raise IntegrityError("Invalid CSR indptr.")
-            if np.any(np.diff(indptr) < 0) or np.any(indices < 0) or np.any(indices >= shape[1]):
-                raise IntegrityError("Invalid CSR indices.")
+            if np.any(np.diff(indptr) < 0):
+                raise IntegrityError("Invalid CSR indptr.")
+            indices = handle["X/indices"]
+            data = handle["X/data"]
+            if len(indices) != manifest.nnz or len(data) != manifest.nnz:
+                raise IntegrityError("CSR data/index lengths disagree with the manifest.")
+            if (
+                data.dtype != np.dtype(np.int32)
+                or indices.dtype != np.dtype(np.int32)
+                or indptr.dtype != np.dtype(np.int64)
+            ):
+                raise IntegrityError("Count-store CSR dtypes differ from the int32/int64 contract.")
+            chunk_nonzeros = 16_777_216
+            for start in range(0, manifest.nnz, chunk_nonzeros):
+                end = min(start + chunk_nonzeros, manifest.nnz)
+                index_chunk = np.asarray(indices[start:end])
+                data_chunk = np.asarray(data[start:end])
+                if np.any(index_chunk < 0) or np.any(index_chunk >= shape[1]):
+                    raise IntegrityError("Invalid CSR indices.")
+                if not np.issubdtype(data_chunk.dtype, np.integer) or np.any(data_chunk < 0):
+                    raise IntegrityError("Count-store values are not nonnegative integers.")
             if _row_hash(row_ids) != manifest.row_ids_hash:
                 raise IntegrityError("Row identity hash mismatch.")
+            if _feature_hash(raw_features) != manifest.feature_index_hash:
+                raise IntegrityError("Feature identity hash mismatch.")
             if not np.array_equal(sorted_ids, np.sort(row_ids, kind="stable")):
                 raise IntegrityError("Sorted row index is inconsistent.")
             if not np.array_equal(row_ids[sorted_positions], sorted_ids):
@@ -220,10 +284,18 @@ class CountStore:
 
     def rows(self, row_ids: np.ndarray) -> SparseCountBatch:
         requested = np.asarray(row_ids, dtype=np.int64)
-        with h5py.File(self.path, "r") as handle:
-            sorted_ids = handle["row_ids_sorted"][:]
-            sorted_positions = handle["row_positions_sorted"][:]
-            offsets = handle["X/indptr"][:]
+        self._assert_process_owner()
+        manager = (
+            nullcontext(self._handle) if self._handle is not None else h5py.File(self.path, "r")
+        )
+        with manager as handle:
+            if self._row_index_cache is None:
+                self._row_index_cache = (
+                    np.asarray(handle["row_ids_sorted"][:], dtype=np.int64),
+                    np.asarray(handle["row_positions_sorted"][:], dtype=np.int64),
+                    np.asarray(handle["X/indptr"][:], dtype=np.int64),
+                )
+            sorted_ids, sorted_positions, offsets = self._row_index_cache
             found = np.searchsorted(sorted_ids, requested)
             valid = found < len(sorted_ids)
             candidates = np.where(valid)[0]
@@ -254,11 +326,41 @@ class CountStore:
                     row_ids=requested.copy(),
                     feature_index_hash=self.manifest.feature_index_hash,
                 )
+            # Target-balanced samplers commonly request a small number of
+            # contiguous guide runs. Read those exact CSR spans rather than
+            # falling back to one HDF5 operation per cell or scanning every
+            # touched 16k-row window.
+            unique_positions, inverse = np.unique(positions, return_inverse=True)
+            run_breaks = np.where(np.diff(unique_positions) != 1)[0] + 1
+            runs = np.split(unique_positions, run_breaks)
+            if len(runs) <= max(64, len(unique_positions) // 8):
+                run_blocks: list[sparse.csr_matrix] = []
+                for run in runs:
+                    first = int(run[0])
+                    last = int(run[-1]) + 1
+                    span_offsets = offsets[first : last + 1]
+                    data_start, data_end = int(span_offsets[0]), int(span_offsets[-1])
+                    run_blocks.append(
+                        sparse.csr_matrix(
+                            (
+                                handle["X/data"][data_start:data_end],
+                                handle["X/indices"][data_start:data_end],
+                                span_offsets.astype(np.int64) - data_start,
+                            ),
+                            shape=(last - first, self.manifest.features),
+                        )
+                    )
+                unique_matrix = sparse.vstack(run_blocks, format="csr")
+                matrix = unique_matrix[inverse].tocsr()
+                return SparseCountBatch(
+                    matrix=matrix,
+                    row_ids=requested.copy(),
+                    feature_index_hash=self.manifest.feature_index_hash,
+                )
             # Large interleaved selections are read in bounded source-row
             # windows. Never materialize the entire CSR payload: the intended
             # stores can be terabyte-scale.
             if len(positions) >= 4_096:
-                unique_positions, inverse = np.unique(positions, return_inverse=True)
                 window_rows = 16_384
                 blocks: list[sparse.csr_matrix] = []
                 block_positions: list[np.ndarray] = []
@@ -331,8 +433,12 @@ class CountStore:
         )
 
     def row_ids(self) -> np.ndarray:
-        with h5py.File(self.path, "r") as handle:
-            return handle["row_ids"][:]
+        self._assert_process_owner()
+        manager = (
+            nullcontext(self._handle) if self._handle is not None else h5py.File(self.path, "r")
+        )
+        with manager as handle:
+            return cast(np.ndarray, handle["row_ids"][:])
 
     def iter_batches(
         self,

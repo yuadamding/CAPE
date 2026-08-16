@@ -1,0 +1,152 @@
+{
+  "$defs": {
+    "CountStoreShard": {
+      "additionalProperties": false,
+      "description": "One immutable row-contiguous member of a sharded count store.",
+      "properties": {
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "features": {
+          "exclusiveMinimum": 0,
+          "title": "Features",
+          "type": "integer"
+        },
+        "nnz": {
+          "minimum": 0,
+          "title": "Nnz",
+          "type": "integer"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "row_id_max": {
+          "title": "Row Id Max",
+          "type": "integer"
+        },
+        "row_id_min": {
+          "title": "Row Id Min",
+          "type": "integer"
+        },
+        "row_ids_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Row Ids Hash",
+          "type": "string"
+        },
+        "rows": {
+          "exclusiveMinimum": 0,
+          "title": "Rows",
+          "type": "integer"
+        },
+        "shard_id": {
+          "minLength": 1,
+          "title": "Shard Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "shard_id",
+        "relative_uri",
+        "rows",
+        "features",
+        "nnz",
+        "row_id_min",
+        "row_id_max",
+        "row_ids_hash",
+        "content_sha256"
+      ],
+      "title": "CountStoreShard",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/sharded-count-store.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Catalog-independent sparse store assembled from ordered CSR shards.",
+  "properties": {
+    "backend": {
+      "const": "csr_hdf5_sharded",
+      "default": "csr_hdf5_sharded",
+      "title": "Backend",
+      "type": "string"
+    },
+    "feature_index_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Feature Index Hash",
+      "type": "string"
+    },
+    "features": {
+      "exclusiveMinimum": 0,
+      "title": "Features",
+      "type": "integer"
+    },
+    "merkle_root": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Merkle Root",
+      "type": "string"
+    },
+    "nnz": {
+      "minimum": 0,
+      "title": "Nnz",
+      "type": "integer"
+    },
+    "row_ids_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Row Ids Hash",
+      "type": "string"
+    },
+    "row_locator_relative_uri": {
+      "default": "row-locator.h5",
+      "title": "Row Locator Relative Uri",
+      "type": "string"
+    },
+    "row_locator_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Row Locator Sha256",
+      "type": "string"
+    },
+    "rows": {
+      "exclusiveMinimum": 0,
+      "title": "Rows",
+      "type": "integer"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "shards": {
+      "items": {
+        "$ref": "#/$defs/CountStoreShard"
+      },
+      "title": "Shards",
+      "type": "array"
+    },
+    "store_id": {
+      "title": "Store Id",
+      "type": "string"
+    },
+    "value_dtype": {
+      "const": "int32",
+      "default": "int32",
+      "title": "Value Dtype",
+      "type": "string"
+    }
+  },
+  "required": [
+    "store_id",
+    "rows",
+    "features",
+    "nnz",
+    "row_ids_hash",
+    "feature_index_hash",
+    "row_locator_sha256",
+    "merkle_root",
+    "shards"
+  ],
+  "title": "ShardedCountStoreManifest",
+  "type": "object"
+}
