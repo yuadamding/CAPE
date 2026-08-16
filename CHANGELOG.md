@@ -1,5 +1,19 @@
 # Changelog
 
+## 4.0.0.dev27 — 2026-08-16
+
+- preserve dev26/v1 as an immutable fixed-concentration fold-subcomposition
+  result and correct its overbroad complete-physical-denominator wording;
+- add a separately versioned physical-pool conditional-DM objective that uses
+  all 495 source guides and inherits active concentration from the full alpha
+  vector, plus independent SciPy parity and DM-factorization checks;
+- enforce inner and outer sister-guide support, fully cross-link T00/T02A/T07S
+  parents, and separate numerical parity from the sign-based predictive rule;
+- run the one permitted CPU-only, historically exposed fold-0 correction and
+  report both conditional-multinomial and conditional-DM uncertainty surfaces;
+- confirm update 0 remains selected and M1 remains superior, retiring the
+  selector/protocol without broadly retiring the estimator or reaction family.
+
 ## 4.0.0.dev26 — 2026-08-16
 
 - harden dev25 by joining legacy and corrected null rows on full repeat identity

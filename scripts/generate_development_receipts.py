@@ -100,6 +100,11 @@ def main() -> None:
     )
     t07r_evidence = workspace / "credo_v4_renz_t07r_a0_20260816"
     t07r_bundle = t07r_evidence / "T07R_A0_POOLED_LIKELIHOOD"
+    t07r_v2_review = Path(
+        "/home/yding1995/.codex/attachments/3751f141-7899-4e8a-9ced-6caa7aa9525b/pasted-text.txt"
+    )
+    t07r_v2_evidence = workspace / "credo_v4_renz_t07r_a0_v2_20260816"
+    t07r_v2_bundle = t07r_v2_evidence / "T07R_A0_PHYSICAL_POOL_CONDITIONAL_DM_V2_R2"
     receipt = {
         "schema_version": 1,
         "status": "engineering_only",
@@ -190,6 +195,24 @@ def main() -> None:
         "t07r_run_report_sha256": (
             sha256_file(t07r_evidence / "RUN_REPORT.md")
             if (t07r_evidence / "RUN_REPORT.md").is_file()
+            else None
+        ),
+        "t07r_v2_review_sha256": (
+            sha256_file(t07r_v2_review) if t07r_v2_review.is_file() else None
+        ),
+        "t07r_v2_qualification_sha256": (
+            sha256_file(t07r_v2_bundle / "physical-pool-conditional-reaction.json")
+            if (t07r_v2_bundle / "physical-pool-conditional-reaction.json").is_file()
+            else None
+        ),
+        "t07r_v2_test_receipt_sha256": (
+            sha256_file(t07r_v2_bundle / "TEST_RECEIPT.json")
+            if (t07r_v2_bundle / "TEST_RECEIPT.json").is_file()
+            else None
+        ),
+        "t07r_v2_run_report_sha256": (
+            sha256_file(t07r_v2_evidence / "RUN_REPORT.md")
+            if (t07r_v2_evidence / "RUN_REPORT.md").is_file()
             else None
         ),
         "tests_passed": args.tests_passed,

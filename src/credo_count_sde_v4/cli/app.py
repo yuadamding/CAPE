@@ -114,6 +114,16 @@ def build_parser() -> argparse.ArgumentParser:
     pooled_reaction.add_argument("--t07s-amendment", type=_path, required=True)
     pooled_reaction.add_argument("--fold-assignment", type=_path, required=True)
     pooled_reaction.add_argument("--output", type=_path, required=True)
+    conditional_reaction = sub.add_parser(
+        "correct-pooled-reaction",
+        help="run the exposed CPU T07R-A0-v2 physical-pool conditional correction",
+    )
+    conditional_reaction.add_argument("--pooled-bundle", type=_path, required=True)
+    conditional_reaction.add_argument("--t02a-bundle", type=_path, required=True)
+    conditional_reaction.add_argument("--t02a-amendment", type=_path, required=True)
+    conditional_reaction.add_argument("--t07s-amendment", type=_path, required=True)
+    conditional_reaction.add_argument("--fold-assignment", type=_path, required=True)
+    conditional_reaction.add_argument("--output", type=_path, required=True)
     raw_noise = sub.add_parser(
         "qualify-raw-noise",
         help="run the independent T02A raw-count and relative-mass noise qualification",
@@ -234,6 +244,15 @@ def main(argv: list[str] | None = None) -> int:
         result = api.qualify_pooled_reaction(
             args.output,
             pooled_bundle=args.pooled_bundle,
+            t02a_amendment=args.t02a_amendment,
+            t07s_amendment=args.t07s_amendment,
+            fold_assignment=args.fold_assignment,
+        )
+    elif command == "correct-pooled-reaction":
+        result = api.correct_physical_pool_reaction(
+            args.output,
+            pooled_bundle=args.pooled_bundle,
+            t02a_bundle=args.t02a_bundle,
             t02a_amendment=args.t02a_amendment,
             t07s_amendment=args.t07s_amendment,
             fold_assignment=args.fold_assignment,

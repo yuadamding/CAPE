@@ -1,0 +1,243 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/physical-pool-conditional-reaction-bundle.v2.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Immutable CPU forensic correction of the T07R physical-pool estimand.",
+  "properties": {
+    "candidate_updates": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Candidate Updates",
+      "type": "array"
+    },
+    "component_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "conditional_concentration_rule": {
+      "const": "sum_full_alpha_over_active_categories",
+      "title": "Conditional Concentration Rule",
+      "type": "string"
+    },
+    "conditional_dm_bootstrap": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "conditional_multinomial_bootstrap": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "estimator_parity": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "evidence_role": {
+      "const": "forensic_estimand_correction",
+      "title": "Evidence Role",
+      "type": "string"
+    },
+    "exposure_status": {
+      "const": "historically_exposed_development",
+      "title": "Exposure Status",
+      "type": "string"
+    },
+    "factorization_check": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "fold_assignment_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Fold Assignment Sha256",
+      "type": "string"
+    },
+    "full_category_count": {
+      "const": 495,
+      "title": "Full Category Count",
+      "type": "integer"
+    },
+    "full_concentration": {
+      "maximum": 1000.0,
+      "minimum": 1000.0,
+      "title": "Full Concentration",
+      "type": "number"
+    },
+    "inner_validation_fold": {
+      "const": 1,
+      "default": 1,
+      "title": "Inner Validation Fold",
+      "type": "integer"
+    },
+    "input_catalog": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "method": {
+      "const": "physical_pool_conditional_dm_likelihood_v2",
+      "title": "Method",
+      "type": "string"
+    },
+    "minimum_inner_fit_sisters": {
+      "minimum": 1,
+      "title": "Minimum Inner Fit Sisters",
+      "type": "integer"
+    },
+    "minimum_outer_nonouter_sisters": {
+      "minimum": 1,
+      "title": "Minimum Outer Nonouter Sisters",
+      "type": "integer"
+    },
+    "outer_fold": {
+      "const": 0,
+      "default": 0,
+      "title": "Outer Fold",
+      "type": "integer"
+    },
+    "outer_guide_metrics": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "parent_link": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "physical_pool_id": {
+      "const": "pooled_P4_to_P60",
+      "title": "Physical Pool Id",
+      "type": "string"
+    },
+    "pooled_data_id": {
+      "title": "Pooled Data Id",
+      "type": "string"
+    },
+    "predecessor_method": {
+      "const": "fold_subcomposition_fixed_concentration_dm_v1",
+      "title": "Predecessor Method",
+      "type": "string"
+    },
+    "qualification_id": {
+      "title": "Qualification Id",
+      "type": "string"
+    },
+    "refit_effects": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "role_support_audit": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "schema_version": {
+      "const": 2,
+      "default": 2,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "selected_model": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "selection_curve": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "source_denominator_scope": {
+      "const": "all_495_retained_guides",
+      "title": "Source Denominator Scope",
+      "type": "string"
+    },
+    "t02a_amendment_id": {
+      "title": "T02A Amendment Id",
+      "type": "string"
+    },
+    "t02a_noise_id": {
+      "title": "T02A Noise Id",
+      "type": "string"
+    },
+    "t07s_amendment_id": {
+      "title": "T07S Amendment Id",
+      "type": "string"
+    },
+    "terminal_likelihood_scope": {
+      "const": "conditional_subcomposition",
+      "title": "Terminal Likelihood Scope",
+      "type": "string"
+    },
+    "test_contract_id": {
+      "title": "Test Contract Id",
+      "type": "string"
+    },
+    "test_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    }
+  },
+  "required": [
+    "qualification_id",
+    "test_contract_id",
+    "method",
+    "evidence_role",
+    "exposure_status",
+    "predecessor_method",
+    "pooled_data_id",
+    "t02a_noise_id",
+    "t02a_amendment_id",
+    "t07s_amendment_id",
+    "fold_assignment_sha256",
+    "physical_pool_id",
+    "full_category_count",
+    "source_denominator_scope",
+    "terminal_likelihood_scope",
+    "full_concentration",
+    "conditional_concentration_rule",
+    "candidate_updates",
+    "minimum_inner_fit_sisters",
+    "minimum_outer_nonouter_sisters",
+    "input_catalog",
+    "role_support_audit",
+    "selection_curve",
+    "refit_effects",
+    "estimator_parity",
+    "factorization_check",
+    "outer_guide_metrics",
+    "conditional_multinomial_bootstrap",
+    "conditional_dm_bootstrap",
+    "selected_model",
+    "parent_link",
+    "test_receipt",
+    "component_receipt"
+  ],
+  "title": "PhysicalPoolConditionalReactionBundle",
+  "type": "object"
+}

@@ -1,6 +1,6 @@
 # Component-wise qualification program
 
-Status: authoritative development order for `4.0.0.dev26`. This page defines
+Status: authoritative development order for `4.0.0.dev27`. This page defines
 software promotion, not a biological claim.
 
 CREDO V4 is qualified as three dependency tracks rather than one large training
@@ -188,7 +188,7 @@ reaction in synthetic complete catalogs only. See the
 [dev24 R1 amendment](t07s-reaction-metric-amendment.md) and authoritative
 [dev25 unified R0/R1 amendment](t07s-null-interval-amendment.md).
 
-T07R-A0 then tested only pooled relative-guide representation, without a gene
+T07R-A0-v1 then tested only pooled relative-guide representation, without a gene
 representation, drift, diffusion, within-guide selection, ecology, decoder, or
 GPU. Its independent penalized-DM reference and production implementation
 agreed to `7.82e-08` maximum probability error and `9.53e-07` maximum target-
@@ -198,7 +198,16 @@ versus `0.0224217` for the sister-guide target reference. The paired delta was
 `+0.000641766`, with interval `[+0.000621024,+0.000662385]`, far above the
 training-only `1e-08` noninferiority margin. T07R-A0 is therefore
 `fail_retired`; the stop rule forbids more updates or four-fold scale-out. See
-the [exact dev26 record](t07r-a0-pooled-likelihood.md).
+the [exact dev26/v1 and dev27/v2 record](t07r-a0-pooled-likelihood.md).
+
+Dev27 corrects v1's fold-subcomposition concentration without reopening any
+fresh endpoint. The v2 physical-pool conditional DM computes every guide's
+source probability in the complete 495-guide pool, then scores an active fold
+with `alpha_active = 1000 * p_full[active]`. Estimator parity and DM
+factorization pass. Update 0 still wins, and M1 remains superior under both the
+conditional multinomial primary interval and conditional DM sensitivity. This
+is historically exposed forensic evidence. It retires the T07R-A0 selector,
+not the numerical reaction estimator or constant target reaction in general.
 
 T02A consumed the exact passed T00 population and complete common-34,699 raw
 CountStore. One hundred balanced cell split-halves at both checkpoints and 100

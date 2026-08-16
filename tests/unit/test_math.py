@@ -22,7 +22,11 @@ from credo_count_sde_v4.errors import ContractError
 from credo_count_sde_v4.evaluation.evaluator import _training_row_order
 from credo_count_sde_v4.model import CountSDEModel, DynamicPoolBank
 from credo_count_sde_v4.numerics import rollout
-from credo_count_sde_v4.objectives import count_probabilities, dirichlet_multinomial_log_prob
+from credo_count_sde_v4.objectives import (
+    conditional_dirichlet_multinomial_log_prob,
+    count_probabilities,
+    dirichlet_multinomial_log_prob,
+)
 from credo_count_sde_v4.training.trainer import (
     _csr_selected_logit_sum,
     _fit_shrunk_target_main_weight,
@@ -107,6 +111,30 @@ def test_dm_large_total_and_truncated_denominator_negative_control() -> None:
     )
     assert torch.isfinite(full)
     assert not torch.isclose(full, truncated)
+
+
+def test_physical_pool_dm_conditioning_inherits_subset_concentration() -> None:
+    probability = torch.tensor([0.10, 0.15, 0.20, 0.25, 0.30], dtype=torch.float64)
+    active = torch.tensor([True, False, True, True, False])
+    counts = torch.tensor([3.0, 7.0, 5.0], dtype=torch.float64)
+    actual = conditional_dirichlet_multinomial_log_prob(counts, probability, active, 1000.0)
+    alpha = 1000.0 * probability.numpy()[active.numpy()]
+    y = counts.numpy()
+    expected = (
+        gammaln(y.sum() + 1.0)
+        - gammaln(y + 1.0).sum()
+        + gammaln(alpha.sum())
+        - gammaln(y.sum() + alpha.sum())
+        + (gammaln(y + alpha) - gammaln(alpha)).sum()
+    )
+    assert actual.item() == pytest.approx(expected, abs=1e-12)
+    assert alpha.sum() == pytest.approx(550.0)
+    fixed_subset = dirichlet_multinomial_log_prob(
+        counts,
+        torch.log(probability[active] / probability[active].sum()),
+        torch.tensor(1000.0),
+    )
+    assert not torch.isclose(actual, fixed_subset)
 
 
 def test_selection_and_fitness_gauges_and_positive_mass() -> None:

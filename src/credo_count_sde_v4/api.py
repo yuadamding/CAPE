@@ -26,6 +26,8 @@ from .contracts import (
     LifecycleState,
     ParticleEngineQualificationBundle,
     ParticleEngineTestReceipt,
+    PhysicalPoolConditionalReactionBundle,
+    PhysicalPoolConditionalReactionReceipt,
     PooledFiniteMeasureBundle,
     PooledReactionLikelihoodBundle,
     PooledReactionLikelihoodReceipt,
@@ -68,8 +70,10 @@ from .persistence import LifecycleLedger, verify_directory
 from .prepare import prepare_representation
 from .reaction import (
     amend_reaction_recovery_metrics,
+    qualify_physical_pool_conditional_reaction,
     qualify_pooled_reaction_likelihood,
     qualify_reaction_recovery,
+    verify_physical_pool_conditional_reaction,
     verify_pooled_reaction_likelihood,
     verify_reaction_recovery_metric_amendment,
     verify_reaction_recovery_qualification,
@@ -194,6 +198,30 @@ def qualify_pooled_reaction(
     return result
 
 
+def correct_physical_pool_reaction(
+    destination: Path,
+    *,
+    pooled_bundle: Path,
+    t02a_bundle: Path,
+    t02a_amendment: Path,
+    t07s_amendment: Path,
+    fold_assignment: Path,
+) -> Path:
+    """Run and verify the one permitted exposed CPU denominator correction."""
+
+    _supported_preflight()
+    settings = {
+        "pooled_bundle": pooled_bundle,
+        "t02a_bundle": t02a_bundle,
+        "t02a_amendment": t02a_amendment,
+        "t07s_amendment": t07s_amendment,
+        "fold_assignment": fold_assignment,
+    }
+    result = qualify_physical_pool_conditional_reaction(destination, **settings)
+    verify_physical_pool_conditional_reaction(result, **settings)
+    return result
+
+
 def qualify_raw_noise(
     destination: Path,
     *,
@@ -288,6 +316,8 @@ def validate_contract(path: Path) -> dict[str, Any]:
             selected = ReactionRecoveryQualificationBundle
         elif payload.get("method") == "pooled_target_reaction_dm_likelihood_v1":
             selected = PooledReactionLikelihoodBundle
+        elif payload.get("method") == "physical_pool_conditional_dm_likelihood_v2":
+            selected = PhysicalPoolConditionalReactionBundle
         elif payload.get("method") == "t07s_interval_metric_amendment_v2":
             selected = ReactionRecoveryMetricAmendment
         elif payload.get("method") == "t07s_interval_metric_amendment_v1":
@@ -300,6 +330,8 @@ def validate_contract(path: Path) -> dict[str, Any]:
             selected = ReactionRecoveryTestReceiptV1
         elif "estimator_parity_pass" in payload and "real_pooled_noninferiority_pass" in payload:
             selected = PooledReactionLikelihoodReceipt
+        elif "factorization_pass" in payload and "predictive_decision" in payload:
+            selected = PhysicalPoolConditionalReactionReceipt
         else:
             discriminators = (
                 ("compiled_run_id", CompiledRunContract),

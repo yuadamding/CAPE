@@ -8,7 +8,7 @@ count_state → count_measure → count_context
 ```
 
 It is a sibling of, not a modification to, the frozen CREDO checkout. Version
-`4.0.0.dev26` is engineering software; it is not a biological result and cannot
+`4.0.0.dev27` is engineering software; it is not a biological result and cannot
 be relabeled as stable `4.0`.
 
 Implemented surfaces include strict hash-bound contracts, sparse count storage,
@@ -17,15 +17,19 @@ likelihood, separate state/fitness/context channels, immutable checkpoint and
 resume, streaming inference, four-branch contrasts, one-shot evaluation, and a
 sealed aggregate. The repository contains no cohort adapter or biological data.
 
-Dev26 retains the two immutable, failed T01 Hellinger candidates, passed T04
+Dev27 retains the two immutable, failed T01 Hellinger candidates, passed T04
 fixed-pool particle-engine qualification, and completed T02A calibration. It
 adds a no-retraining amendment that places both dev23 T07S null and nonzero
 tests in duration-integrated endpoint units, separates nonzero checkpoint
 selection from false promotion, and retains the tightened 0.05 false-promotion
 limit. It adds the frozen T07R-A0 pooled relative-guide likelihood pilot. The
 production likelihood matches an independent reference on training-only
-synthetic counts, but the real fold selects update 0 and fails noninferiority
-to the sister-guide target reference; that adapter is retired. T01 blocks the
+synthetic counts, but its fixed subset concentration is now explicitly labeled
+as a fold-subcomposition v1 method. Dev27 adds the physical-pool conditional-DM
+v2 forensic correction. It again selects update 0 and the sister-guide target
+reference is superior under both conditional multinomial and conditional-DM
+uncertainty surfaces. The selector/protocol is retired; the numerical estimator
+and constant-reaction family are not broadly retired. T01 blocks the
 pooled real-data state-dynamics path; it does not block T02A raw-count/mass
 noise qualification or the passed synthetic T04/T07S numerical path. T00 has an
 explicit, immutable pooled finite-measure API and receipt. The T03 source ×
@@ -63,6 +67,15 @@ credo-v4 qualify-pooled-reaction \
   --fold-assignment /path/to/guide_fold_assignment.parquet \
   --output /tmp/T07R_A0_POOLED_LIKELIHOOD
 
+# One permitted, historically exposed physical-pool denominator correction.
+credo-v4 correct-pooled-reaction \
+  --pooled-bundle /path/to/T00_pooled_data_contract \
+  --t02a-bundle /path/to/T02A_raw_count_mass_noise_v2 \
+  --t02a-amendment /path/to/T02A_INTERPRETATION_AMENDMENT \
+  --t07s-amendment /path/to/T07S_NULL_INTERVAL_AMENDMENT \
+  --fold-assignment /path/to/guide_fold_assignment.parquet \
+  --output /tmp/T07R_A0_PHYSICAL_POOL_CONDITIONAL_DM_V2_R2
+
 # Independent T02A calibration against a passed T00 bundle and raw CountStore.
 credo-v4 qualify-raw-noise \
   --pooled-bundle /path/to/T00_pooled_data_contract \
@@ -79,7 +92,7 @@ See [architecture](docs/architecture.md), [contracts](docs/contracts.md),
 [the dev23 T07S record](docs/t07s-reaction-recovery.md),
 [the dev24 R1 amendment](docs/t07s-reaction-metric-amendment.md),
 [the authoritative dev25 unified R0/R1 amendment](docs/t07s-null-interval-amendment.md),
-[the dev26 T07R-A0 record](docs/t07r-a0-pooled-likelihood.md), and
+[the dev26/v1 and dev27/v2 T07R-A0 record](docs/t07r-a0-pooled-likelihood.md), and
 [release policy](docs/release.md).
 
 Current verification status is recorded in

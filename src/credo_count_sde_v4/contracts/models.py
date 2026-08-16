@@ -693,6 +693,126 @@ class PooledReactionLikelihoodReceipt(StrictModel):
         return self
 
 
+class PhysicalPoolConditionalReactionBundle(StrictModel):
+    """Immutable CPU forensic correction of the T07R physical-pool estimand."""
+
+    schema_version: Literal[2] = 2
+    qualification_id: str
+    test_contract_id: str
+    method: Literal["physical_pool_conditional_dm_likelihood_v2"]
+    evidence_role: Literal["forensic_estimand_correction"]
+    exposure_status: Literal["historically_exposed_development"]
+    predecessor_method: Literal["fold_subcomposition_fixed_concentration_dm_v1"]
+    pooled_data_id: str
+    t02a_noise_id: str
+    t02a_amendment_id: str
+    t07s_amendment_id: str
+    fold_assignment_sha256: Sha256
+    physical_pool_id: Literal["pooled_P4_to_P60"]
+    full_category_count: Literal[495]
+    source_denominator_scope: Literal["all_495_retained_guides"]
+    terminal_likelihood_scope: Literal["conditional_subcomposition"]
+    full_concentration: float = Field(ge=1000.0, le=1000.0)
+    conditional_concentration_rule: Literal["sum_full_alpha_over_active_categories"]
+    outer_fold: Literal[0] = 0
+    inner_validation_fold: Literal[1] = 1
+    candidate_updates: tuple[int, ...]
+    minimum_inner_fit_sisters: int = Field(ge=1)
+    minimum_outer_nonouter_sisters: int = Field(ge=1)
+    input_catalog: ArtifactRef
+    role_support_audit: ArtifactRef
+    selection_curve: ArtifactRef
+    refit_effects: ArtifactRef
+    estimator_parity: ArtifactRef
+    factorization_check: ArtifactRef
+    outer_guide_metrics: ArtifactRef
+    conditional_multinomial_bootstrap: ArtifactRef
+    conditional_dm_bootstrap: ArtifactRef
+    selected_model: ArtifactRef
+    parent_link: ArtifactRef
+    test_receipt: ArtifactRef
+    component_receipt: ArtifactRef
+
+    @model_validator(mode="after")
+    def validate_physical_pool_conditional_reaction(
+        self,
+    ) -> PhysicalPoolConditionalReactionBundle:
+        expected = self.identity(id_field="qualification_id")
+        if self.qualification_id != expected:
+            raise ValueError(f"qualification_id mismatch: expected {expected}.")
+        if self.candidate_updates != (0, 25, 50, 100, 200):
+            raise ValueError("T07R-A0-v2 requires the frozen update grid.")
+        return self
+
+
+class PhysicalPoolConditionalReactionReceipt(StrictModel):
+    """Numerical parity and exposed predictive decision for T07R-A0-v2."""
+
+    schema_version: Literal[2] = 2
+    receipt_id: str
+    test_contract_id: str
+    status: Literal["forensic_m1_superior", "forensic_m2_superior", "forensic_inconclusive"]
+    evidence_role: Literal["forensic_estimand_correction"]
+    exposure_status: Literal["historically_exposed_development"]
+    metric_estimand: Literal["physical_pool_conditional_p60_dm_nll_per_count"]
+    selected_update: int = Field(ge=0)
+    estimator_probability_max_abs_error: float = Field(ge=0)
+    estimator_probability_tolerance: float = Field(gt=0)
+    estimator_effect_max_abs_error: float = Field(ge=0)
+    estimator_effect_tolerance: float = Field(gt=0)
+    estimator_parity_pass: bool
+    factorization_max_abs_error: float = Field(ge=0)
+    factorization_tolerance: float = Field(gt=0)
+    factorization_pass: bool
+    m2_selected_policy_nll: float = Field(ge=0)
+    m1_sister_target_nll: float = Field(ge=0)
+    point_delta_m2_minus_m1: float
+    predictive_decision: Literal["m1_superior", "m2_superior", "inconclusive"]
+    conditional_multinomial_interval_95: tuple[float, float]
+    conditional_dm_interval_95: tuple[float, float]
+    bootstrap_draws_each: int = Field(ge=1000)
+    minimum_inner_fit_sisters: int = Field(ge=1)
+    minimum_outer_nonouter_sisters: int = Field(ge=1)
+    zero_inner_fit_sister_guides: Literal[0] = 0
+    zero_outer_nonouter_sister_guides: Literal[0] = 0
+    protected_channels_pass: bool
+    parent_components_verified: Literal[True] = True
+    config_hash: Sha256
+    implementation_hash: Sha256
+    environment_hash: Sha256
+
+    @model_validator(mode="after")
+    def validate_physical_pool_conditional_receipt(
+        self,
+    ) -> PhysicalPoolConditionalReactionReceipt:
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
+        for interval in (
+            self.conditional_multinomial_interval_95,
+            self.conditional_dm_interval_95,
+        ):
+            if interval[0] > interval[1]:
+                raise ValueError("T07R-A0-v2 intervals must be ordered.")
+        parity = (
+            self.estimator_probability_max_abs_error < self.estimator_probability_tolerance
+            and self.estimator_effect_max_abs_error < self.estimator_effect_tolerance
+        )
+        if self.estimator_parity_pass != parity:
+            raise ValueError("Estimator-parity flag differs from its numerical metrics.")
+        if self.factorization_pass != (
+            self.factorization_max_abs_error < self.factorization_tolerance
+        ):
+            raise ValueError("DM factorization flag differs from its numerical metric.")
+        primary = self.conditional_multinomial_interval_95
+        decision = (
+            "m2_superior" if primary[1] < 0 else "m1_superior" if primary[0] > 0 else "inconclusive"
+        )
+        if self.predictive_decision != decision or self.status != f"forensic_{decision}":
+            raise ValueError("Predictive decision must follow the sign of the primary interval.")
+        return self
+
+
 class RawCountMassNoiseBundle(StrictModel):
     """Immutable T02A raw-count and relative-mass noise-floor bundle."""
 
@@ -1612,7 +1732,7 @@ class CompiledRunContract(StrictModel):
     schema_version: int = 1
     compiled_run_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev26"] = "4.0.dev26"
+    recipe_version: Literal["4.0.dev27"] = "4.0.dev27"
     recipe_wheel_hash: Sha256
     frozen_credo_artifact_hash: Sha256
     environment_lock_hash: Sha256
@@ -1679,7 +1799,7 @@ class InferenceBundleManifest(StrictModel):
     compiled_run_id: str
     selected_checkpoint_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev26"] = "4.0.dev26"
+    recipe_version: Literal["4.0.dev27"] = "4.0.dev27"
     selected_family: Literal[
         "configured_checkpoint",
         "gene_decoder_selected",

@@ -43,6 +43,62 @@ def dirichlet_multinomial_log_prob(
     return value
 
 
+def dirichlet_multinomial_log_prob_from_alpha(
+    counts: torch.Tensor,
+    alpha: torch.Tensor,
+) -> torch.Tensor:
+    """Return a DM log probability from an explicit positive alpha vector.
+
+    This form is required for conditioning a physical-pool DM on the observed
+    total of a guide subset.  Unlike :func:`dirichlet_multinomial_log_prob`, it
+    does not renormalize that subset or reset its concentration.
+    """
+
+    y = counts.to(torch.float64)
+    alpha64 = alpha.to(torch.float64)
+    if bool(torch.any(alpha64 <= 0)):
+        raise ValueError("Every Dirichlet concentration must be strictly positive.")
+    concentration = alpha64.sum(dim=-1)
+    total = y.sum(dim=-1)
+    value = torch.lgamma(total + 1.0) - torch.lgamma(y + 1.0).sum(dim=-1)
+    value = value + torch.lgamma(concentration) - torch.lgamma(total + concentration)
+    value = value + (torch.lgamma(y + alpha64) - torch.lgamma(alpha64)).sum(dim=-1)
+    return value
+
+
+def conditional_dirichlet_multinomial_log_prob(
+    counts_active: torch.Tensor,
+    full_probabilities: torch.Tensor,
+    active_mask: torch.Tensor,
+    full_concentration: torch.Tensor | float,
+) -> torch.Tensor:
+    """Score an active subcomposition under one complete physical-pool DM.
+
+    The complete catalog determines ``p`` and ``alpha = kappa * p``.  Only the
+    terminal counts selected by ``active_mask`` are read.  The inherited
+    conditional concentration is therefore ``sum(alpha[active_mask])`` rather
+    than a fresh copy of ``kappa``.
+    """
+
+    probabilities = full_probabilities.to(torch.float64)
+    mask = active_mask.to(torch.bool)
+    if probabilities.ndim != 1 or mask.ndim != 1 or len(probabilities) != len(mask):
+        raise ValueError("Physical-pool probabilities and active mask must be aligned vectors.")
+    if int(mask.sum()) != int(counts_active.numel()):
+        raise ValueError("Active counts do not match the physical-pool category mask.")
+    if not torch.isclose(
+        probabilities.sum(), torch.tensor(1.0, dtype=torch.float64), atol=1e-12, rtol=1e-12
+    ):
+        raise ValueError("Physical-pool probabilities must sum to one.")
+    concentration = torch.as_tensor(full_concentration, dtype=torch.float64)
+    if concentration.numel() != 1 or float(concentration) <= 0:
+        raise ValueError("Full physical-pool concentration must be a positive scalar.")
+    return dirichlet_multinomial_log_prob_from_alpha(
+        counts_active,
+        concentration * probabilities[mask],
+    )
+
+
 def exact_count_loss(
     terminal_counts: torch.Tensor,
     source_counts: torch.Tensor,
