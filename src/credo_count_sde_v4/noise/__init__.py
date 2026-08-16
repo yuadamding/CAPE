@@ -1,5 +1,15 @@
 """Independent raw-count and relative-mass noise qualification."""
 
-from .qualification import qualify_raw_count_mass_noise, verify_raw_count_mass_noise
+from .qualification import (
+    derive_raw_count_mass_noise_amendment,
+    qualify_raw_count_mass_noise,
+    verify_raw_count_mass_noise,
+    verify_raw_count_mass_noise_amendment,
+)
 
-__all__ = ["qualify_raw_count_mass_noise", "verify_raw_count_mass_noise"]
+__all__ = [
+    "derive_raw_count_mass_noise_amendment",
+    "qualify_raw_count_mass_noise",
+    "verify_raw_count_mass_noise",
+    "verify_raw_count_mass_noise_amendment",
+]

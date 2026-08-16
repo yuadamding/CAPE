@@ -1,9 +1,9 @@
 """T02A raw-count split-half and relative-mass sampling noise floors.
 
-This module deliberately has no model, representation, optimizer, or biological
-endpoint dependency.  It consumes the passed T00 pooled population and its raw
-CSR counts, then freezes measurement-noise tolerances before learned components
-are inspected.
+This module deliberately has no model, representation, optimizer, or external
+biological-annotation dependency.  It consumes the passed T00 pooled population
+and its observed endpoint CSR counts, then freezes conditional measurement-noise
+tolerances before learned components are inspected.
 """
 
 from __future__ import annotations
@@ -23,6 +23,9 @@ from ..canonical import canonical_json_bytes, contract_id, path_manifest, sha256
 from ..contracts import (
     ComponentTestContract,
     ComponentTestReceipt,
+    ComponentTestReceiptV2,
+    RawCountMassNoiseAmendment,
+    RawCountMassNoiseAmendmentReceipt,
     RawCountMassNoiseBundle,
     RawCountMassNoiseReceipt,
 )
@@ -36,6 +39,13 @@ _DEFAULT_REPEATS = 100
 _DEFAULT_VARIABLE_GENES = 2_000
 _DEFAULT_TOP_GENES = 50
 _DEFAULT_RANK_TOP_K = 20
+_RAW_METRICS = (
+    "hellinger",
+    "jensen_shannon",
+    "multinomial_deviance_per_count",
+    "pseudobulk_gene_spearman",
+    "top_variable_gene_overlap",
+)
 
 
 def _write_json(path: Path, payload: Any) -> None:
@@ -48,6 +58,7 @@ def _implementation_identity() -> tuple[str, dict[str, str]]:
         "contracts/models.py",
         "data/pooling.py",
         "noise/qualification.py",
+        "runtime_identity.py",
         "store/csr.py",
     )
     files = {relative: sha256_file(package / relative) for relative in relative_paths}
@@ -88,29 +99,39 @@ def _top_overlap(left: np.ndarray, right: np.ndarray, *, count: int) -> np.ndarr
 
 
 def _target_balanced_repeat_summary(frame: pd.DataFrame) -> pd.DataFrame:
-    metrics = (
-        "hellinger",
-        "jensen_shannon",
-        "multinomial_deviance_per_count",
-        "pseudobulk_gene_spearman",
-        "top_variable_gene_overlap",
-    )
     targeting = frame[~frame.is_control].copy()
     controls = frame[frame.is_control].copy()
     target_means = targeting.groupby(
         ["repeat", "seed", "checkpoint", "target_id"], observed=True, as_index=False
-    )[list(metrics)].mean()
+    )[list(_RAW_METRICS)].mean()
     target_balanced = target_means.groupby(
         ["repeat", "seed", "checkpoint"], observed=True, as_index=False
-    )[list(metrics)].mean()
+    )[list(_RAW_METRICS)].mean()
     target_balanced["population"] = "perturbation_target_balanced"
     control_means = controls.groupby(
         ["repeat", "seed", "checkpoint"], observed=True, as_index=False
-    )[list(metrics)].mean()
+    )[list(_RAW_METRICS)].mean()
     control_means["population"] = "control_guide_mean"
-    return pd.concat([target_balanced, control_means], ignore_index=True).sort_values(
-        ["repeat", "checkpoint", "population"], kind="stable"
-    ).reset_index(drop=True)
+    return (
+        pd.concat([target_balanced, control_means], ignore_index=True)
+        .sort_values(["repeat", "checkpoint", "population"], kind="stable")
+        .reset_index(drop=True)
+    )
+
+
+def _raw_target_summary(frame: pd.DataFrame) -> pd.DataFrame:
+    summary = (
+        frame.groupby(["checkpoint", "target_id", "is_control"], observed=True)[list(_RAW_METRICS)]
+        .agg(["mean", "median", lambda values: np.quantile(values, 0.95)])
+        .reset_index()
+    )
+    summary.columns = [
+        column if isinstance(column, str) else "_".join(part for part in column if part)
+        for column in summary.columns
+    ]
+    return summary.rename(
+        columns={column: column.replace("_<lambda_0>", "_q95") for column in summary}
+    )
 
 
 def _raw_split_half_metrics(
@@ -230,24 +251,22 @@ def _raw_split_half_metrics(
                 out=np.ones_like(right),
                 where=right > 0,
             )
-            deviance = 2.0 * (
-                np.sum(xlogy(left, left_ratio), axis=1)
-                + np.sum(xlogy(right, right_ratio), axis=1)
-            ) / (left_total[:, 0] + right_total[:, 0])
+            deviance = (
+                2.0
+                * (
+                    np.sum(xlogy(left, left_ratio), axis=1)
+                    + np.sum(xlogy(right, right_ratio), axis=1)
+                )
+                / (left_total[:, 0] + right_total[:, 0])
+            )
             ranked = rankdata(aggregate[:, variable], method="average", axis=1)
             gene_spearman = _rowwise_correlation(ranked[0::2], ranked[1::2])
             left_score = np.abs(
-                np.log(
-                    (left[:, variable] + 0.5)
-                    / (left_total + 0.5 * feature_count)
-                )
+                np.log((left[:, variable] + 0.5) / (left_total + 0.5 * feature_count))
                 - np.log(background_probability[variable])[None, :]
             )
             right_score = np.abs(
-                np.log(
-                    (right[:, variable] + 0.5)
-                    / (right_total + 0.5 * feature_count)
-                )
+                np.log((right[:, variable] + 0.5) / (right_total + 0.5 * feature_count))
                 - np.log(background_probability[variable])[None, :]
             )
             top_overlap = _top_overlap(left_score, right_score, count=top_gene_count)
@@ -273,30 +292,14 @@ def _raw_split_half_metrics(
             )
             all_rows.append(frame)
 
-    raw = pd.concat(all_rows, ignore_index=True).sort_values(
-        ["checkpoint", "repeat", "guide_id"], kind="stable"
-    ).reset_index(drop=True)
+    raw = (
+        pd.concat(all_rows, ignore_index=True)
+        .sort_values(["checkpoint", "repeat", "guide_id"], kind="stable")
+        .reset_index(drop=True)
+    )
     variables = pd.concat(variable_rows, ignore_index=True)
     repeat_summary = _target_balanced_repeat_summary(raw)
-    metrics = (
-        "hellinger",
-        "jensen_shannon",
-        "multinomial_deviance_per_count",
-        "pseudobulk_gene_spearman",
-        "top_variable_gene_overlap",
-    )
-    target_summary = (
-        raw.groupby(["checkpoint", "target_id", "is_control"], observed=True)[list(metrics)]
-        .agg(["mean", "median", lambda values: np.quantile(values, 0.95)])
-        .reset_index()
-    )
-    target_summary.columns = [
-        column if isinstance(column, str) else "_".join(part for part in column if part)
-        for column in target_summary.columns
-    ]
-    target_summary = target_summary.rename(
-        columns={column: column.replace("_<lambda_0>", "_q95") for column in target_summary}
-    )
+    target_summary = _raw_target_summary(raw)
     return raw, repeat_summary, target_summary, variables
 
 
@@ -393,13 +396,10 @@ def _mass_noise_metrics(
             {
                 "repeat": repeat,
                 "seed": seed,
-                "interval_log_mass_rmse_target_balanced": float(
-                    np.sqrt(per_target_mse.mean())
-                ),
+                "interval_log_mass_rmse_target_balanced": float(np.sqrt(per_target_mse.mean())),
                 "expansion_sign_accuracy": float(
                     np.mean(
-                        np.sign(effect[targeting_indices])
-                        == np.sign(observed[targeting_indices])
+                        np.sign(effect[targeting_indices]) == np.sign(observed[targeting_indices])
                     )
                 ),
                 "guide_rank_spearman": _rank_correlation(
@@ -427,9 +427,7 @@ def _mass_noise_metrics(
                 "bootstrap_error_sd": float(np.std(guide_error, ddof=1)),
                 "absolute_error_q95": _quantile(np.abs(guide_error), 0.95),
                 "sign_stability": float(
-                    np.mean(
-                        np.sign(observed[index] + guide_error) == np.sign(observed[index])
-                    )
+                    np.mean(np.sign(observed[index] + guide_error) == np.sign(observed[index]))
                 ),
             }
         )
@@ -452,18 +450,42 @@ def _mass_noise_metrics(
     return bootstrap, guide_noise, pd.DataFrame(target_rows)
 
 
+def _seed_ranges_disjoint(
+    *, split_seed_start: int, split_repeats: int, mass_seed_start: int, mass_repeats: int
+) -> bool:
+    split = range(split_seed_start, split_seed_start + 2 * split_repeats)
+    mass = range(mass_seed_start, mass_seed_start + mass_repeats)
+    return split.stop <= mass.start or mass.stop <= split.start
+
+
 def _raw_invariants(
-    raw: pd.DataFrame, *, guides: int, checkpoints: int, repeats: int
+    raw: pd.DataFrame,
+    *,
+    guides: int,
+    checkpoints: int,
+    repeats: int,
+    catalog: pd.DataFrame | None = None,
+    measures: pd.DataFrame | None = None,
+    checkpoint_names: tuple[str, str] | None = None,
+    seed_start: int | None = None,
 ) -> bool:
     expected = guides * checkpoints * repeats
-    metric_columns = (
-        "hellinger",
-        "jensen_shannon",
-        "multinomial_deviance_per_count",
-        "pseudobulk_gene_spearman",
-        "top_variable_gene_overlap",
-    )
-    finite = np.isfinite(raw.loc[:, metric_columns].to_numpy(dtype=np.float64)).all()
+    required_columns = {
+        "repeat",
+        "seed",
+        "checkpoint",
+        "guide_id",
+        "target_id",
+        "is_control",
+        "left_cells",
+        "right_cells",
+        "left_umis",
+        "right_umis",
+        *_RAW_METRICS,
+    }
+    if set(raw.columns) != required_columns:
+        return False
+    finite = np.isfinite(raw.loc[:, _RAW_METRICS].to_numpy(dtype=np.float64)).all()
     bounds = bool(
         raw.hellinger.between(0, 1 + 1e-12).all()
         and raw.jensen_shannon.between(0, math.log(2) + 1e-12).all()
@@ -472,19 +494,361 @@ def _raw_invariants(
         and raw.top_variable_gene_overlap.between(0, 1).all()
     )
     balanced = bool((raw.left_cells - raw.right_cells).abs().le(1).all())
-    return len(raw) == expected and finite and bounds and balanced
+    base = len(raw) == expected and finite and bounds and balanced
+    if not base or any(
+        value is None for value in (catalog, measures, checkpoint_names, seed_start)
+    ):
+        return base
+    assert catalog is not None
+    assert measures is not None
+    assert checkpoint_names is not None
+    assert seed_start is not None
+    if raw.duplicated(["repeat", "checkpoint", "guide_id"]).any():
+        return False
+    expected_guides = set(catalog.guide_id.astype(str))
+    if set(raw.guide_id.astype(str)) != expected_guides:
+        return False
+    expected_keys = {
+        (repeat, checkpoint, guide)
+        for checkpoint in checkpoint_names
+        for repeat in range(repeats)
+        for guide in expected_guides
+    }
+    observed_keys = set(
+        raw[["repeat", "checkpoint", "guide_id"]].itertuples(index=False, name=None)
+    )
+    if observed_keys != expected_keys:
+        return False
+    checkpoint_index = {checkpoint: index for index, checkpoint in enumerate(checkpoint_names)}
+    expected_seed = raw.apply(
+        lambda row: (
+            seed_start + checkpoint_index[str(row.checkpoint)] * repeats + int(row["repeat"])
+        ),
+        axis=1,
+    )
+    if not np.array_equal(
+        raw.seed.to_numpy(dtype=np.int64), expected_seed.to_numpy(dtype=np.int64)
+    ):
+        return False
+    mapping = catalog.set_index("guide_id")[["target_id", "is_control"]]
+    mapped = mapping.reindex(raw.guide_id.astype(str))
+    if mapped.isna().any().any():
+        return False
+    if not np.array_equal(raw.target_id.astype(str).to_numpy(), mapped.target_id.astype(str)):
+        return False
+    if not np.array_equal(raw.is_control.astype(bool).to_numpy(), mapped.is_control.astype(bool)):
+        return False
+    cell_counts = measures.set_index(["checkpoint", "guide_id"]).cell_count
+    expected_cells = np.asarray(
+        [
+            cell_counts.loc[(checkpoint, guide)]
+            for checkpoint, guide in raw[["checkpoint", "guide_id"]].itertuples(
+                index=False, name=None
+            )
+        ],
+        dtype=np.int64,
+    )
+    return bool(
+        np.array_equal(
+            raw.left_cells.to_numpy(dtype=np.int64) + raw.right_cells.to_numpy(dtype=np.int64),
+            expected_cells,
+        )
+    )
 
 
-def _mass_invariants(bootstrap: pd.DataFrame, *, repeats: int) -> bool:
+def _mass_invariants(
+    bootstrap: pd.DataFrame, *, repeats: int, seed_start: int | None = None
+) -> bool:
+    required_columns = {
+        "repeat",
+        "seed",
+        "interval_log_mass_rmse_target_balanced",
+        "expansion_sign_accuracy",
+        "guide_rank_spearman",
+        "target_rank_spearman",
+        "top_k_overlap",
+        "bottom_k_overlap",
+    }
+    if set(bootstrap.columns) != required_columns:
+        return False
     finite = np.isfinite(bootstrap.select_dtypes(include=[np.number]).to_numpy()).all()
     bounded = bool(
-        bootstrap.expansion_sign_accuracy.between(0, 1).all()
+        (bootstrap.interval_log_mass_rmse_target_balanced >= 0).all()
+        and bootstrap.expansion_sign_accuracy.between(0, 1).all()
         and bootstrap.guide_rank_spearman.between(-1, 1).all()
         and bootstrap.target_rank_spearman.between(-1, 1).all()
         and bootstrap.top_k_overlap.between(0, 1).all()
         and bootstrap.bottom_k_overlap.between(0, 1).all()
     )
-    return len(bootstrap) == repeats and finite and bounded
+    base = (
+        len(bootstrap) == repeats
+        and finite
+        and bounded
+        and not bootstrap.repeat.duplicated().any()
+        and set(bootstrap.repeat.astype(int)) == set(range(repeats))
+    )
+    if not base or seed_start is None:
+        return base
+    ordered = bootstrap.sort_values("repeat", kind="stable")
+    return np.array_equal(
+        ordered.seed.to_numpy(dtype=np.int64),
+        np.arange(seed_start, seed_start + repeats, dtype=np.int64),
+    )
+
+
+def _noise_summary_invariants(
+    guide_noise: pd.DataFrame, target_noise: pd.DataFrame, *, catalog: pd.DataFrame
+) -> bool:
+    guide_columns = {
+        "guide_id",
+        "target_id",
+        "is_control",
+        "observed_interval_log_mass",
+        "bootstrap_error_sd",
+        "absolute_error_q95",
+        "sign_stability",
+    }
+    target_columns = {
+        "target_id",
+        "guide_count",
+        "observed_interval_log_mass",
+        "bootstrap_error_sd",
+        "absolute_error_q95",
+        "sign_stability",
+    }
+    if set(guide_noise.columns) != guide_columns or set(target_noise.columns) != target_columns:
+        return False
+    if guide_noise.guide_id.duplicated().any() or target_noise.target_id.duplicated().any():
+        return False
+    mapping = catalog.set_index("guide_id")[["target_id", "is_control"]]
+    observed = guide_noise.set_index("guide_id")
+    if set(observed.index.astype(str)) != set(mapping.index.astype(str)):
+        return False
+    observed = observed.reindex(mapping.index)
+    if not np.array_equal(observed.target_id.astype(str), mapping.target_id.astype(str)):
+        return False
+    if not np.array_equal(observed.is_control.astype(bool), mapping.is_control.astype(bool)):
+        return False
+    targeting = catalog[~catalog.is_control.astype(bool)]
+    expected_counts = targeting.groupby("target_id", observed=True).guide_id.size().sort_index()
+    target_indexed = target_noise.set_index("target_id").sort_index()
+    if set(target_indexed.index.astype(str)) != set(expected_counts.index.astype(str)):
+        return False
+    if not np.array_equal(
+        target_indexed.guide_count.to_numpy(dtype=np.int64),
+        expected_counts.to_numpy(dtype=np.int64),
+    ):
+        return False
+    numeric = pd.concat(
+        [
+            guide_noise[
+                [
+                    "observed_interval_log_mass",
+                    "bootstrap_error_sd",
+                    "absolute_error_q95",
+                    "sign_stability",
+                ]
+            ],
+            target_noise[
+                [
+                    "observed_interval_log_mass",
+                    "bootstrap_error_sd",
+                    "absolute_error_q95",
+                    "sign_stability",
+                ]
+            ],
+        ],
+        ignore_index=True,
+    )
+    return bool(
+        np.isfinite(numeric.to_numpy(dtype=np.float64)).all()
+        and (numeric.bootstrap_error_sd >= 0).all()
+        and (numeric.absolute_error_q95 >= 0).all()
+        and numeric.sign_stability.between(0, 1).all()
+    )
+
+
+def _legacy_thresholds(
+    *, raw: pd.DataFrame, raw_repeat: pd.DataFrame, mass: pd.DataFrame, mass_guide: pd.DataFrame
+) -> dict[str, Any]:
+    target_repeat = raw_repeat[raw_repeat.population == "perturbation_target_balanced"]
+    control_raw = raw[raw.is_control]
+    targeting_guide_noise = mass_guide[~mass_guide.is_control]
+    target_median_detection = targeting_guide_noise.groupby(
+        "target_id", observed=True
+    ).absolute_error_q95.median()
+    return {
+        "schema_version": 1,
+        "status": "frozen_before_learned_model_inspection",
+        "control_dispersion_hellinger_q95": _quantile(control_raw.hellinger, 0.95),
+        "mass_improvement_margin_interval_log_rmse_q95": _quantile(
+            mass.interval_log_mass_rmse_target_balanced, 0.95
+        ),
+        "minimum_detectable_abs_interval_log_mass_effect": _quantile(target_median_detection, 0.95),
+        "protected_raw_count_metrics": {
+            "target_balanced_hellinger_q95": _quantile(target_repeat.hellinger, 0.95),
+            "target_balanced_jensen_shannon_q95": _quantile(target_repeat.jensen_shannon, 0.95),
+            "target_balanced_deviance_per_count_q95": _quantile(
+                target_repeat.multinomial_deviance_per_count, 0.95
+            ),
+            "target_balanced_pseudobulk_spearman_q05": _quantile(
+                target_repeat.pseudobulk_gene_spearman, 0.05
+            ),
+            "target_balanced_top_gene_overlap_q05": _quantile(
+                target_repeat.top_variable_gene_overlap, 0.05
+            ),
+        },
+        "mass_stability_metrics": {
+            "expansion_sign_accuracy_q05": _quantile(mass.expansion_sign_accuracy, 0.05),
+            "guide_rank_spearman_q05": _quantile(mass.guide_rank_spearman, 0.05),
+            "target_rank_spearman_q05": _quantile(mass.target_rank_spearman, 0.05),
+            "top_k_overlap_q05": _quantile(mass.top_k_overlap, 0.05),
+            "bottom_k_overlap_q05": _quantile(mass.bottom_k_overlap, 0.05),
+        },
+        "quantile_method": "numpy_linear",
+        "target_balance": "mean_per_perturbation_target_then_mean_targets",
+        "controls": "reported_separately_not_one_perturbation_target",
+    }
+
+
+def _component_receipt_invariants(
+    component: ComponentTestReceipt | ComponentTestReceiptV2,
+    *,
+    contract: ComponentTestContract,
+    detailed: RawCountMassNoiseReceipt,
+    pooled_data_id: str,
+    count_store_sha256: str,
+    raw_repeat: pd.DataFrame,
+) -> bool:
+    """Check the generic component surface against the detailed T02A receipt."""
+
+    expected_inputs = {
+        "pooled_data": pooled_data_id,
+        "count_store": count_store_sha256,
+        "environment": detailed.environment_hash,
+    }
+    common = bool(
+        component.test_id == contract.test_id
+        and component.status == detailed.status
+        and component.primary_metric == contract.primary_metric
+        and component.primary_baseline == contract.primary_baseline
+        and component.protected_metrics_pass
+        == (detailed.raw_invariants_pass and detailed.mass_invariants_pass)
+        and component.selected_update == 0
+        and component.input_hashes == expected_inputs
+        and component.config_hash == detailed.config_hash
+        and component.implementation_hash == detailed.implementation_hash
+    )
+    if not common:
+        return False
+    if isinstance(component, ComponentTestReceiptV2):
+        return bool(
+            component.receipt_role == "calibration"
+            and component.estimand == "target_balanced_split_half_hellinger"
+            and component.quantile_probability == 0.95
+            and component.quantile_value == detailed.target_balanced_hellinger_q95
+            and component.repeat_count == detailed.split_repeats
+            and component.sampling_method == "balanced_cell_split_half_by_checkpoint"
+        )
+    targeting = raw_repeat[raw_repeat.population == "perturbation_target_balanced"]
+    return bool(
+        component.point_delta == detailed.target_balanced_hellinger_q95
+        and component.bootstrap_interval
+        == (
+            float(targeting.hellinger.min()),
+            detailed.target_balanced_hellinger_q95,
+        )
+        and component.required_margin == contract.required_margin
+        and component.channel_activity == 0.0
+    )
+
+
+def _interpreted_thresholds(
+    *,
+    raw: pd.DataFrame,
+    raw_repeat: pd.DataFrame,
+    mass: pd.DataFrame,
+    mass_guide: pd.DataFrame,
+    mass_target: pd.DataFrame,
+) -> dict[str, Any]:
+    legacy = _legacy_thresholds(raw=raw, raw_repeat=raw_repeat, mass=mass, mass_guide=mass_guide)
+    targeting_guide_noise = mass_guide[~mass_guide.is_control]
+    target_medians = targeting_guide_noise.groupby(
+        "target_id", observed=True
+    ).absolute_error_q95.median()
+    return {
+        "schema_version": 1,
+        "status": "derived_interpretation_of_immutable_t02a",
+        "observed_endpoint_sampling_rmse_q95": _quantile(
+            mass.interval_log_mass_rmse_target_balanced, 0.95
+        ),
+        "guide_abs_error_q95_target_median_q95": _quantile(target_medians, 0.95),
+        "target_abs_error_q95_across_targets_q95": _quantile(mass_target.absolute_error_q95, 0.95),
+        "formal_minimum_detectable_effect_status": "not_estimated",
+        "model_comparison_improvement_margin_status": "not_estimated",
+        "pooled_raw_count_descriptive": legacy["protected_raw_count_metrics"],
+        "pooled_control_hellinger_q95_descriptive": legacy["control_dispersion_hellinger_q95"],
+        "mass_stability_metrics": {
+            "expansion_sign_accuracy_q05": _quantile(mass.expansion_sign_accuracy, 0.05),
+            "guide_rank_spearman_q05": _quantile(mass.guide_rank_spearman, 0.05),
+            "target_rank_spearman_q05": _quantile(mass.target_rank_spearman, 0.05),
+            "guide_top_k_overlap_q05": _quantile(mass.top_k_overlap, 0.05),
+            "guide_bottom_k_overlap_q05": _quantile(mass.bottom_k_overlap, 0.05),
+        },
+        "quantile_method": "numpy_linear",
+        "target_balance": legacy["target_balance"],
+        "controls": legacy["controls"],
+    }
+
+
+def _checkpoint_thresholds(
+    *, raw: pd.DataFrame, raw_repeat: pd.DataFrame, checkpoints: tuple[str, str]
+) -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    for checkpoint in checkpoints:
+        targeting = raw_repeat[
+            (raw_repeat.checkpoint == checkpoint)
+            & (raw_repeat.population == "perturbation_target_balanced")
+        ]
+        controls = raw[(raw.checkpoint == checkpoint) & raw.is_control]
+        for population, frame, unit in (
+            ("targeting", targeting, "target_balanced_repeat"),
+            ("controls", controls, "control_guide_repeat"),
+        ):
+            if frame.empty:
+                raise IntegrityError(
+                    f"T02A checkpoint {checkpoint!r} lacks {population} threshold rows."
+                )
+            rows.append(
+                {
+                    "checkpoint": checkpoint,
+                    "population": population,
+                    "sampling_unit": unit,
+                    "observations": len(frame),
+                    "hellinger_q95": _quantile(frame.hellinger, 0.95),
+                    "jensen_shannon_q95": _quantile(frame.jensen_shannon, 0.95),
+                    "multinomial_deviance_per_count_q95": _quantile(
+                        frame.multinomial_deviance_per_count, 0.95
+                    ),
+                    "pseudobulk_gene_spearman_q05": _quantile(frame.pseudobulk_gene_spearman, 0.05),
+                    "top_variable_gene_overlap_q05": _quantile(
+                        frame.top_variable_gene_overlap, 0.05
+                    ),
+                }
+            )
+    return (
+        pd.DataFrame(rows)
+        .sort_values(["checkpoint", "population"], kind="stable")
+        .reset_index(drop=True)
+    )
+
+
+def _target_rank_stability(mass_bootstrap: pd.DataFrame) -> pd.DataFrame:
+    return (
+        mass_bootstrap[["repeat", "seed", "target_rank_spearman"]]
+        .sort_values("repeat", kind="stable")
+        .reset_index(drop=True)
+    )
 
 
 def qualify_raw_count_mass_noise(
@@ -506,8 +870,13 @@ def qualify_raw_count_mass_noise(
         raise FileExistsError(f"Committed destination already exists: {destination}.")
     if split_repeats < 100 or mass_bootstrap_repeats < 100:
         raise ContractError("T02A requires at least 100 split and mass repeats.")
-    if min(split_seed_start, mass_seed_start) < 0 or split_seed_start == mass_seed_start:
-        raise ContractError("T02A seed ranges must be distinct and nonnegative.")
+    if min(split_seed_start, mass_seed_start) < 0 or not _seed_ranges_disjoint(
+        split_seed_start=split_seed_start,
+        split_repeats=split_repeats,
+        mass_seed_start=mass_seed_start,
+        mass_repeats=mass_bootstrap_repeats,
+    ):
+        raise ContractError("T02A seed ranges must be disjoint and nonnegative.")
     if min(variable_gene_count, top_gene_count, rank_top_k) < 1:
         raise ContractError("T02A feature and rank counts must be positive.")
     pooled = verify_pooled_finite_measures(pooled_bundle)
@@ -544,52 +913,20 @@ def qualify_raw_count_mass_noise(
         guides=pooled.retained_guides,
         checkpoints=2,
         repeats=split_repeats,
+        catalog=catalog,
+        measures=measures,
+        checkpoint_names=checkpoints,
+        seed_start=split_seed_start,
     )
-    mass_pass = _mass_invariants(mass, repeats=mass_bootstrap_repeats)
-    target_repeat = raw_repeat[raw_repeat.population == "perturbation_target_balanced"]
-    control_raw = raw[raw.is_control]
-    targeting_guide_noise = mass_guide[~mass_guide.is_control]
-    target_median_detection = (
-        targeting_guide_noise.groupby("target_id", observed=True).absolute_error_q95.median()
+    mass_pass = _mass_invariants(
+        mass, repeats=mass_bootstrap_repeats, seed_start=mass_seed_start
+    ) and _noise_summary_invariants(mass_guide, mass_target, catalog=catalog)
+    thresholds = _legacy_thresholds(
+        raw=raw,
+        raw_repeat=raw_repeat,
+        mass=mass,
+        mass_guide=mass_guide,
     )
-    thresholds: dict[str, Any] = {
-        "schema_version": 1,
-        "status": "frozen_before_learned_model_inspection",
-        "control_dispersion_hellinger_q95": _quantile(control_raw.hellinger, 0.95),
-        "mass_improvement_margin_interval_log_rmse_q95": _quantile(
-            mass.interval_log_mass_rmse_target_balanced, 0.95
-        ),
-        "minimum_detectable_abs_interval_log_mass_effect": _quantile(
-            target_median_detection, 0.95
-        ),
-        "protected_raw_count_metrics": {
-            "target_balanced_hellinger_q95": _quantile(target_repeat.hellinger, 0.95),
-            "target_balanced_jensen_shannon_q95": _quantile(
-                target_repeat.jensen_shannon, 0.95
-            ),
-            "target_balanced_deviance_per_count_q95": _quantile(
-                target_repeat.multinomial_deviance_per_count, 0.95
-            ),
-            "target_balanced_pseudobulk_spearman_q05": _quantile(
-                target_repeat.pseudobulk_gene_spearman, 0.05
-            ),
-            "target_balanced_top_gene_overlap_q05": _quantile(
-                target_repeat.top_variable_gene_overlap, 0.05
-            ),
-        },
-        "mass_stability_metrics": {
-            "expansion_sign_accuracy_q05": _quantile(
-                mass.expansion_sign_accuracy, 0.05
-            ),
-            "guide_rank_spearman_q05": _quantile(mass.guide_rank_spearman, 0.05),
-            "target_rank_spearman_q05": _quantile(mass.target_rank_spearman, 0.05),
-            "top_k_overlap_q05": _quantile(mass.top_k_overlap, 0.05),
-            "bottom_k_overlap_q05": _quantile(mass.bottom_k_overlap, 0.05),
-        },
-        "quantile_method": "numpy_linear",
-        "target_balance": "mean_per_perturbation_target_then_mean_targets",
-        "controls": "reported_separately_not_one_perturbation_target",
-    }
     environment = environment_identity()
     environment_hash = environment_lock_hash()
     implementation_hash, implementation_files = _implementation_identity()
@@ -613,7 +950,7 @@ def qualify_raw_count_mass_noise(
     contract_payload = {
         "schema_version": 1,
         "test_contract_id": "pending",
-        "test_id": "T02_RAW_COUNT_MASS_NOISE",
+        "test_id": "T02A_RAW_COUNT_MASS_NOISE",
         "component": "raw_count_and_relative_mass_noise",
         "primary_metric": "target_balanced_split_half_hellinger_q95",
         "primary_baseline": "independent_cell_halves_and_multinomial_catalog_bootstrap",
@@ -714,9 +1051,9 @@ def qualify_raw_count_mass_noise(
             "target_balanced_spearman_q05": thresholds["protected_raw_count_metrics"][
                 "target_balanced_pseudobulk_spearman_q05"
             ],
-            "target_balanced_top_gene_overlap_q05": thresholds[
-                "protected_raw_count_metrics"
-            ]["target_balanced_top_gene_overlap_q05"],
+            "target_balanced_top_gene_overlap_q05": thresholds["protected_raw_count_metrics"][
+                "target_balanced_top_gene_overlap_q05"
+            ],
             "interval_log_mass_rmse_q95": thresholds[
                 "mass_improvement_margin_interval_log_rmse_q95"
             ],
@@ -730,9 +1067,7 @@ def qualify_raw_count_mass_noise(
                 "target_rank_spearman_q05"
             ],
             "top_k_overlap_q05": thresholds["mass_stability_metrics"]["top_k_overlap_q05"],
-            "bottom_k_overlap_q05": thresholds["mass_stability_metrics"][
-                "bottom_k_overlap_q05"
-            ],
+            "bottom_k_overlap_q05": thresholds["mass_stability_metrics"]["bottom_k_overlap_q05"],
             "raw_invariants_pass": raw_pass,
             "mass_invariants_pass": mass_pass,
             "protected_metrics_frozen": True,
@@ -744,19 +1079,22 @@ def qualify_raw_count_mass_noise(
         receipt = RawCountMassNoiseReceipt.model_validate(detail_payload)
         _write_json(temp / "TEST_RECEIPT.json", receipt.model_dump(mode="json"))
         generic_payload = {
-            "schema_version": 1,
+            "schema_version": 2,
             "receipt_id": "pending",
             "test_id": test_contract.test_id,
+            "receipt_role": "calibration",
             "status": receipt.status,
             "primary_metric": test_contract.primary_metric,
             "primary_baseline": test_contract.primary_baseline,
-            "point_delta": receipt.target_balanced_hellinger_q95,
-            "bootstrap_interval": [
-                float(target_repeat.hellinger.min()),
-                receipt.target_balanced_hellinger_q95,
-            ],
-            "required_margin": 0.0,
-            "channel_activity": 0.0,
+            "point_delta": None,
+            "bootstrap_interval": None,
+            "required_margin": None,
+            "channel_activity": None,
+            "estimand": "target_balanced_split_half_hellinger",
+            "quantile_probability": 0.95,
+            "quantile_value": receipt.target_balanced_hellinger_q95,
+            "repeat_count": split_repeats,
+            "sampling_method": "balanced_cell_split_half_by_checkpoint",
             "protected_metrics_pass": raw_pass and mass_pass,
             "selected_update": 0,
             "input_hashes": {
@@ -768,7 +1106,7 @@ def qualify_raw_count_mass_noise(
             "implementation_hash": implementation_hash,
         }
         generic_payload["receipt_id"] = contract_id(generic_payload, id_field="receipt_id")
-        component_receipt = ComponentTestReceipt.model_validate(generic_payload)
+        component_receipt = ComponentTestReceiptV2.model_validate(generic_payload)
         _write_json(temp / "COMPONENT_RECEIPT.json", component_receipt.model_dump(mode="json"))
         bundle_payload = {
             "schema_version": 1,
@@ -859,9 +1197,7 @@ def qualify_raw_count_mass_noise(
         )
 
     publish_directory(destination, writer)
-    verify_raw_count_mass_noise(
-        destination, pooled_bundle=pooled_bundle, count_store=count_store
-    )
+    verify_raw_count_mass_noise(destination, pooled_bundle=pooled_bundle, count_store=count_store)
     return destination
 
 
@@ -876,13 +1212,16 @@ def verify_raw_count_mass_noise(
     )
     receipt = RawCountMassNoiseReceipt.model_validate_json((path / "TEST_RECEIPT.json").read_text())
     contract = ComponentTestContract.model_validate_json((path / "TEST_CONTRACT.json").read_text())
-    component = ComponentTestReceipt.model_validate_json(
-        (path / "COMPONENT_RECEIPT.json").read_text()
-    )
+    component_payload = json.loads((path / "COMPONENT_RECEIPT.json").read_text())
+    component: ComponentTestReceipt | ComponentTestReceiptV2
+    if component_payload.get("schema_version") == 2:
+        component = ComponentTestReceiptV2.model_validate(component_payload)
+    else:
+        component = ComponentTestReceipt.model_validate(component_payload)
     pooled = verify_pooled_finite_measures(pooled_bundle)
     store = CountStore(count_store).verify(full=True)
     if (
-        contract.test_id != "T02_RAW_COUNT_MASS_NOISE"
+        contract.test_id not in {"T02_RAW_COUNT_MASS_NOISE", "T02A_RAW_COUNT_MASS_NOISE"}
         or bundle.test_contract_id != contract.test_contract_id
         or receipt.test_contract_id != contract.test_contract_id
         or component.test_id != contract.test_id
@@ -914,8 +1253,7 @@ def verify_raw_count_mass_noise(
     config = json.loads((path / "CONFIG.json").read_text())
     if (
         sha256_bytes(canonical_json_bytes(config)) != receipt.config_hash
-        or sha256_bytes(canonical_json_bytes(config.get("environment")))
-        != receipt.environment_hash
+        or sha256_bytes(canonical_json_bytes(config.get("environment"))) != receipt.environment_hash
         or receipt.environment_hash != bundle.environment_hash
     ):
         raise IntegrityError("T02A configuration or environment identity differs.")
@@ -927,34 +1265,105 @@ def verify_raw_count_mass_noise(
     ):
         raise IntegrityError("T02A implementation identity differs from its receipt.")
     raw = pd.read_parquet(path / bundle.raw_split_metrics.relative_uri)
+    raw_repeat = pd.read_parquet(path / bundle.raw_repeat_summary.relative_uri)
+    raw_target = pd.read_parquet(path / bundle.raw_target_summary.relative_uri)
+    variable_genes = pd.read_parquet(path / bundle.variable_genes.relative_uri)
     mass = pd.read_parquet(path / bundle.mass_bootstrap.relative_uri)
+    mass_guide = pd.read_parquet(path / bundle.mass_guide_noise.relative_uri)
+    mass_target = pd.read_parquet(path / bundle.mass_target_noise.relative_uri)
+    catalog = pd.read_parquet(pooled_bundle / pooled.guide_catalog.relative_uri)
+    measures = pd.read_parquet(pooled_bundle / pooled.finite_measures.relative_uri)
+    checkpoints = (pooled.source_checkpoint, pooled.terminal_checkpoint)
+    if (
+        bundle.source_checkpoint != pooled.source_checkpoint
+        or bundle.terminal_checkpoint != pooled.terminal_checkpoint
+        or config.get("split_repeats") != bundle.split_repeats
+        or config.get("mass_bootstrap_repeats") != bundle.mass_bootstrap_repeats
+        or config.get("split_seed_start") != bundle.split_seed_start
+        or config.get("mass_seed_start") != bundle.mass_seed_start
+        or config.get("variable_gene_count") != bundle.variable_gene_count
+        or config.get("top_gene_count") != bundle.top_gene_count
+        or config.get("rank_top_k") != bundle.rank_top_k
+        or not _seed_ranges_disjoint(
+            split_seed_start=bundle.split_seed_start,
+            split_repeats=bundle.split_repeats,
+            mass_seed_start=bundle.mass_seed_start,
+            mass_repeats=bundle.mass_bootstrap_repeats,
+        )
+    ):
+        raise IntegrityError("T02A bundle configuration differs from its table contract.")
     raw_pass = _raw_invariants(
         raw,
         guides=pooled.retained_guides,
         checkpoints=2,
         repeats=bundle.split_repeats,
+        catalog=catalog,
+        measures=measures,
+        checkpoint_names=checkpoints,
+        seed_start=bundle.split_seed_start,
     )
-    mass_pass = _mass_invariants(mass, repeats=bundle.mass_bootstrap_repeats)
+    mass_pass = _mass_invariants(
+        mass,
+        repeats=bundle.mass_bootstrap_repeats,
+        seed_start=bundle.mass_seed_start,
+    ) and _noise_summary_invariants(mass_guide, mass_target, catalog=catalog)
+    expected_variable_keys = {
+        (checkpoint, rank)
+        for checkpoint in checkpoints
+        for rank in range(1, bundle.variable_gene_count + 1)
+    }
+    observed_variable_keys = set(
+        variable_genes[["checkpoint", "variance_rank"]].itertuples(index=False, name=None)
+    )
+    variable_pass = bool(
+        set(variable_genes.columns)
+        == {"checkpoint", "variance_rank", "feature_index", "log_cpm_variance"}
+        and observed_variable_keys == expected_variable_keys
+        and not variable_genes.duplicated(["checkpoint", "variance_rank"]).any()
+        and not variable_genes.duplicated(["checkpoint", "feature_index"]).any()
+        and variable_genes.feature_index.between(0, store.features - 1).all()
+        and np.isfinite(variable_genes.log_cpm_variance.to_numpy(dtype=np.float64)).all()
+    )
+    try:
+        pd.testing.assert_frame_equal(
+            raw_repeat.reset_index(drop=True),
+            _target_balanced_repeat_summary(raw),
+            check_exact=True,
+            check_dtype=True,
+        )
+        pd.testing.assert_frame_equal(
+            raw_target.reset_index(drop=True),
+            _raw_target_summary(raw),
+            check_exact=True,
+            check_dtype=True,
+        )
+    except AssertionError as exc:
+        raise IntegrityError(
+            "T02A stored raw summaries differ from the guide-level table."
+        ) from exc
     thresholds = json.loads((path / bundle.frozen_thresholds.relative_uri).read_text())
+    recomputed_thresholds = _legacy_thresholds(
+        raw=raw,
+        raw_repeat=raw_repeat,
+        mass=mass,
+        mass_guide=mass_guide,
+    )
     if (
         raw_pass != receipt.raw_invariants_pass
         or mass_pass != receipt.mass_invariants_pass
+        or not variable_pass
         or receipt.status != ("pass" if raw_pass and mass_pass else "fail_retired")
-        or thresholds["control_dispersion_hellinger_q95"]
-        != receipt.control_hellinger_q95
+        or thresholds != recomputed_thresholds
+        or thresholds["control_dispersion_hellinger_q95"] != receipt.control_hellinger_q95
         or thresholds["mass_improvement_margin_interval_log_rmse_q95"]
         != receipt.interval_log_mass_rmse_q95
         or thresholds["protected_raw_count_metrics"]["target_balanced_hellinger_q95"]
         != receipt.target_balanced_hellinger_q95
         or thresholds["protected_raw_count_metrics"]["target_balanced_jensen_shannon_q95"]
         != receipt.target_balanced_js_q95
-        or thresholds["protected_raw_count_metrics"][
-            "target_balanced_deviance_per_count_q95"
-        ]
+        or thresholds["protected_raw_count_metrics"]["target_balanced_deviance_per_count_q95"]
         != receipt.target_balanced_deviance_q95
-        or thresholds["protected_raw_count_metrics"][
-            "target_balanced_pseudobulk_spearman_q05"
-        ]
+        or thresholds["protected_raw_count_metrics"]["target_balanced_pseudobulk_spearman_q05"]
         != receipt.target_balanced_spearman_q05
         or thresholds["protected_raw_count_metrics"]["target_balanced_top_gene_overlap_q05"]
         != receipt.target_balanced_top_gene_overlap_q05
@@ -964,10 +1373,17 @@ def verify_raw_count_mass_noise(
         != receipt.guide_rank_spearman_q05
         or thresholds["mass_stability_metrics"]["target_rank_spearman_q05"]
         != receipt.target_rank_spearman_q05
-        or thresholds["mass_stability_metrics"]["top_k_overlap_q05"]
-        != receipt.top_k_overlap_q05
+        or thresholds["mass_stability_metrics"]["top_k_overlap_q05"] != receipt.top_k_overlap_q05
         or thresholds["mass_stability_metrics"]["bottom_k_overlap_q05"]
         != receipt.bottom_k_overlap_q05
+        or not _component_receipt_invariants(
+            component,
+            contract=contract,
+            detailed=receipt,
+            pooled_data_id=pooled.pooled_data_id,
+            count_store_sha256=store.content_sha256,
+            raw_repeat=raw_repeat,
+        )
     ):
         raise IntegrityError("T02A stored gates differ from recomputed invariants.")
     link = json.loads((path / "QUALIFICATION_LINK.json").read_text())
@@ -983,3 +1399,288 @@ def verify_raw_count_mass_noise(
         if sha256_file(path / relative.strip()) != expected:
             raise IntegrityError(f"T02A SHA256SUMS mismatch: {relative.strip()}.")
     return bundle
+
+
+def _threshold_semantics_payload(*, parent_noise_id: str) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "parent_noise_id": parent_noise_id,
+        "calibration_scope": "conditional_pooled_endpoint_sampling_noise",
+        "renamed_estimands": {
+            "mass_improvement_margin_interval_log_rmse_q95": {
+                "replacement": "observed_endpoint_sampling_rmse_q95",
+                "allowed_use": "absolute_adequacy_and_preprocessing_tolerance_reference",
+                "forbidden_use": "direct_model_versus_baseline_improvement_margin",
+            },
+            "minimum_detectable_abs_interval_log_mass_effect": {
+                "replacement": "guide_abs_error_q95_target_median_q95",
+                "allowed_use": "descriptive_conservative_guide_noise_summary",
+                "forbidden_use": "formal_minimum_detectable_effect_or_power_claim",
+            },
+            "top_k_overlap": {
+                "replacement": "guide_top_k_overlap",
+                "allowed_use": "guide_level_rank_stability",
+                "forbidden_use": "target_level_top_k_overlap_claim",
+            },
+            "bottom_k_overlap": {
+                "replacement": "guide_bottom_k_overlap",
+                "allowed_use": "guide_level_rank_stability",
+                "forbidden_use": "target_level_bottom_k_overlap_claim",
+            },
+        },
+        "checkpoint_use": {
+            "source_representation": "use_source_checkpoint_rows",
+            "terminal_reconstruction": "use_terminal_checkpoint_rows",
+            "pooled_rows": "descriptive_only",
+        },
+        "model_comparison": {
+            "required_statistic": "paired_loss_difference_on_shared_bootstrap_catalog",
+            "promotion_rule": "upper_q95_delta_below_negative_preregistered_epsilon",
+            "epsilon_source": "separate_synthetic_or_model_comparison_null",
+        },
+        "formal_detectable_effect": {
+            "status": "not_estimated",
+            "required_addition": "prespecified_alpha_power_estimand_and_detection_rule",
+        },
+        "information_boundary": (
+            "learned_model_outputs_and_external_biological_annotations_not_read;"
+            "observed_pooled_endpoint_counts_used_to_characterize_conditional_sampling_noise"
+        ),
+    }
+
+
+def derive_raw_count_mass_noise_amendment(
+    destination: Path,
+    *,
+    t02a_bundle: Path,
+    pooled_bundle: Path,
+    count_store: Path,
+) -> Path:
+    """Publish a semantic amendment derived from one immutable T02A bundle."""
+
+    if destination.exists():
+        raise FileExistsError(f"Committed destination already exists: {destination}.")
+    parent = verify_raw_count_mass_noise(
+        t02a_bundle, pooled_bundle=pooled_bundle, count_store=count_store
+    )
+    raw = pd.read_parquet(t02a_bundle / parent.raw_split_metrics.relative_uri)
+    raw_repeat = pd.read_parquet(t02a_bundle / parent.raw_repeat_summary.relative_uri)
+    mass = pd.read_parquet(t02a_bundle / parent.mass_bootstrap.relative_uri)
+    mass_guide = pd.read_parquet(t02a_bundle / parent.mass_guide_noise.relative_uri)
+    mass_target = pd.read_parquet(t02a_bundle / parent.mass_target_noise.relative_uri)
+    checkpoints = (parent.source_checkpoint, parent.terminal_checkpoint)
+    checkpoint_thresholds = _checkpoint_thresholds(
+        raw=raw, raw_repeat=raw_repeat, checkpoints=checkpoints
+    )
+    recomputed = _interpreted_thresholds(
+        raw=raw,
+        raw_repeat=raw_repeat,
+        mass=mass,
+        mass_guide=mass_guide,
+        mass_target=mass_target,
+    )
+    rank_stability = _target_rank_stability(mass)
+    semantics = _threshold_semantics_payload(parent_noise_id=parent.noise_id)
+    parent_bundle_sha256 = sha256_file(t02a_bundle / "raw-count-mass-noise.json")
+    implementation_hash, implementation_files = _implementation_identity()
+    environment = environment_identity()
+    environment_hash = environment_lock_hash()
+
+    def writer(temp: Path) -> None:
+        checkpoint_thresholds.to_parquet(temp / "THRESHOLDS_BY_CHECKPOINT.parquet", index=False)
+        _write_json(temp / "RECOMPUTED_THRESHOLDS.json", recomputed)
+        rank_stability.to_parquet(temp / "TARGET_RANK_STABILITY.parquet", index=False)
+        _write_json(temp / "THRESHOLD_SEMANTICS.json", semantics)
+        _write_json(
+            temp / "IMPLEMENTATION.sha256",
+            {
+                "schema_version": 1,
+                "implementation_hash": implementation_hash,
+                "files": implementation_files,
+            },
+        )
+        _write_json(temp / "ENVIRONMENT.json", environment)
+        bundle_payload = {
+            "schema_version": 1,
+            "amendment_id": "pending",
+            "parent_noise_id": parent.noise_id,
+            "parent_bundle_sha256": parent_bundle_sha256,
+            "implementation_hash": implementation_hash,
+            "environment_hash": environment_hash,
+            "source_checkpoint": parent.source_checkpoint,
+            "terminal_checkpoint": parent.terminal_checkpoint,
+            "thresholds_by_checkpoint": artifact_ref(
+                temp,
+                temp / "THRESHOLDS_BY_CHECKPOINT.parquet",
+                schema_id="credo.t02a_thresholds_by_checkpoint",
+                media_type="application/x-parquet",
+            ).model_dump(mode="json"),
+            "recomputed_thresholds": artifact_ref(
+                temp,
+                temp / "RECOMPUTED_THRESHOLDS.json",
+                schema_id="credo.t02a_recomputed_thresholds",
+                media_type="application/json",
+            ).model_dump(mode="json"),
+            "target_rank_stability": artifact_ref(
+                temp,
+                temp / "TARGET_RANK_STABILITY.parquet",
+                schema_id="credo.t02a_target_rank_stability",
+                media_type="application/x-parquet",
+            ).model_dump(mode="json"),
+            "threshold_semantics": artifact_ref(
+                temp,
+                temp / "THRESHOLD_SEMANTICS.json",
+                schema_id="credo.t02a_threshold_semantics",
+                media_type="application/json",
+            ).model_dump(mode="json"),
+            "implementation_identity": artifact_ref(
+                temp,
+                temp / "IMPLEMENTATION.sha256",
+                schema_id="credo.t02a_amendment_implementation_identity",
+                media_type="application/json",
+            ).model_dump(mode="json"),
+            "environment_identity": artifact_ref(
+                temp,
+                temp / "ENVIRONMENT.json",
+                schema_id="credo.t02a_amendment_environment_identity",
+                media_type="application/json",
+            ).model_dump(mode="json"),
+        }
+        bundle_payload["amendment_id"] = contract_id(bundle_payload, id_field="amendment_id")
+        amendment = RawCountMassNoiseAmendment.model_validate(bundle_payload)
+        _write_json(
+            temp / "raw-count-mass-noise-amendment.json",
+            amendment.model_dump(mode="json"),
+        )
+        receipt_payload = {
+            "schema_version": 1,
+            "receipt_id": "pending",
+            "amendment_id": amendment.amendment_id,
+            "parent_noise_id": parent.noise_id,
+            "implementation_hash": implementation_hash,
+            "environment_hash": environment_hash,
+            "status": "pass",
+            "parent_bundle_verified": True,
+            "table_invariants_pass": True,
+            "thresholds_recomputed": True,
+            "checkpoint_thresholds_recomputed": True,
+            "misleading_labels_retired": True,
+        }
+        receipt_payload["receipt_id"] = contract_id(receipt_payload, id_field="receipt_id")
+        receipt = RawCountMassNoiseAmendmentReceipt.model_validate(receipt_payload)
+        _write_json(temp / "VERIFICATION_RECEIPT.json", receipt.model_dump(mode="json"))
+        checksums = path_manifest(temp)
+        (temp / "SHA256SUMS").write_text(
+            "".join(f"{row['sha256']}  {row['path']}\n" for row in checksums)
+        )
+
+    publish_directory(destination, writer)
+    verify_raw_count_mass_noise_amendment(
+        destination,
+        t02a_bundle=t02a_bundle,
+        pooled_bundle=pooled_bundle,
+        count_store=count_store,
+        _verified_parent=parent,
+    )
+    return destination
+
+
+def verify_raw_count_mass_noise_amendment(
+    path: Path,
+    *,
+    t02a_bundle: Path,
+    pooled_bundle: Path,
+    count_store: Path,
+    _verified_parent: RawCountMassNoiseBundle | None = None,
+) -> RawCountMassNoiseAmendment:
+    """Verify a T02A amendment against its exact immutable parent tables."""
+
+    verify_directory(path)
+    amendment = RawCountMassNoiseAmendment.model_validate_json(
+        (path / "raw-count-mass-noise-amendment.json").read_text()
+    )
+    receipt = RawCountMassNoiseAmendmentReceipt.model_validate_json(
+        (path / "VERIFICATION_RECEIPT.json").read_text()
+    )
+    parent = _verified_parent or verify_raw_count_mass_noise(
+        t02a_bundle, pooled_bundle=pooled_bundle, count_store=count_store
+    )
+    if (
+        amendment.parent_noise_id != parent.noise_id
+        or receipt.parent_noise_id != parent.noise_id
+        or receipt.amendment_id != amendment.amendment_id
+        or amendment.parent_bundle_sha256 != sha256_file(t02a_bundle / "raw-count-mass-noise.json")
+        or amendment.source_checkpoint != parent.source_checkpoint
+        or amendment.terminal_checkpoint != parent.terminal_checkpoint
+        or receipt.status != "pass"
+    ):
+        raise IntegrityError("T02A amendment, receipt, or immutable parent differs.")
+    for reference in (
+        amendment.thresholds_by_checkpoint,
+        amendment.recomputed_thresholds,
+        amendment.target_rank_stability,
+        amendment.threshold_semantics,
+        amendment.implementation_identity,
+        amendment.environment_identity,
+    ):
+        artifact = path / reference.relative_uri
+        if (
+            artifact.stat().st_size != reference.size_bytes
+            or sha256_file(artifact) != reference.sha256
+        ):
+            raise IntegrityError(f"T02A amendment artifact differs: {reference.relative_uri}.")
+    raw = pd.read_parquet(t02a_bundle / parent.raw_split_metrics.relative_uri)
+    raw_repeat = pd.read_parquet(t02a_bundle / parent.raw_repeat_summary.relative_uri)
+    mass = pd.read_parquet(t02a_bundle / parent.mass_bootstrap.relative_uri)
+    mass_guide = pd.read_parquet(t02a_bundle / parent.mass_guide_noise.relative_uri)
+    mass_target = pd.read_parquet(t02a_bundle / parent.mass_target_noise.relative_uri)
+    expected_checkpoint = _checkpoint_thresholds(
+        raw=raw,
+        raw_repeat=raw_repeat,
+        checkpoints=(parent.source_checkpoint, parent.terminal_checkpoint),
+    )
+    expected_rank = _target_rank_stability(mass)
+    try:
+        pd.testing.assert_frame_equal(
+            pd.read_parquet(path / amendment.thresholds_by_checkpoint.relative_uri),
+            expected_checkpoint,
+            check_exact=True,
+            check_dtype=True,
+        )
+        pd.testing.assert_frame_equal(
+            pd.read_parquet(path / amendment.target_rank_stability.relative_uri),
+            expected_rank,
+            check_exact=True,
+            check_dtype=True,
+        )
+    except AssertionError as exc:
+        raise IntegrityError("T02A amendment parquet tables do not recompute exactly.") from exc
+    expected_thresholds = _interpreted_thresholds(
+        raw=raw,
+        raw_repeat=raw_repeat,
+        mass=mass,
+        mass_guide=mass_guide,
+        mass_target=mass_target,
+    )
+    expected_semantics = _threshold_semantics_payload(parent_noise_id=parent.noise_id)
+    implementation = json.loads((path / amendment.implementation_identity.relative_uri).read_text())
+    environment = json.loads((path / amendment.environment_identity.relative_uri).read_text())
+    if (
+        json.loads((path / amendment.recomputed_thresholds.relative_uri).read_text())
+        != expected_thresholds
+        or json.loads((path / amendment.threshold_semantics.relative_uri).read_text())
+        != expected_semantics
+        or implementation.get("implementation_hash") != amendment.implementation_hash
+        or sha256_bytes(canonical_json_bytes(implementation.get("files")))
+        != amendment.implementation_hash
+        or receipt.implementation_hash != amendment.implementation_hash
+        or sha256_bytes(canonical_json_bytes(environment)) != amendment.environment_hash
+        or receipt.environment_hash != amendment.environment_hash
+    ):
+        raise IntegrityError("T02A amendment JSON does not match recomputed semantics.")
+    for expected, relative in (
+        line.split(maxsplit=1) for line in (path / "SHA256SUMS").read_text().splitlines()
+    ):
+        if sha256_file(path / relative.strip()) != expected:
+            raise IntegrityError(f"T02A amendment SHA256SUMS mismatch: {relative.strip()}.")
+    return amendment

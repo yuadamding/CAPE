@@ -73,6 +73,9 @@ def main() -> None:
     component_status_assessment = Path(
         "/home/yding1995/.codex/attachments/419a4b6e-3a98-431d-8dce-6d90bac813f1/pasted-text.txt"
     )
+    t02a_interpretation_review = Path(
+        "/home/yding1995/.codex/attachments/801c74d4-66df-455e-8b14-0c6730dce794/pasted-text.txt"
+    )
     receipt = {
         "schema_version": 1,
         "status": "engineering_only",
@@ -98,6 +101,11 @@ def main() -> None:
         "component_status_assessment_sha256": (
             sha256_file(component_status_assessment)
             if component_status_assessment.is_file()
+            else None
+        ),
+        "t02a_interpretation_review_sha256": (
+            sha256_file(t02a_interpretation_review)
+            if t02a_interpretation_review.is_file()
             else None
         ),
         "tests_passed": args.tests_passed,

@@ -1,7 +1,7 @@
 # T01 count-native representation qualification
 
 Last verified: 2026-08-15. Status: authoritative engineering record for the
-T01-v1/v2 implementations introduced in `4.0.0.dev19` and retained by dev21;
+T01-v1/v2 implementations introduced in `4.0.0.dev19` and retained by dev22;
 both real Renz candidates are retired. This document defines software and
 development evidence, not a biological claim.
 

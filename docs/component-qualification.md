@@ -1,6 +1,6 @@
 # Component-wise qualification program
 
-Status: authoritative development order for `4.0.0.dev21`. This page defines
+Status: authoritative development order for `4.0.0.dev22`. This page defines
 software promotion, not a biological claim.
 
 CREDO V4 is qualified as three dependency tracks rather than one large training
@@ -169,8 +169,9 @@ resume was bitwise identical. See the
 T02A consumed the exact passed T00 population and complete common-34,699 raw
 CountStore. One hundred balanced cell split-halves at both checkpoints and 100
 Jeffreys-smoothed multinomial catalog bootstraps completed. The frozen
-target-balanced interval log-mass RMSE margin is 0.132578 and the minimum
-detectable absolute interval effect is 0.289973 natural-log units. T02A pass
+target-balanced observed-endpoint sampling RMSE q95 is 0.132578, and the
+guide absolute-error q95 target-median q95 is 0.289973 natural-log units.
+Neither is a model-improvement margin or formal minimum detectable effect. T02A pass
 means the measurement-noise calibration is complete; it does not promote a
 model or authorize pooled state dynamics. See the
 [detailed T02A record](t02a-raw-count-mass-noise.md).

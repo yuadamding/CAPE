@@ -108,6 +108,14 @@ def build_parser() -> argparse.ArgumentParser:
     raw_noise.add_argument("--variable-gene-count", type=int, default=2_000)
     raw_noise.add_argument("--top-gene-count", type=int, default=50)
     raw_noise.add_argument("--rank-top-k", type=int, default=20)
+    amendment = sub.add_parser(
+        "amend-raw-noise",
+        help="derive checkpoint and semantic amendments from an immutable T02A bundle",
+    )
+    amendment.add_argument("--t02a-bundle", type=_path, required=True)
+    amendment.add_argument("--pooled-bundle", type=_path, required=True)
+    amendment.add_argument("--count-store", type=_path, required=True)
+    amendment.add_argument("--output", type=_path, required=True)
     open_parser = sub.add_parser("open-run")
     open_parser.add_argument("run", type=_path)
     open_parser.add_argument("--device", default="cpu")
@@ -210,6 +218,13 @@ def main(argv: list[str] | None = None) -> int:
             variable_gene_count=args.variable_gene_count,
             top_gene_count=args.top_gene_count,
             rank_top_k=args.rank_top_k,
+        )
+    elif command == "amend-raw-noise":
+        result = api.amend_raw_noise_interpretation(
+            args.output,
+            t02a_bundle=args.t02a_bundle,
+            pooled_bundle=args.pooled_bundle,
+            count_store=args.count_store,
         )
     elif command == "finalize":
         result = api.finalize(args.config)

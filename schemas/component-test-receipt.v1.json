@@ -86,7 +86,7 @@
       "type": "string"
     },
     "test_id": {
-      "pattern": "^T\\d{2}_[A-Z0-9_]+$",
+      "pattern": "^T\\d{2}[A-Z]?_[A-Z0-9_]+$",
       "title": "Test Id",
       "type": "string"
     }

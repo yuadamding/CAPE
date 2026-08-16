@@ -16,7 +16,7 @@ Implemented in this repository:
 - CLI/API, full content/reload verification, correction/context audit helpers;
 - CPU regression, leakage, corruption, fault, resume, compatibility, and wheel CI.
 
-Dev21 retains the component-qualified boundary introduced in dev18: the T00
+Dev22 retains the component-qualified boundary introduced in dev18: the T00
 pooled finite-measure contract, public API/CLI, strict channel-isolation
 contract, and focused invariants. The external pooled Renz adapter passed T00
 with 495 guides and 277,200 cells. T04 independently passed its fixed-truth
@@ -32,9 +32,10 @@ The raw Hellinger candidates were 0.204–0.256 nats/count worse; centered
 residual Hellinger candidates were 0.178–0.238 worse. These are retired
 candidates, not a representation qualification; downstream tests remain
 blocked only on the pooled real-data representation path. The independent
-T02A raw-count/mass calibration passes with a target-balanced interval
-log-mass RMSE q95 of 0.132578 and minimum detectable absolute interval effect
-of 0.289973. Synthetic T04–T07 remains independent. See the
+T02A raw-count/mass calibration passes with a target-balanced observed-endpoint
+sampling RMSE q95 of 0.132578 and guide absolute-error q95 target-median q95 of
+0.289973. These are conditional noise summaries, not a direct model-improvement
+margin or formal minimum detectable effect. Synthetic T04–T07 remains independent. See the
 [detailed T02A record](t02a-raw-count-mass-noise.md).
 
 T04 routes non-trainable analytic truths through the production streaming
@@ -46,7 +47,7 @@ variance relative error is 0.004459. This is numerical software evidence; it
 does not qualify a learned channel or biological model. See the
 [detailed T04 record](t04-particle-engine-qualification.md).
 
-Local acceptance result: 121 tests passed with one CUDA-only skip and 86.89%
+Local acceptance result: 126 tests passed with one CUDA-only skip and 86.38%
 coverage; `receipts/local-validation.json` is the machine authority. Ruff,
 mypy, generated-schema, documentation-link, wheel
 namespace/license, clean-wheel lifecycle, and frozen-CREDO preflight checks
@@ -99,7 +100,7 @@ conditional-interaction, and joint nulls, freezes fold and seed identities,
 and strengthens noninteraction comparators. That T03 code remains unqualified
 until T01, T02, and the prescribed pooled pilot pass.
 
-Deliberately not asserted complete in `4.0.0.dev21`:
+Deliberately not asserted complete in `4.0.0.dev22`:
 
 - stable CREDO entry-point discovery;
 - in-repository real-cohort adapters, biological thresholds, or biological claims;
@@ -145,5 +146,5 @@ authority.
 
 Exact future use depends on the branch commit, `REPOSITORY.sha256`, the
 wheel/sdist bytes, generated schemas, and the local validation receipt. A clean
-dev21 commit and release receipt are necessary—but not sufficient—before any
+dev22 commit and release receipt are necessary—but not sufficient—before any
 pilot deployment or stable promotion.

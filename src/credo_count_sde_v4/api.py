@@ -18,6 +18,7 @@ from .contracts import (
     CompiledRunContract,
     ComponentTestContract,
     ComponentTestReceipt,
+    ComponentTestReceiptV2,
     CountRepresentationBundle,
     CountStoreManifest,
     EvaluationBundleManifest,
@@ -27,6 +28,8 @@ from .contracts import (
     ParticleEngineTestReceipt,
     PooledFiniteMeasureBundle,
     PreparedRepresentation,
+    RawCountMassNoiseAmendment,
+    RawCountMassNoiseAmendmentReceipt,
     RawCountMassNoiseBundle,
     RawCountMassNoiseReceipt,
     ResolvedConfig,
@@ -41,7 +44,12 @@ from .data import build_pooled_finite_measures, verify_pooled_finite_measures
 from .errors import ContractError, IntegrityError
 from .evaluation import evaluate_run, seal_run
 from .inference import V4Run, finalize_inference, open_inference_run
-from .noise import qualify_raw_count_mass_noise, verify_raw_count_mass_noise
+from .noise import (
+    derive_raw_count_mass_noise_amendment,
+    qualify_raw_count_mass_noise,
+    verify_raw_count_mass_noise,
+    verify_raw_count_mass_noise_amendment,
+)
 from .numerics import (
     qualify_particle_engine as run_particle_engine_qualification,
 )
@@ -167,6 +175,42 @@ def verify_raw_noise(
     )
 
 
+def amend_raw_noise_interpretation(
+    destination: Path,
+    *,
+    t02a_bundle: Path,
+    pooled_bundle: Path,
+    count_store: Path,
+) -> Path:
+    """Derive and fully verify a semantic amendment without rerunning T02A."""
+
+    _supported_preflight()
+    return derive_raw_count_mass_noise_amendment(
+        destination,
+        t02a_bundle=t02a_bundle,
+        pooled_bundle=pooled_bundle,
+        count_store=count_store,
+    )
+
+
+def verify_raw_noise_amendment(
+    path: Path,
+    *,
+    t02a_bundle: Path,
+    pooled_bundle: Path,
+    count_store: Path,
+) -> RawCountMassNoiseAmendment:
+    """Verify a derived T02A interpretation amendment and its parent bundle."""
+
+    _supported_preflight()
+    return verify_raw_count_mass_noise_amendment(
+        path,
+        t02a_bundle=t02a_bundle,
+        pooled_bundle=pooled_bundle,
+        count_store=count_store,
+    )
+
+
 def validate_contract(path: Path) -> dict[str, Any]:
     """Validate canonical JSON syntax and reject non-object contracts."""
 
@@ -185,6 +229,8 @@ def validate_contract(path: Path) -> dict[str, Any]:
             ("compiled_run_id", CompiledRunContract),
             ("qualification_id", ParticleEngineQualificationBundle),
             ("noise_id", RawCountMassNoiseBundle),
+            ("parent_bundle_verified", RawCountMassNoiseAmendmentReceipt),
+            ("amendment_id", RawCountMassNoiseAmendment),
             ("representation_id", CountRepresentationBundle),
             ("pooled_data_id", PooledFiniteMeasureBundle),
             ("test_contract_id", ComponentTestContract),
@@ -193,6 +239,7 @@ def validate_contract(path: Path) -> dict[str, Any]:
                 ParticleEngineTestReceipt,
             ),
             ("interval_log_mass_rmse_q95", RawCountMassNoiseReceipt),
+            ("receipt_role", ComponentTestReceiptV2),
             ("receipt_id", ComponentTestReceipt),
             ("prepared_id", PreparedRepresentation),
             ("evaluation_id", EvaluationBundleManifest),

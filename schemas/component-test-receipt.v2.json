@@ -1,0 +1,214 @@
+{
+  "$id": "https://credo.local/schemas/component-test-receipt.v2.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Role-aware component receipt without overloaded comparison fields.",
+  "properties": {
+    "bootstrap_interval": {
+      "anyOf": [
+        {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bootstrap Interval"
+    },
+    "channel_activity": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Channel Activity"
+    },
+    "config_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Config Hash",
+      "type": "string"
+    },
+    "estimand": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Estimand"
+    },
+    "implementation_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Implementation Hash",
+      "type": "string"
+    },
+    "input_hashes": {
+      "additionalProperties": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "title": "Input Hashes",
+      "type": "object"
+    },
+    "point_delta": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Point Delta"
+    },
+    "primary_baseline": {
+      "title": "Primary Baseline",
+      "type": "string"
+    },
+    "primary_metric": {
+      "title": "Primary Metric",
+      "type": "string"
+    },
+    "protected_metrics_pass": {
+      "title": "Protected Metrics Pass",
+      "type": "boolean"
+    },
+    "quantile_probability": {
+      "anyOf": [
+        {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Quantile Probability"
+    },
+    "quantile_value": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Quantile Value"
+    },
+    "receipt_id": {
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "receipt_role": {
+      "enum": [
+        "model_comparison",
+        "calibration",
+        "invariant"
+      ],
+      "title": "Receipt Role",
+      "type": "string"
+    },
+    "repeat_count": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Repeat Count"
+    },
+    "required_margin": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Required Margin"
+    },
+    "sampling_method": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sampling Method"
+    },
+    "schema_version": {
+      "const": 2,
+      "default": 2,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "selected_update": {
+      "minimum": 0,
+      "title": "Selected Update",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail_retired",
+        "not_run"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "test_id": {
+      "pattern": "^T\\d{2}[A-Z]?_[A-Z0-9_]+$",
+      "title": "Test Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "test_id",
+    "receipt_role",
+    "status",
+    "primary_metric",
+    "primary_baseline",
+    "protected_metrics_pass",
+    "selected_update",
+    "input_hashes",
+    "config_hash",
+    "implementation_hash"
+  ],
+  "title": "ComponentTestReceiptV2",
+  "type": "object"
+}

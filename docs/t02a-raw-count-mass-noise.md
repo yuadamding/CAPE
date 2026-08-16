@@ -1,7 +1,7 @@
 # T02A raw-count and relative-mass noise qualification
 
-Last verified: 2026-08-15. Status: authoritative dev21 component contract and
-completed Renz development calibration. This is a measurement-noise result,
+Last verified: 2026-08-15. Status: authoritative dev22 interpretation amendment
+over the immutable dev21 Renz calibration. This is a measurement-noise result,
 not model performance or biology.
 
 ## Decision
@@ -14,23 +14,29 @@ complete CountStore parent.
 
 The Renz noise ID is
 `ca3b8c5c6575a399c6125047530d92a8d337cc0a54cc525dfb5daf9d4e0e5310`.
+The derived dev22 amendment ID is
+`9f710d3131eb2d9c41e03e311efae7746561a718dab2e2a5257febe344be54c0`;
+its verification receipt is
+`612487edf62982f970d43f6f5e2c4d3b24c03c5d301cb61ea0e7c7095ee314f4`.
 The complete external report is
 [`T02A_RUN_REPORT.md`](../../credo_v4_renz_t02a_noise_20260815/T02A_RUN_REPORT.md).
 
 ## Dependency and channel boundary
 
 ```text
-T00 passed pooled population ──→ T02A raw-count/mass noise ──→ frozen tolerances
+T00 passed pooled population ──→ T02A raw-count/mass noise ──→ conditional floors
 
 T01 representation ──╳── not read
 learned model ────────╳── not read
-biological outcomes ─╳── not read for threshold selection
+external biological annotations ─╳── not read
 ```
 
 T02A uses no representation, state field, diffusion, reaction, ecology,
 decoder, optimizer, checkpoint, or particle. Its `pass` status means the
 calibration is complete and internally valid. It makes no assertion that the
-measured noise is small.
+measured noise is small. The observed P4 and P60 pooled endpoint counts are
+read by design to characterize their conditional sampling noise; learned-model
+outputs and external biological annotations are not read.
 
 ## Raw-count estimand
 
@@ -94,16 +100,34 @@ and 34,699 assay-common features.
 | Target-balanced deviance/count q95 | 0.0459571 |
 | Target-balanced pseudobulk Spearman q05 | 0.881957 |
 | Target-balanced top-50 overlap q05 | 0.330921 |
-| Interval log-mass RMSE q95 | 0.132578 |
-| Minimum detectable absolute interval log-mass effect | 0.289973 |
+| Observed-endpoint sampling RMSE q95 | 0.132578 |
+| Guide absolute-error q95, target-median q95 | 0.289973 |
 | Sign accuracy q05 | 0.930112 |
 | Guide-rank Spearman q05 | 0.978563 |
 | Target-rank Spearman q05 | 0.980054 |
 | Top-20 / bottom-20 overlap q05 | 0.90 / 0.80 |
 
-These thresholds were frozen before learned-model inspection. T01B may use the
-control Hellinger tolerance; pooled T07R may use the mass RMSE margin; T12 may
-use the protected raw-count metrics. Changing the population, feature scope,
+The amendment separates the raw-count surface by checkpoint and population:
+
+| Checkpoint/population | Hellinger q95 | JS q95 | Deviance/count q95 | Spearman q05 | Top-50 overlap q05 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| P4 targeting | 0.146991 | 0.019783 | 0.039457 | 0.889998 | 0.458207 |
+| P4 controls | 0.212830 | 0.037570 | 0.074892 | 0.789110 | 0.220000 |
+| P60 targeting | 0.154285 | 0.023201 | 0.046065 | 0.881828 | 0.329571 |
+| P60 controls | 0.258018 | 0.053727 | 0.106807 | 0.757615 | 0.160000 |
+
+These thresholds were frozen before learned-model inspection. The two renamed
+mass quantities are conditional noise summaries: `0.132578` is not a direct
+model-versus-baseline improvement margin, and `0.289973` is not a formal
+minimum detectable effect. T07R must use a paired loss-difference bootstrap on
+the same resampled catalogs with a separately preregistered comparison margin.
+Formal detectability requires an explicit estimand, Type-I error, power, and
+detection rule.
+
+Checkpoint-specific consumers must use the derived amendment: T01B uses the P4
+source rows and T12 uses the P60 terminal rows. Pooled raw thresholds remain
+descriptive. Raw-count Hellinger is not a latent-space tolerance; T02B must
+establish that floor after T01 passes. Changing the population, feature scope,
 pseudocount, target weighting, or quantile definition creates a new T02A
 protocol.
 
@@ -123,6 +147,13 @@ api.verify_raw_noise(
     pooled_bundle=t00_directory,
     count_store=count_store_path,
 )
+
+api.amend_raw_noise_interpretation(
+    amendment_directory,
+    t02a_bundle=output_directory,
+    pooled_bundle=t00_directory,
+    count_store=count_store_path,
+)
 ```
 
 ```bash
@@ -132,6 +163,12 @@ credo-v4 qualify-raw-noise \
   --split-repeats 100 \
   --mass-bootstrap-repeats 100 \
   --output T02A_raw_count_mass_noise
+
+credo-v4 amend-raw-noise \
+  --t02a-bundle T02A_raw_count_mass_noise_v2 \
+  --pooled-bundle T00_pooled_data_contract \
+  --count-store counts.h5 \
+  --output T02A_INTERPRETATION_AMENDMENT
 ```
 
 Implementation:
@@ -155,10 +192,27 @@ Implementation:
 | `INPUTS.sha256`, `IMPLEMENTATION.sha256` | parent and code identities |
 | `artifacts.json`, `COMMITTED`, `SHA256SUMS` | transactional integrity |
 
+The immutable v2 bundle is not overwritten. The derived amendment contains:
+
+- `THRESHOLDS_BY_CHECKPOINT.parquet` with P4/P60 targeting/control rows;
+- `RECOMPUTED_THRESHOLDS.json` with exact non-overstated estimand names;
+- `TARGET_RANK_STABILITY.parquet` with the per-bootstrap target-rank Spearman distribution;
+- `THRESHOLD_SEMANTICS.json` with allowed and forbidden downstream uses; and
+- `IMPLEMENTATION.sha256`, `ENVIRONMENT.json`, `VERIFICATION_RECEIPT.json`, and
+  complete hashes.
+
+Full verification now recomputes every legacy frozen threshold from the row-level
+tables and checks exact guide/repeat/checkpoint catalogs, target/control mappings,
+seed sequences, cell-half reconciliation, mass-bootstrap coverage, and bundle
+configuration. Seed ranges must be disjoint, not merely different at their starts.
+
 ## Limitations
 
 Cell halves are technical sampling replicates, not mice. Multinomial catalogs
 condition on observed pooled frequencies and omit systematic WTA-library,
 batch, capture, and biological-replicate variation. Consequently these floors
 are necessary protected tolerances but not a complete biological noise model.
-T02A does not unblock T02B, T03R, or pooled dynamics while T01 remains open.
+T02A does not provide a model-comparison null or a powered detectable-effect
+threshold. Its top/bottom overlap values are guide-level. Target-level top/bottom
+overlap remains a separate T07R endpoint. T02A does not unblock T02B, T03R, or
+pooled dynamics while T01 remains open.

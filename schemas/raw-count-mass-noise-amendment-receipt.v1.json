@@ -1,0 +1,79 @@
+{
+  "$id": "https://credo.local/schemas/raw-count-mass-noise-amendment-receipt.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Fail-closed verification result for a derived T02A amendment.",
+  "properties": {
+    "amendment_id": {
+      "title": "Amendment Id",
+      "type": "string"
+    },
+    "checkpoint_thresholds_recomputed": {
+      "title": "Checkpoint Thresholds Recomputed",
+      "type": "boolean"
+    },
+    "environment_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Environment Hash",
+      "type": "string"
+    },
+    "implementation_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Implementation Hash",
+      "type": "string"
+    },
+    "misleading_labels_retired": {
+      "title": "Misleading Labels Retired",
+      "type": "boolean"
+    },
+    "parent_bundle_verified": {
+      "title": "Parent Bundle Verified",
+      "type": "boolean"
+    },
+    "parent_noise_id": {
+      "title": "Parent Noise Id",
+      "type": "string"
+    },
+    "receipt_id": {
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail_retired"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "table_invariants_pass": {
+      "title": "Table Invariants Pass",
+      "type": "boolean"
+    },
+    "thresholds_recomputed": {
+      "title": "Thresholds Recomputed",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "amendment_id",
+    "parent_noise_id",
+    "implementation_hash",
+    "environment_hash",
+    "status",
+    "parent_bundle_verified",
+    "table_invariants_pass",
+    "thresholds_recomputed",
+    "checkpoint_thresholds_recomputed",
+    "misleading_labels_retired"
+  ],
+  "title": "RawCountMassNoiseAmendmentReceipt",
+  "type": "object"
+}

@@ -384,11 +384,70 @@ class RawCountMassNoiseReceipt(StrictModel):
         if self.receipt_id != expected:
             raise ValueError(f"receipt_id mismatch: expected {expected}.")
         if self.status == "pass" and not (
-            self.raw_invariants_pass
-            and self.mass_invariants_pass
-            and self.protected_metrics_frozen
+            self.raw_invariants_pass and self.mass_invariants_pass and self.protected_metrics_frozen
         ):
             raise ValueError("A passing T02A receipt must freeze both complete noise floors.")
+        return self
+
+
+class RawCountMassNoiseAmendment(StrictModel):
+    """Derived T02A interpretation amendment bound to one immutable bundle."""
+
+    schema_version: Literal[1] = 1
+    amendment_id: str
+    parent_noise_id: str
+    parent_bundle_sha256: Sha256
+    implementation_hash: Sha256
+    environment_hash: Sha256
+    source_checkpoint: str = Field(min_length=1)
+    terminal_checkpoint: str = Field(min_length=1)
+    thresholds_by_checkpoint: ArtifactRef
+    recomputed_thresholds: ArtifactRef
+    target_rank_stability: ArtifactRef
+    threshold_semantics: ArtifactRef
+    implementation_identity: ArtifactRef
+    environment_identity: ArtifactRef
+
+    @model_validator(mode="after")
+    def validate_amendment(self) -> RawCountMassNoiseAmendment:
+        expected = self.identity(id_field="amendment_id")
+        if self.amendment_id != expected:
+            raise ValueError(f"amendment_id mismatch: expected {expected}.")
+        if self.source_checkpoint == self.terminal_checkpoint:
+            raise ValueError("T02A amendment checkpoints must differ.")
+        return self
+
+
+class RawCountMassNoiseAmendmentReceipt(StrictModel):
+    """Fail-closed verification result for a derived T02A amendment."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str
+    amendment_id: str
+    parent_noise_id: str
+    implementation_hash: Sha256
+    environment_hash: Sha256
+    status: Literal["pass", "fail_retired"]
+    parent_bundle_verified: bool
+    table_invariants_pass: bool
+    thresholds_recomputed: bool
+    checkpoint_thresholds_recomputed: bool
+    misleading_labels_retired: bool
+
+    @model_validator(mode="after")
+    def validate_amendment_receipt(self) -> RawCountMassNoiseAmendmentReceipt:
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
+        gates = (
+            self.parent_bundle_verified,
+            self.table_invariants_pass,
+            self.thresholds_recomputed,
+            self.checkpoint_thresholds_recomputed,
+            self.misleading_labels_retired,
+        )
+        if self.status == "pass" and not all(gates):
+            raise ValueError("A passing T02A amendment must satisfy every verification gate.")
         return self
 
 
@@ -397,7 +456,7 @@ class ComponentTestContract(StrictModel):
 
     schema_version: int = 1
     test_contract_id: str
-    test_id: str = Field(pattern=r"^T\d{2}_[A-Z0-9_]+$")
+    test_id: str = Field(pattern=r"^T\d{2}[A-Z]?_[A-Z0-9_]+$")
     component: str = Field(min_length=1)
     primary_metric: str = Field(min_length=1)
     primary_baseline: str = Field(min_length=1)
@@ -448,7 +507,7 @@ class ComponentTestReceipt(StrictModel):
 
     schema_version: int = 1
     receipt_id: str
-    test_id: str = Field(pattern=r"^T\d{2}_[A-Z0-9_]+$")
+    test_id: str = Field(pattern=r"^T\d{2}[A-Z]?_[A-Z0-9_]+$")
     status: Literal["pass", "fail_retired", "not_run"]
     primary_metric: str
     primary_baseline: str
@@ -470,6 +529,79 @@ class ComponentTestReceipt(StrictModel):
         lower, upper = self.bootstrap_interval
         if lower > upper:
             raise ValueError("Bootstrap interval must be ordered.")
+        if self.status == "pass" and not self.protected_metrics_pass:
+            raise ValueError("A passing component must preserve protected metrics.")
+        return self
+
+
+class ComponentTestReceiptV2(StrictModel):
+    """Role-aware component receipt without overloaded comparison fields."""
+
+    schema_version: Literal[2] = 2
+    receipt_id: str
+    test_id: str = Field(pattern=r"^T\d{2}[A-Z]?_[A-Z0-9_]+$")
+    receipt_role: Literal["model_comparison", "calibration", "invariant"]
+    status: Literal["pass", "fail_retired", "not_run"]
+    primary_metric: str
+    primary_baseline: str
+    point_delta: float | None = None
+    bootstrap_interval: tuple[float, float] | None = None
+    required_margin: float | None = Field(default=None, ge=0)
+    channel_activity: float | None = Field(default=None, ge=0)
+    estimand: str | None = None
+    quantile_probability: float | None = Field(default=None, ge=0, le=1)
+    quantile_value: float | None = None
+    repeat_count: int | None = Field(default=None, ge=1)
+    sampling_method: str | None = None
+    protected_metrics_pass: bool
+    selected_update: int = Field(ge=0)
+    input_hashes: dict[str, Sha256]
+    config_hash: Sha256
+    implementation_hash: Sha256
+
+    @model_validator(mode="after")
+    def validate_role_receipt(self) -> ComponentTestReceiptV2:
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
+        numeric = (
+            self.point_delta,
+            *(self.bootstrap_interval or ()),
+            self.required_margin,
+            self.channel_activity,
+            self.quantile_probability,
+            self.quantile_value,
+        )
+        if any(value is not None and not math.isfinite(value) for value in numeric):
+            raise ValueError("Component receipt numerical fields must be finite.")
+        comparison = (
+            self.point_delta,
+            self.bootstrap_interval,
+            self.required_margin,
+            self.channel_activity,
+        )
+        calibration = (
+            self.estimand,
+            self.quantile_probability,
+            self.quantile_value,
+            self.repeat_count,
+            self.sampling_method,
+        )
+        if self.receipt_role == "model_comparison":
+            if any(value is None for value in comparison) or any(
+                value is not None for value in calibration
+            ):
+                raise ValueError("Model-comparison receipts require only comparison fields.")
+            assert self.bootstrap_interval is not None
+            if self.bootstrap_interval[0] > self.bootstrap_interval[1]:
+                raise ValueError("Bootstrap interval must be ordered.")
+        elif self.receipt_role == "calibration":
+            if any(value is not None for value in comparison) or any(
+                value is None for value in calibration
+            ):
+                raise ValueError("Calibration receipts require only calibration fields.")
+        elif any(value is not None for value in (*comparison, *calibration)):
+            raise ValueError("Invariant receipts do not carry comparison or calibration fields.")
         if self.status == "pass" and not self.protected_metrics_pass:
             raise ValueError("A passing component must preserve protected metrics.")
         return self
@@ -1094,7 +1226,7 @@ class CompiledRunContract(StrictModel):
     schema_version: int = 1
     compiled_run_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev21"] = "4.0.dev21"
+    recipe_version: Literal["4.0.dev22"] = "4.0.dev22"
     recipe_wheel_hash: Sha256
     frozen_credo_artifact_hash: Sha256
     environment_lock_hash: Sha256
@@ -1161,7 +1293,7 @@ class InferenceBundleManifest(StrictModel):
     compiled_run_id: str
     selected_checkpoint_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev21"] = "4.0.dev21"
+    recipe_version: Literal["4.0.dev22"] = "4.0.dev22"
     selected_family: Literal[
         "configured_checkpoint",
         "gene_decoder_selected",

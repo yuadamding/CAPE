@@ -1,5 +1,15 @@
 # Changelog
 
+## 4.0.0.dev22 — 2026-08-15
+
+- preserve the immutable T02A v2 qualification while adding a derived,
+  hash-bound interpretation amendment with checkpoint-specific thresholds;
+- reclassify the mass RMSE and guide-error summaries as conditional sampling
+  scales rather than model-improvement or formal detectable-effect margins;
+- harden full T02A verification to recompute thresholds and enforce exact
+  catalog, checkpoint, repeat, seed-range, mapping, and cell-count contracts;
+- add role-aware component receipt schema v2 and permit explicit T02A/T02B IDs.
+
 ## 4.0.0.dev21 — 2026-08-15
 
 - preserve the immutable T04 result while clarifying that trainable ecology is
