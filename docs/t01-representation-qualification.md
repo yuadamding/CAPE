@@ -1,17 +1,19 @@
 # T01 count-native representation qualification
 
 Last verified: 2026-08-15. Status: authoritative engineering record for the
-T01 implementation in `4.0.0.dev19`; both real Renz candidates are retired.
-This document defines software and development evidence, not a biological
-claim.
+T01-v1/v2 implementations introduced in `4.0.0.dev19` and retained by dev20;
+both real Renz candidates are retired. This document defines software and
+development evidence, not a biological claim.
 
 ## Decision
 
-T01 did not pass. The exact global gene-frequency decoder, represented by
+T01-v1 and T01-v2 did not pass. The exact global gene-frequency decoder, represented by
 candidate dimension 0, won every outer development fold for both tested
 count-native representation families. No learned encoder was therefore
-selected, refit, or authorized for downstream use. T02 and every dynamics
-stage remain blocked.
+selected, refit, or authorized for the pooled Renz dynamics path. T01 remains
+open to a newly versioned model family. T02B latent noise and the real-data
+dynamics stages remain blocked; T02A raw-count/mass noise and the independent
+T04–T07 synthetic numerical path do not depend on T01.
 
 The result is a failure of the two tested Hellinger low-rank representation
 families under the frozen T01 estimand. It is not evidence that count-native
@@ -22,8 +24,10 @@ margin, dropping the null, or looking at P60 to select a replacement.
 
 Representation learning can manufacture apparent trajectory predictability
 if terminal cells, outer-held-out guides, or dynamics gradients influence the
-encoder. T01 therefore qualifies an encoder before any drift, diffusion,
-reaction, ecology, counterfactual, or gene-decoder component can run.
+encoder. T01 therefore qualifies an encoder before any pooled real-data drift,
+diffusion, reaction, ecology, or counterfactual component can run. It does not
+block fixed-truth numerical qualification, and it does not replace the T12
+claim-grade gene-decoder/program gate.
 
 ```mermaid
 flowchart LR
@@ -145,7 +149,8 @@ selects a learned dimension:
 - split-half distance divided by random-target distance;
 - P60 nearest-neighbour support coverage relative to held-out P4 coverage;
 - 2,000-draw target-clustered percentile intervals; and
-- 20 genuine small count-native refits after guide-target permutation.
+- 20 genuine small count-native refits after guide-target permutation in the
+  historical v1/v2 contract.
 
 P60 support uses a nearest-neighbour threshold calibrated as the 99th
 percentile of training-P4 calibration distances. P60 is encoded without
@@ -172,6 +177,69 @@ T00 bundle and complete CountStore parent were reverified and unchanged. T01
 did not define a separate continuous protected-metric vector beyond those
 parent invariants; future learned candidates should add one if additional T00
 diagnostics become eligible for quantitative degradation testing.
+
+The historical 20-repeat target permutation was never reached and is not
+adequate for a future 5% calibration claim. A successor must use at least 59
+genuine global-composition count-null refits for latent-dimension selection
+and at least 59 separate leave-one-guide-out guide-target permutation refits
+for target-structure calibration; 100 repeats is preferred. The sister-target
+centroid for a query guide must exclude that guide in both observed and null
+activity calculations.
+
+## Successor decomposition
+
+T01 should no longer be treated as one full-gene reconstruction gate:
+
+1. **T01A count denoising** fits source-only cell composition from a frozen
+   encoding split and scores an independent count-thinning split.
+2. **T01B latent geometry and stability** tests split-half guide stability,
+   leave-one-guide-out target activity, control dispersion, and calibrated
+   null selection.
+3. **T01C source-to-terminal support** is evaluated only after a source-only
+   representation has been selected and refit.
+
+The proposed v3 family is a multinomial logistic factor model. Each P4 count
+vector is reproducibly thinned as
+
+\[
+x_i^{\mathrm{enc}}\sim\operatorname{Binomial}(x_i,0.8),\qquad
+x_i^{\mathrm{score}}=x_i-x_i^{\mathrm{enc}},
+\]
+
+and only `enc` counts may fit or infer the latent state. The scored
+probabilities are
+
+\[
+p_i=\operatorname{softmax}(b+Wz_i),
+\]
+
+with one training-P4 intercept `b`, ridge penalties on `W` and `z`, and exact
+dimension-zero nesting at `W=0`. Feature selection must be recomputed inside
+each outer fold from P4 outer-training rows only. This is a design candidate,
+not yet a frozen or executed T01-v3 receipt.
+
+The candidate dimensions remain `0, 8, 16, 32, 48`. A prospective frozen
+feature rule is at least 100 training-P4 counts, at least 20 nonzero
+training-P4 cells, then the top 4,096 genes by multinomial deviance, recomputed
+inside each outer fold. The smallest dimension within a frozen tolerance of
+the best qualifying held-out-count likelihood is selected.
+
+Before one real fold is opened, v3 must pass three synthetic tests: select
+dimension 0 in at least 59/59 pure global-composition fits; recover a known
+8- or 16-dimensional logistic-factor truth without library-size dependence;
+and recover leave-one-guide-out target structure in a 150-target/∼3-guide
+simulation while target permutation removes the activity. A real pilot uses
+P4 only and stops immediately if dimension 0 wins. Only a passing pilot can
+open the four-fold OOF qualification.
+
+The primary v3 statistical object is the concatenated OOF target-clustered
+result, not four separate significance tests. Promotion additionally requires
+a negative held-out-count likelihood margin, stable nonzero dimension without
+a materially harmful fold, median split-half/random-target ratio at most 0.5,
+leave-one-guide-out target separation lower bound above 0.05, control
+dispersion inside the T02A noise floor, source support, terminal/source support
+ratio at least 0.8, both null false-selection upper bounds below 0.05, a fresh
+all-training-P4 refit, and unchanged T00/CountStore parents.
 
 ## Real Renz development inputs
 
@@ -314,9 +382,9 @@ role. The all-positive deltas are much larger than the frozen `1e-4` margin,
 so this is not a close-call uncertainty issue or an insufficient-epochs issue.
 Neither candidate has trainable epochs, particles, or dynamics parameters.
 
-The next allowed action is to write and freeze a new T01 protocol with a
-scientifically distinct count model and its own identity—for example, a
-proper held-out-count NB/multinomial encoder with explicit regularization and
-training-only selection. The previous null must remain selectable, and the
-new protocol must preserve the same protected-row boundary. T02 must not run
-until such a T01 receipt passes.
+The next T01 action is to freeze T01-v3 only after its global-null,
+known-factor, and target-shared synthetic recovery tests pass. The previous
+null must remain exactly selectable, and the new protocol must preserve the
+same protected-row boundary. T02B and pooled real-data dynamics must not run
+until such a T01 receipt passes. T02A and T04–T07S remain independently
+eligible.

@@ -1,6 +1,6 @@
 # Architecture
 
-Status: component-qualified engineering architecture for `4.0.0.dev19`.
+Status: component-qualified engineering architecture for `4.0.0.dev20`.
 
 The package is a sibling distribution. It owns the count-native numerical
 recipe and never writes into the frozen CREDO checkout. Numerical modules can
@@ -29,6 +29,13 @@ Scientific promotion follows the T00–T13 dependency graph in
 [component-qualification.md](component-qualification.md). Existing numerical
 surfaces are capabilities, not evidence that their scientific component has
 passed. Only typed component receipts can unlock downstream channels.
+
+The graph has independent real-data, raw-count, and synthetic tracks. Failed
+T01-v1/v2 representations block pooled state dynamics but do not block T02A
+raw-count/mass noise floors or T04 fixed-truth engine testing. Dev20 adds a
+restartable `ParticleState` and pool-local log-sum-exp aggregation; its T04
+receipt qualifies the numerical kernel for subsequent isolated synthetic
+drift and reaction tests. This does not promote a learned SDE.
 
 The optional, not-yet-qualified dev18 T03 pilot separates three nested
 families:

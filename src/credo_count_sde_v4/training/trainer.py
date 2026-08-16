@@ -24,6 +24,7 @@ from ..contracts import (
     RunIntent,
     SelectionManifest,
     SemanticStudySnapshot,
+    TrainingConfig,
 )
 from ..errors import ResumeMismatchError
 from ..model import CountSDEModel, DynamicPoolBank
@@ -1191,24 +1192,11 @@ def _write_selection(
     checkpoints: list[CheckpointManifest],
 ) -> dict[str, Any]:
     null_guarded = config.training.checkpoint_selection == "minimum_state_validation_null_guarded"
+    eligible_updates = scientific_checkpoint_updates(
+        tuple(checkpoint.update for checkpoint in checkpoints), config.training
+    )
     eligible_checkpoints = [
-        checkpoint
-        for checkpoint in checkpoints
-        if (
-            null_guarded
-            and (
-                checkpoint.update == 0
-                or checkpoint.update in config.training.state_checkpoint_updates
-            )
-        )
-        or (
-            not null_guarded
-            and checkpoint.update > 0
-            and (
-                checkpoint.update % config.training.checkpoint_every == 0
-                or checkpoint.update == config.training.max_updates
-            )
-        )
+        checkpoint for checkpoint in checkpoints if checkpoint.update in eligible_updates
     ]
     if null_guarded:
         expected_candidates = (0, *config.training.state_checkpoint_updates)
@@ -1360,6 +1348,28 @@ def _write_selection(
     serialized = selection.model_dump(mode="json")
     atomic_json(training_root / "selection.json", serialized)
     return serialized
+
+
+def scientific_checkpoint_updates(
+    persisted_updates: tuple[int, ...], training: TrainingConfig
+) -> tuple[int, ...]:
+    """Return only preregistered scientific selection candidates.
+
+    A disposable capacity probe can persist update 1 in the same lineage, but
+    it is excluded unless update 1 is explicitly part of the frozen scientific
+    checkpoint grid. The order of the persisted parent chain is preserved.
+    """
+
+    null_guarded = training.checkpoint_selection == "minimum_state_validation_null_guarded"
+    if null_guarded:
+        allowed = {0, *training.state_checkpoint_updates}
+        return tuple(update for update in persisted_updates if update in allowed)
+    return tuple(
+        update
+        for update in persisted_updates
+        if update > 0
+        and (update % training.checkpoint_every == 0 or update == training.max_updates)
+    )
 
 
 def _loss(

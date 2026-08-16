@@ -1,12 +1,28 @@
 # Changelog
 
+## 4.0.0.dev20 — 2026-08-15
+
+- split component dependencies into pooled real-data, raw-count, and
+  software/synthetic tracks so failed T01 candidates do not block T02A or T04;
+- add a typed, immutable T04 fixed-truth particle-engine qualification across
+  deterministic drift, OU drift/diffusion, reaction mass, absolute-weight
+  mean-field feedback, and lifecycle invariants;
+- make streaming particle rollouts explicitly restartable by persisting only
+  current particles, normalized weights, relative log mass, generator state,
+  and grid step;
+- aggregate physical-pool state from stabilized absolute log masses, with
+  fail-closed zero/negative/nonfinite mass handling;
+- document T01-v1/v2 as retired families rather than a universal
+  representation impossibility, and specify the count-thinned multinomial
+  logistic-factor v3 design and separate null families.
+
 ## 4.0.0.dev19 — 2026-08-15
 
 - add an explicit globally centered Hellinger residual implementation to the
   fail-closed T01 count-native representation gate;
 - retain both real pooled-Renz T01 candidates as immutable negative evidence:
   dimension 0 won all four folds for each, so neither candidate was refit and
-  T02 remains blocked;
+  T02B and the pooled real-data path remain blocked;
 - expose full verification/reuse of an existing T01 bundle without changing
   its scientific receipt.
 

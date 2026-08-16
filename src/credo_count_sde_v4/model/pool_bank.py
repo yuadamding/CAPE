@@ -28,6 +28,39 @@ class DynamicPoolBank:
         *,
         pool_count: int,
     ) -> DynamicPoolBank:
+        if torch.any(mass < 0) or not bool(torch.isfinite(mass).all()):
+            raise ContractError("Physical-pool masses must be finite and nonnegative.")
+        log_mass = torch.where(
+            mass > 0,
+            mass.log(),
+            torch.full_like(mass, -torch.inf),
+        )
+        return cls.from_log_series(
+            state,
+            log_mass,
+            pool_index,
+            pool_count=pool_count,
+        )
+
+    @classmethod
+    def from_log_series(
+        cls,
+        state: torch.Tensor,
+        log_mass: torch.Tensor,
+        pool_index: torch.Tensor,
+        *,
+        pool_count: int,
+    ) -> DynamicPoolBank:
+        """Build a bank from absolute log masses without exponentiating globally.
+
+        A pool-local log-sum-exp keeps the mean-field state and total mass
+        finite when absolute guide masses span a large dynamic range. Exact
+        zero mass is represented by ``-inf`` and is allowed only when another
+        contributor in the same physical pool has positive mass.
+        """
+
+        if torch.isnan(log_mass).any() or torch.isposinf(log_mass).any():
+            raise ContractError("Physical-pool log masses cannot contain NaN or +inf.")
         means: list[torch.Tensor] = []
         totals: list[torch.Tensor] = []
         counts: list[int] = []
@@ -35,10 +68,16 @@ class DynamicPoolBank:
             mask = pool_index == pool
             if not bool(mask.any()):
                 raise ContractError(f"Physical pool {pool} has no declared contributor.")
-            weights = mass[mask].clamp_min(0)
-            normalized = weights / weights.sum().clamp_min(1e-12)
+            local_log_mass = log_mass[mask]
+            finite = torch.isfinite(local_log_mass)
+            if not bool(finite.any()):
+                raise ContractError(f"Physical pool {pool} has zero total mass.")
+            offset = local_log_mass[finite].max()
+            weights = torch.exp(local_log_mass - offset)
+            total = weights.sum()
+            normalized = weights / total
             means.append((normalized[:, None] * state[mask]).sum(dim=0))
-            totals.append(weights.sum().log())
+            totals.append(offset + total.log())
             counts.append(int(mask.sum()))
         return cls(
             state_mean=torch.stack(means),

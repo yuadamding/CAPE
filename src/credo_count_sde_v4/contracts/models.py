@@ -218,6 +218,89 @@ class CountRepresentationBundle(StrictModel):
         return self
 
 
+class ParticleEngineQualificationBundle(StrictModel):
+    """Immutable T04 numerical particle-engine qualification bundle."""
+
+    schema_version: int = 1
+    qualification_id: str
+    test_contract_id: str
+    method: Literal["streaming_euler_maruyama_v1"]
+    environment_hash: Sha256
+    particle_grid: tuple[int, ...]
+    step_grid: tuple[int, ...]
+    seed_count: int = Field(ge=1)
+    deterministic_drift: ArtifactRef
+    ou_grid: ArtifactRef
+    reaction_mass: ArtifactRef
+    ecology: ArtifactRef
+    lifecycle: ArtifactRef
+    test_receipt: ArtifactRef
+
+    @model_validator(mode="after")
+    def validate_qualification(self) -> ParticleEngineQualificationBundle:
+        expected = self.identity(id_field="qualification_id")
+        if self.qualification_id != expected:
+            raise ValueError(f"qualification_id mismatch: expected {expected}.")
+        if tuple(sorted(set(self.particle_grid))) != self.particle_grid:
+            raise ValueError("Particle qualification grid must be increasing and unique.")
+        if tuple(sorted(set(self.step_grid))) != self.step_grid:
+            raise ValueError("Step qualification grid must be increasing and unique.")
+        if any(value <= 0 for value in (*self.particle_grid, *self.step_grid)):
+            raise ValueError("Particle and step qualification grids must be positive.")
+        return self
+
+
+class ParticleEngineTestReceipt(StrictModel):
+    """Complete T04 fixed-truth decision surface."""
+
+    schema_version: int = 1
+    receipt_id: str
+    test_contract_id: str
+    status: Literal["pass", "fail_retired"]
+    deterministic_drift_max_abs_error: float = Field(ge=0)
+    drift_refinement_pass: bool
+    ou_mean_within_two_standard_errors: bool
+    ou_largest_grid_variance_relative_error: float = Field(ge=0)
+    ou_convergence_pass: bool
+    reaction_max_relative_error: float = Field(ge=0)
+    ecology_absolute_weight_max_error: float = Field(ge=0)
+    normalized_context_negative_control_detected: bool
+    stabilized_log_weight_pass: bool
+    deterministic_replay_pass: bool
+    interrupted_resume_pass: bool
+    no_guide_switching_pass: bool
+    normalized_particle_weights_pass: bool
+    declared_mass_pass: bool
+    capacity_probe_exclusion_pass: bool
+    protected_metrics_pass: bool
+    config_hash: Sha256
+    implementation_hash: Sha256
+    environment_hash: Sha256
+
+    @model_validator(mode="after")
+    def validate_t04_receipt(self) -> ParticleEngineTestReceipt:
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
+        gates = (
+            self.drift_refinement_pass,
+            self.ou_mean_within_two_standard_errors,
+            self.ou_convergence_pass,
+            self.normalized_context_negative_control_detected,
+            self.stabilized_log_weight_pass,
+            self.deterministic_replay_pass,
+            self.interrupted_resume_pass,
+            self.no_guide_switching_pass,
+            self.normalized_particle_weights_pass,
+            self.declared_mass_pass,
+            self.capacity_probe_exclusion_pass,
+            self.protected_metrics_pass,
+        )
+        if self.status == "pass" and not all(gates):
+            raise ValueError("A passing T04 receipt must satisfy every fixed numerical gate.")
+        return self
+
+
 class ComponentTestContract(StrictModel):
     """Frozen component-wise qualification contract."""
 
@@ -920,7 +1003,7 @@ class CompiledRunContract(StrictModel):
     schema_version: int = 1
     compiled_run_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev19"] = "4.0.dev19"
+    recipe_version: Literal["4.0.dev20"] = "4.0.dev20"
     recipe_wheel_hash: Sha256
     frozen_credo_artifact_hash: Sha256
     environment_lock_hash: Sha256
@@ -987,7 +1070,7 @@ class InferenceBundleManifest(StrictModel):
     compiled_run_id: str
     selected_checkpoint_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev19"] = "4.0.dev19"
+    recipe_version: Literal["4.0.dev20"] = "4.0.dev20"
     selected_family: Literal[
         "configured_checkpoint",
         "gene_decoder_selected",

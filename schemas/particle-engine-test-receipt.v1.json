@@ -1,0 +1,138 @@
+{
+  "$id": "https://credo.local/schemas/particle-engine-test-receipt.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Complete T04 fixed-truth decision surface.",
+  "properties": {
+    "capacity_probe_exclusion_pass": {
+      "title": "Capacity Probe Exclusion Pass",
+      "type": "boolean"
+    },
+    "config_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Config Hash",
+      "type": "string"
+    },
+    "declared_mass_pass": {
+      "title": "Declared Mass Pass",
+      "type": "boolean"
+    },
+    "deterministic_drift_max_abs_error": {
+      "minimum": 0,
+      "title": "Deterministic Drift Max Abs Error",
+      "type": "number"
+    },
+    "deterministic_replay_pass": {
+      "title": "Deterministic Replay Pass",
+      "type": "boolean"
+    },
+    "drift_refinement_pass": {
+      "title": "Drift Refinement Pass",
+      "type": "boolean"
+    },
+    "ecology_absolute_weight_max_error": {
+      "minimum": 0,
+      "title": "Ecology Absolute Weight Max Error",
+      "type": "number"
+    },
+    "environment_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Environment Hash",
+      "type": "string"
+    },
+    "implementation_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Implementation Hash",
+      "type": "string"
+    },
+    "interrupted_resume_pass": {
+      "title": "Interrupted Resume Pass",
+      "type": "boolean"
+    },
+    "no_guide_switching_pass": {
+      "title": "No Guide Switching Pass",
+      "type": "boolean"
+    },
+    "normalized_context_negative_control_detected": {
+      "title": "Normalized Context Negative Control Detected",
+      "type": "boolean"
+    },
+    "normalized_particle_weights_pass": {
+      "title": "Normalized Particle Weights Pass",
+      "type": "boolean"
+    },
+    "ou_convergence_pass": {
+      "title": "Ou Convergence Pass",
+      "type": "boolean"
+    },
+    "ou_largest_grid_variance_relative_error": {
+      "minimum": 0,
+      "title": "Ou Largest Grid Variance Relative Error",
+      "type": "number"
+    },
+    "ou_mean_within_two_standard_errors": {
+      "title": "Ou Mean Within Two Standard Errors",
+      "type": "boolean"
+    },
+    "protected_metrics_pass": {
+      "title": "Protected Metrics Pass",
+      "type": "boolean"
+    },
+    "reaction_max_relative_error": {
+      "minimum": 0,
+      "title": "Reaction Max Relative Error",
+      "type": "number"
+    },
+    "receipt_id": {
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "stabilized_log_weight_pass": {
+      "title": "Stabilized Log Weight Pass",
+      "type": "boolean"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail_retired"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "test_contract_id": {
+      "title": "Test Contract Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "test_contract_id",
+    "status",
+    "deterministic_drift_max_abs_error",
+    "drift_refinement_pass",
+    "ou_mean_within_two_standard_errors",
+    "ou_largest_grid_variance_relative_error",
+    "ou_convergence_pass",
+    "reaction_max_relative_error",
+    "ecology_absolute_weight_max_error",
+    "normalized_context_negative_control_detected",
+    "stabilized_log_weight_pass",
+    "deterministic_replay_pass",
+    "interrupted_resume_pass",
+    "no_guide_switching_pass",
+    "normalized_particle_weights_pass",
+    "declared_mass_pass",
+    "capacity_probe_exclusion_pass",
+    "protected_metrics_pass",
+    "config_hash",
+    "implementation_hash",
+    "environment_hash"
+  ],
+  "title": "ParticleEngineTestReceipt",
+  "type": "object"
+}

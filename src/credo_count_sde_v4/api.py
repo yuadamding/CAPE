@@ -23,6 +23,8 @@ from .contracts import (
     EvaluationBundleManifest,
     InferenceBundleManifest,
     LifecycleState,
+    ParticleEngineQualificationBundle,
+    ParticleEngineTestReceipt,
     PooledFiniteMeasureBundle,
     PreparedRepresentation,
     ResolvedConfig,
@@ -37,6 +39,12 @@ from .data import build_pooled_finite_measures, verify_pooled_finite_measures
 from .errors import ContractError, IntegrityError
 from .evaluation import evaluate_run, seal_run
 from .inference import V4Run, finalize_inference, open_inference_run
+from .numerics import (
+    qualify_particle_engine as run_particle_engine_qualification,
+)
+from .numerics import (
+    verify_particle_engine_qualification,
+)
 from .persistence import LifecycleLedger, verify_directory
 from .prepare import prepare_representation
 from .representation import qualify_count_representation, verify_count_representation
@@ -110,6 +118,15 @@ def qualify_representation(
     return result
 
 
+def qualify_particle_engine(destination: Path) -> Path:
+    """Run and fully verify the independent T04 fixed-truth qualification."""
+
+    _supported_preflight()
+    result = run_particle_engine_qualification(destination)
+    verify_particle_engine_qualification(result)
+    return result
+
+
 def validate_contract(path: Path) -> dict[str, Any]:
     """Validate canonical JSON syntax and reject non-object contracts."""
 
@@ -126,9 +143,14 @@ def validate_contract(path: Path) -> dict[str, Any]:
     else:
         discriminators = (
             ("compiled_run_id", CompiledRunContract),
+            ("qualification_id", ParticleEngineQualificationBundle),
             ("representation_id", CountRepresentationBundle),
             ("pooled_data_id", PooledFiniteMeasureBundle),
             ("test_contract_id", ComponentTestContract),
+            (
+                "ou_largest_grid_variance_relative_error",
+                ParticleEngineTestReceipt,
+            ),
             ("receipt_id", ComponentTestReceipt),
             ("prepared_id", PreparedRepresentation),
             ("evaluation_id", EvaluationBundleManifest),

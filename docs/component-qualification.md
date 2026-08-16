@@ -1,26 +1,32 @@
 # Component-wise qualification program
 
-Status: authoritative development order for `4.0.0.dev19`. This page defines
+Status: authoritative development order for `4.0.0.dev20`. This page defines
 software promotion, not a biological claim.
 
-CREDO V4 is qualified as a dependency graph rather than one large training
+CREDO V4 is qualified as three dependency tracks rather than one large training
 run:
 
 ```text
-T00 pooled data contract
-  → T01 count-native representation
-  → T02 empirical noise floors and baseline registry
-  → T03 shared control and target hierarchy
-  → T05 drift → T06 diffusion ┐
-                  T07 reaction ├→ T08 joint finite measure
-T04 particle engine ───────────┘
-  → T09 ecology → T10 weak form → T11 same-start counterfactuals
-  → T12 decoder/program recovery → T13 pooled biological validation
+Pooled Renz track:
+T00 → T01 → T02B latent noise → T03R shared control/target hierarchy
+     → T05R/T06R/T07R → T08R → T09R–T13R
+
+Independent raw-count track:
+T00 → T02A raw-count and mass noise floors
+
+Software/synthetic track:
+T04 particle engine → T05S drift → T06S diffusion
+                    └→ T07S reaction → T08S finite measure
 ```
 
 T04 is an independent numerical prerequisite for learned dynamics. A failed
 component is disabled downstream. More updates, particles, decoder width, or
 GPU memory cannot substitute for a failed scientific gate.
+
+T12 is the claim-grade gene-decoding/program stage. T01 asks whether a latent
+state preserves stable, count-supported geometry; it must not be made
+impossible by requiring full-gene reconstruction to carry the entire
+representation decision.
 
 ## Universal promotion rule
 
@@ -38,6 +44,10 @@ Cells estimate guide-level empirical laws. Guides are held-out prediction
 units within targets. Targets are the primary uncertainty units. Cells,
 guides from one target, and folds sharing targets are never treated as
 independent biological replicates.
+
+T04 is a fixed-truth numerical exception to the learned-component rule: it has
+no optimizer or post-selection refit. It passes only by matching analytic
+drift, OU, reaction, ecology, and lifecycle truths under frozen tolerances.
 
 ## Channel isolation
 
@@ -107,10 +117,12 @@ model; its null calibration and bootstrap entries are explicitly
 | Stage | Package status | Pooled real-data status | Promotion |
 |---|---|---|---|
 | T00 | implemented; eight focused tests pass | external Renz receipt passes | T00 only |
-| T01 | v1/v2 count-native gates implemented | both failed; dimension 0 in 4/4 folds | blocked |
-| T02 | baseline primitives exist; complete noise-floor receipt absent | not run | blocked |
+| T01 | v1/v2 retired; v3 not implemented | both failed; dimension 0 in 4/4 folds | general test open; pooled path blocked |
+| T02A | specification only | raw-count/mass receipt not run | eligible after T00 |
+| T02B | latent primitives only | not run | blocked by T01 |
 | T03 | identifiability/null hardening exists as engineering code | not run under this ladder | blocked |
-| T04–T13 | partial numerical/model primitives exist | not run under this ladder | blocked |
+| T04 | implemented and fixed-truth qualified | cohort-independent | synthetic T05S/T07S eligible |
+| T05–T13 | partial numerical/model primitives exist | not run under this ladder | dependency-specific |
 
 The external T00 Renz receipt retains 495 source-eligible guides (445
 targeting and 50 controls), 150 perturbation targets, and 277,200 cells. Both
@@ -122,19 +134,29 @@ The first T01 candidate used multinomial/Hellinger low-rank factors with
 dimensions 8, 16, 32, and 48. The global gene-frequency decoder (dimension 0)
 was selectable and won every fold. The learned candidates were worse by
 0.204–0.256 nats per count on P4-only inner validation. T01 v1 is therefore
-`fail_retired`; it was not refit, P60 support was not inspected, and T02 remains
+`fail_retired`; it was not refit, P60 support was not inspected, and T02B remains
 blocked. The failure receipt is retained outside the package in
 `credo_v4_renz_t01_representation_20260815/`.
 
-The separately frozen centered successor represented the global square-root gene
-frequency explicitly and fit only residual Hellinger structure. It also
+The separately frozen centered successor represented the global square-root
+gene frequency explicitly and fit only residual Hellinger structure. It also
 selected dimension 0 in every fold: learned dimensions 8, 16, 32, and 48 were
 0.178–0.238 nats per count worse than the global gene-frequency decoder. T01
 v2 is also `fail_retired`; no post-selection refit or P60-support diagnostic
-was eligible. The two immutable failures block T02. Changing the loss,
-threshold, or candidate family would be a new T01 protocol, not continuation
-of either failed test. See the
+was eligible. The two immutable failures block T02B and the pooled Renz
+dynamics path, but not T02A or T04–T07S. Changing the loss, threshold, or
+candidate family would be a new T01 protocol, not continuation of either
+failed test. See the
 [detailed T01 implementation and result record](t01-representation-qualification.md).
+
+T04 now routes analytic fixed truths through the same streaming particle
+kernel used by inference. Its committed qualification uses 50 seeds over the
+64/256/1,024/4,096-particle and 8/16/32/64-step OU grid. Deterministic drift
+was exact, largest-grid OU variance error was 0.004459, reaction relative
+error was below `6e-16`, absolute-weight ecology matched exactly, the
+normalized-within-guide negative control failed as required, and interrupted
+resume was bitwise identical. See the
+[detailed T04 record](t04-particle-engine-qualification.md).
 
 Synthetic values reported outside a committed component directory are useful
 design evidence but are not promotion evidence. Every subsequent stage must

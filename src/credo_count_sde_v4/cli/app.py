@@ -89,6 +89,11 @@ def build_parser() -> argparse.ArgumentParser:
     representation.add_argument("--bootstrap-draws", type=int, default=2_000)
     representation.add_argument("--null-repeats", type=int, default=20)
     representation.add_argument("--seed", type=int, default=20_260_815)
+    particle_engine = sub.add_parser(
+        "qualify-particle-engine",
+        help="run the independent T04 fixed-truth numerical qualification",
+    )
+    particle_engine.add_argument("--output", type=_path, required=True)
     open_parser = sub.add_parser("open-run")
     open_parser.add_argument("run", type=_path)
     open_parser.add_argument("--device", default="cpu")
@@ -177,6 +182,8 @@ def main(argv: list[str] | None = None) -> int:
             null_repeats=args.null_repeats,
             seed=args.seed,
         )
+    elif command == "qualify-particle-engine":
+        result = api.qualify_particle_engine(args.output)
     elif command == "finalize":
         result = api.finalize(args.config)
     elif command == "evaluate":

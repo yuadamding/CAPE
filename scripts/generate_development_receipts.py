@@ -67,6 +67,9 @@ def main() -> None:
     component_decision = Path(
         "/home/yding1995/.codex/attachments/787edecc-16fc-44f4-95bb-0d5589155bbd/pasted-text.txt"
     )
+    component_assessment = Path(
+        "/home/yding1995/.codex/attachments/adcf3061-ef5f-44d5-abe7-51663447a868/pasted-text.txt"
+    )
     receipt = {
         "schema_version": 1,
         "status": "engineering_only",
@@ -85,6 +88,9 @@ def main() -> None:
         "amendment_sha256": sha256_file(amendment) if amendment.is_file() else None,
         "component_qualification_decision_sha256": (
             sha256_file(component_decision) if component_decision.is_file() else None
+        ),
+        "component_qualification_assessment_sha256": (
+            sha256_file(component_assessment) if component_assessment.is_file() else None
         ),
         "tests_passed": args.tests_passed,
         "coverage_percent": args.coverage_percent,
