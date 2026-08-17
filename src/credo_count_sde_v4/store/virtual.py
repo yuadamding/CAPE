@@ -15,6 +15,7 @@ from scipy import sparse
 
 from ..canonical import canonical_json_bytes, sha256_file
 from ..contracts import (
+    SourcePlaneDerivationReceipt,
     VirtualCanonicalCountStoreManifest,
     VirtualCanonicalCountStoreManifestV2,
     VirtualCountSource,
@@ -27,6 +28,22 @@ from .csr import SparseCountBatch
 def _permutation_hash(values: np.ndarray) -> str:
     permutation = np.asarray(values, dtype="<i4")
     return hashlib.sha256(permutation.tobytes(order="C")).hexdigest()
+
+
+def _int64_hash(values: np.ndarray) -> str:
+    return hashlib.sha256(np.asarray(values, dtype="<i8").tobytes(order="C")).hexdigest()
+
+
+def _source_row_pairs_hash(source_index: int, source_rows: np.ndarray) -> str:
+    digest = hashlib.sha256()
+    rows = np.asarray(source_rows, dtype=np.int64)
+    for start in range(0, len(rows), 1_000_000):
+        chunk = rows[start : start + 1_000_000]
+        pairs = np.empty((len(chunk), 2), dtype="<i8")
+        pairs[:, 0] = source_index
+        pairs[:, 1] = chunk
+        digest.update(pairs.tobytes(order="C"))
+    return digest.hexdigest()
 
 
 def _csr_rows(
@@ -139,14 +156,20 @@ class VirtualCanonicalCountStore:
         ).hexdigest()
         return guide_hash, target_hash
 
-    def _verify_dev30_authority_artifacts(self) -> None:
+    def _verify_dev30_authority_artifacts(
+        self, row_ids: np.ndarray, source_indices: np.ndarray, source_rows: np.ndarray
+    ) -> None:
         if not isinstance(self.manifest, VirtualCanonicalCountStoreManifestV2):
             return
         crosswalk_path = self.path / self.manifest.guide_target_crosswalk.relative_uri
         numeric_path = self.path / self.manifest.source_numeric_audit.relative_uri
+        derivation_path = self.path / self.manifest.source_derivation_receipt.relative_uri
+        amendment_path = self.path / self.manifest.source_plane_amendment.relative_uri
         if (
             sha256_file(crosswalk_path) != self.manifest.guide_target_crosswalk.sha256
             or sha256_file(numeric_path) != self.manifest.source_numeric_audit.sha256
+            or sha256_file(derivation_path) != self.manifest.source_derivation_receipt.sha256
+            or sha256_file(amendment_path) != self.manifest.source_plane_amendment.sha256
         ):
             raise IntegrityError("Virtual canonical authority-artifact hash mismatch.")
         crosswalk = pd.read_parquet(crosswalk_path)
@@ -193,6 +216,25 @@ class VirtualCanonicalCountStore:
         locator_targets = target_ids[target_codes]
         if not np.array_equal(mapped_targets, locator_targets):
             raise IntegrityError("Eligible row guide-target assignments violate the crosswalk.")
+        if set(crosswalk["target_id"].astype(str)) != set(target_ids.tolist()):
+            raise IntegrityError("Crosswalk and row-locator target catalogs differ.")
+        eligible_counts = np.bincount(guide_codes, minlength=len(guide_ids))
+        source_guide_pairs = np.unique(
+            guide_codes.astype(np.int64) * len(self.manifest.sources)
+            + source_indices.astype(np.int64)
+        )
+        observed_source_counts = np.bincount(
+            source_guide_pairs // len(self.manifest.sources), minlength=len(guide_ids)
+        )
+        crosswalk_by_guide = crosswalk.set_index("guide_id")
+        if not np.array_equal(
+            eligible_counts,
+            crosswalk_by_guide.loc[guide_ids, "eligible_cell_count"].to_numpy(dtype=np.int64),
+        ) or not np.array_equal(
+            observed_source_counts,
+            crosswalk_by_guide.loc[guide_ids, "observed_source_count"].to_numpy(dtype=np.int64),
+        ):
+            raise IntegrityError("Crosswalk support counts differ from the row locator.")
         numeric = pd.read_parquet(numeric_path)
         numeric_columns = {
             "source_id",
@@ -202,6 +244,7 @@ class VirtualCanonicalCountStore:
             "indptr_dtype",
             "counts_nonnegative_verified",
             "counts_integral_verified",
+            "counts_finite_verified",
             "maximum_observed_count",
             "csr_indices_in_bounds_verified",
             "csr_indptr_monotonic_verified",
@@ -221,6 +264,29 @@ class VirtualCanonicalCountStore:
         }
         if observed != expected:
             raise IntegrityError("Source numeric audit differs from source records.")
+        derivation = SourcePlaneDerivationReceipt.model_validate_json(
+            derivation_path.read_text()
+        )
+        records = {record.source_id: record for record in derivation.records}
+        if set(records) != {source.source_id for source in self.manifest.sources}:
+            raise IntegrityError("Source derivation receipt has a different source catalog.")
+        for source_index, source in enumerate(self.manifest.sources):
+            selected = source_indices == source_index
+            selected_rows = source_rows[selected]
+            selected_ids = row_ids[selected]
+            record = records[source.source_id]
+            if (
+                record.selected_row_count != int(selected.sum())
+                or record.selected_row_count != source.eligible_rows
+                or record.selected_nnz != source.eligible_nnz
+                or record.selected_row_ids_hash != _int64_hash(selected_ids)
+                or record.source_row_pairs_hash
+                != _source_row_pairs_hash(source_index, selected_rows)
+                or record.source_file_sha256 != source.source_file_sha256
+            ):
+                raise IntegrityError(
+                    f"Source derivation receipt differs for {source.source_id}."
+                )
 
     def _feature_permutations(self) -> tuple[np.ndarray, ...]:
         if self._permutations is None:
@@ -262,8 +328,21 @@ class VirtualCanonicalCountStore:
             or np.any(source_indices >= len(self.manifest.sources))
         ):
             raise IntegrityError("Virtual canonical row locator is invalid.")
+        if isinstance(self.manifest, VirtualCanonicalCountStoreManifestV2):
+            if _int64_hash(row_ids) != self.manifest.eligible_row_ids_hash:
+                raise IntegrityError("Virtual canonical eligible-row hash mismatch.")
         for index, source in enumerate(self._sources()):
             selected = source_indices == index
+            selected_rows = source_rows[selected]
+            if int(selected.sum()) != source.eligible_rows:
+                raise IntegrityError(
+                    f"Virtual source row count differs for {source.source_id}."
+                )
+            sorted_source_rows = np.sort(selected_rows, kind="stable")
+            if len(sorted_source_rows) > 1 and np.any(np.diff(sorted_source_rows) == 0):
+                raise IntegrityError(
+                    f"Virtual source rows are duplicated for {source.source_id}."
+                )
             if np.any(source_rows[selected] < 0) or np.any(source_rows[selected] >= source.rows):
                 raise IntegrityError(f"Virtual source rows exceed {source.source_id} bounds.")
             source_path = self.source_root / source.relative_uri
@@ -277,7 +356,7 @@ class VirtualCanonicalCountStore:
             or target_hash != self.manifest.target_catalog_hash
         ):
             raise IntegrityError("Virtual row locator guide/target catalog hash mismatch.")
-        self._verify_dev30_authority_artifacts()
+        self._verify_dev30_authority_artifacts(row_ids, source_indices, source_rows)
         self._feature_permutations()
         return self.manifest
 

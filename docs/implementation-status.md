@@ -77,8 +77,8 @@ software/synthetic qualification, not evidence about a cohort. See the
 [dev24 R1 amendment](t07s-reaction-metric-amendment.md) and authoritative
 [dev25 unified R0/R1 amendment](t07s-null-interval-amendment.md).
 
-Local acceptance completed with 205 CPU tests passing and one CUDA-only test
-skipped on the CPU validation host, with 85.72% branch-aware coverage. The exact
+Local acceptance completed with 210 CPU tests passing and one CUDA-only test
+skipped on the CPU validation host, with 85.31% branch-aware coverage. The exact
 test and coverage results are in
 `receipts/local-validation.json`. Ruff,
 mypy, generated-schema, documentation-link, wheel
@@ -123,6 +123,14 @@ environment, parity, performance, and numerical memory gates fail-closed. This
 is contract-only work: G00C and G00D remain not run and downstream real-data
 components remain blocked. See the
 [Dev30-A contract amendment](g00-dev30a-contract-amendment.md).
+
+Dev30-A-r2 finishes the contract path without executing it. It adds the
+immutable v1-to-v2 source-plane amendment, construction derivation receipt,
+full locator/crosswalk reconciliation, derived G00C feature/scale/row/sampler
+decisions, and exact G00D GPU/protocol/evidence wiring. G00A/G00B v1 remain the
+only executed source-plane evidence; G00C, G00D, and downstream real-data
+components remain blocked. See the
+[Dev30-A-r2 finalization](g00-dev30a-r2-contract-finalization.md).
 
 Dev7 replaced the invalid reconstructed-SVD softmax with a checkpoint-owned
 multinomial count-composition decoder. Dev10 added a deterministic

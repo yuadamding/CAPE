@@ -50,6 +50,11 @@
       "title": "Macrobatch Cells",
       "type": "integer"
     },
+    "maximum_aggregate_worker_rss_bytes": {
+      "exclusiveMinimum": 0,
+      "title": "Maximum Aggregate Worker Rss Bytes",
+      "type": "integer"
+    },
     "maximum_data_wait_fraction": {
       "default": 0.1,
       "maximum": 0.1,
@@ -62,6 +67,11 @@
       "title": "Maximum Loader Rss Bytes",
       "type": "integer"
     },
+    "maximum_open_file_handles": {
+      "minimum": 1,
+      "title": "Maximum Open File Handles",
+      "type": "integer"
+    },
     "maximum_open_shards": {
       "minimum": 1,
       "title": "Maximum Open Shards",
@@ -71,6 +81,11 @@
       "exclusiveMinimum": 0,
       "title": "Maximum P95 Batch Ready Seconds",
       "type": "number"
+    },
+    "maximum_process_loader_rss_bytes": {
+      "exclusiveMinimum": 0,
+      "title": "Maximum Process Loader Rss Bytes",
+      "type": "integer"
     },
     "maximum_rss_excursion_fraction": {
       "exclusiveMinimum": 0,
@@ -97,6 +112,12 @@
       "const": 512,
       "default": 512,
       "title": "Microbatch Cells",
+      "type": "integer"
+    },
+    "microbatches_per_update": {
+      "const": 8,
+      "default": 8,
+      "title": "Microbatches Per Update",
       "type": "integer"
     },
     "minimum_steady_state_gpu_utilization": {
@@ -184,7 +205,10 @@
     "telemetry_interval_seconds",
     "maximum_p95_batch_ready_seconds",
     "maximum_loader_rss_bytes",
+    "maximum_process_loader_rss_bytes",
+    "maximum_aggregate_worker_rss_bytes",
     "maximum_open_shards",
+    "maximum_open_file_handles",
     "maximum_rss_slope_upper_bytes_per_second",
     "maximum_rss_excursion_fraction"
   ],

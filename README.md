@@ -58,7 +58,8 @@ Dev30-A preserves those accepted v1 results and adds v2 protected-access,
 numeric-CSR, guide-target crosswalk, exact-parent, G00C selection/sampler, and
 G00D parity/performance contracts. It runs no G00C/G00D workload and changes no
 scientific gate. See the
-[G00 Dev30-A amendment](docs/g00-dev30a-contract-amendment.md).
+[G00 Dev30-A amendment](docs/g00-dev30a-contract-amendment.md) and its
+[Dev30-A-r2 finalization](docs/g00-dev30a-r2-contract-finalization.md).
 
 ## Quick start
 
@@ -112,6 +113,7 @@ See [architecture](docs/architecture.md), [contracts](docs/contracts.md),
 [lifecycle](docs/lifecycle.md),
 [the G00 two-tier data-plane contract](docs/g00-two-tier-data-plane.md),
 [the G00 Dev30-A contract amendment](docs/g00-dev30a-contract-amendment.md),
+[the G00 Dev30-A-r2 finalization](docs/g00-dev30a-r2-contract-finalization.md),
 [component qualification](docs/component-qualification.md),
 [the detailed T01 record](docs/t01-representation-qualification.md),
 [the detailed T02A record](docs/t02a-raw-count-mass-noise.md),

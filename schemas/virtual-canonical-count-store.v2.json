@@ -102,6 +102,12 @@
       "additionalProperties": false,
       "description": "Observed sparse-storage invariants for one source matrix.",
       "properties": {
+        "counts_finite_verified": {
+          "const": true,
+          "default": true,
+          "title": "Counts Finite Verified",
+          "type": "boolean"
+        },
         "counts_integral_verified": {
           "const": true,
           "default": true,
@@ -384,8 +390,19 @@
       "title": "Source Authority Id",
       "type": "string"
     },
+    "source_derivation_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
     "source_numeric_audit": {
       "$ref": "#/$defs/ArtifactRef"
+    },
+    "source_plane_amendment": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "source_plane_amendment_id": {
+      "minLength": 1,
+      "title": "Source Plane Amendment Id",
+      "type": "string"
     },
     "sources": {
       "items": {
@@ -412,12 +429,15 @@
   "required": [
     "virtual_store_id",
     "source_authority_id",
+    "source_plane_amendment_id",
+    "source_plane_amendment",
     "canonical_feature_index_hash",
     "guide_catalog_hash",
     "target_catalog_hash",
     "guide_target_crosswalk_hash",
     "guide_target_crosswalk",
     "source_numeric_audit",
+    "source_derivation_receipt",
     "guide_count",
     "target_control_count",
     "eligibility_rule",

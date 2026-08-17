@@ -150,7 +150,7 @@
           "type": "string"
         },
         "rows": {
-          "minimum": 0,
+          "exclusiveMinimum": 0,
           "title": "Rows",
           "type": "integer"
         }
@@ -168,6 +168,13 @@
       "description": "No-outer-outcome ranked-prefix feature selection protocol.",
       "properties": {
         "candidate_feature_counts": {
+          "default": [
+            256,
+            512,
+            1024,
+            2048,
+            4096
+          ],
           "items": {
             "type": "integer"
           },
@@ -202,6 +209,12 @@
           "title": "Implementation Sha256",
           "type": "string"
         },
+        "maximum_feature_count": {
+          "const": 4096,
+          "default": 4096,
+          "title": "Maximum Feature Count",
+          "type": "integer"
+        },
         "method": {
           "const": "training_only_ranked_prefix_v1",
           "default": "training_only_ranked_prefix_v1",
@@ -222,25 +235,29 @@
           "title": "Paired Refit Draws",
           "type": "integer"
         },
-        "selected_feature_count": {
-          "exclusiveMinimum": 0,
-          "maximum": 4096,
-          "title": "Selected Feature Count",
-          "type": "integer"
+        "paired_statistic": {
+          "const": "p95_absolute_paired_nll_difference_to_4096",
+          "default": "p95_absolute_paired_nll_difference_to_4096",
+          "title": "Paired Statistic",
+          "type": "string"
         },
         "selection_metric": {
           "const": "training_validation_negative_log_likelihood",
           "default": "training_validation_negative_log_likelihood",
           "title": "Selection Metric",
           "type": "string"
+        },
+        "selection_rule": {
+          "const": "smallest_prefix_with_p95_difference_le_margin",
+          "default": "smallest_prefix_with_p95_difference_le_margin",
+          "title": "Selection Rule",
+          "type": "string"
         }
       },
       "required": [
         "implementation_sha256",
         "fit_rows_hash",
-        "candidate_feature_counts",
         "minimum_improvement_margin",
-        "selected_feature_count",
         "ordered_feature_table"
       ],
       "title": "TrainingOnlyFeatureSelectionContract",
@@ -286,11 +303,6 @@
           "title": "Saturation Rule",
           "type": "string"
         },
-        "selected_training_cells": {
-          "exclusiveMinimum": 0,
-          "title": "Selected Training Cells",
-          "type": "integer"
-        },
         "two_million_extension_triggered_by_no_saturation": {
           "default": false,
           "title": "Two Million Extension Triggered By No Saturation",
@@ -299,8 +311,7 @@
       },
       "required": [
         "equivalence_epsilon",
-        "candidate_cells",
-        "selected_training_cells"
+        "candidate_cells"
       ],
       "title": "TrainingOnlySampleSizeSelectionContract",
       "type": "object"
@@ -318,10 +329,6 @@
       ],
       "title": "Count Dtype",
       "type": "string"
-    },
-    "count_maximum_audit_pass": {
-      "title": "Count Maximum Audit Pass",
-      "type": "boolean"
     },
     "feature_selection": {
       "$ref": "#/$defs/TrainingOnlyFeatureSelectionContract"
@@ -341,6 +348,11 @@
       ],
       "title": "Index Dtype",
       "type": "string"
+    },
+    "maximum_observed_count": {
+      "minimum": 0,
+      "title": "Maximum Observed Count",
+      "type": "integer"
     },
     "outer_split_id": {
       "title": "Outer Split Id",
@@ -369,10 +381,10 @@
       "title": "Physical Layout",
       "type": "string"
     },
-    "protected_expression_values_used": {
+    "protected_outer_stimulated_expression_values_used": {
       "const": false,
       "default": false,
-      "title": "Protected Expression Values Used",
+      "title": "Protected Outer Stimulated Expression Values Used",
       "type": "boolean"
     },
     "row_role_assignment_implementation_sha256": {
@@ -427,7 +439,7 @@
     "sampler",
     "count_dtype",
     "index_dtype",
-    "count_maximum_audit_pass",
+    "maximum_observed_count",
     "physical_layout"
   ],
   "title": "FoldNativeCompactViewContractV2",

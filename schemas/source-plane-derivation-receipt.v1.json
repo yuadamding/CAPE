@@ -1,0 +1,97 @@
+{
+  "$defs": {
+    "SourcePlaneDerivationRecord": {
+      "additionalProperties": false,
+      "description": "Construction-time evidence for one locator-selected immutable source.",
+      "properties": {
+        "scanner_implementation_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Scanner Implementation Sha256",
+          "type": "string"
+        },
+        "selected_nnz": {
+          "minimum": 0,
+          "title": "Selected Nnz",
+          "type": "integer"
+        },
+        "selected_row_count": {
+          "exclusiveMinimum": 0,
+          "title": "Selected Row Count",
+          "type": "integer"
+        },
+        "selected_row_ids_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Selected Row Ids Hash",
+          "type": "string"
+        },
+        "source_file_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source File Sha256",
+          "type": "string"
+        },
+        "source_id": {
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_row_pairs_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Row Pairs Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "selected_row_count",
+        "selected_nnz",
+        "selected_row_ids_hash",
+        "source_row_pairs_hash",
+        "scanner_implementation_sha256",
+        "source_file_sha256"
+      ],
+      "title": "SourcePlaneDerivationRecord",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/source-plane-derivation-receipt.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Content-addressed construction scan behind routine G00B verification.",
+  "properties": {
+    "model_fitting_performed": {
+      "const": false,
+      "default": false,
+      "title": "Model Fitting Performed",
+      "type": "boolean"
+    },
+    "protected_outcome_scientific_use": {
+      "const": false,
+      "default": false,
+      "title": "Protected Outcome Scientific Use",
+      "type": "boolean"
+    },
+    "receipt_id": {
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "records": {
+      "items": {
+        "$ref": "#/$defs/SourcePlaneDerivationRecord"
+      },
+      "title": "Records",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "records"
+  ],
+  "title": "SourcePlaneDerivationReceipt",
+  "type": "object"
+}

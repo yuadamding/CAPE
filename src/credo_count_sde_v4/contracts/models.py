@@ -1696,10 +1696,115 @@ class SourceNumericIntegrity(StrictModel):
     indptr_dtype: str = Field(min_length=1)
     counts_nonnegative_verified: Literal[True] = True
     counts_integral_verified: Literal[True] = True
+    counts_finite_verified: Literal[True] = True
     maximum_observed_count: int = Field(ge=0)
     csr_indices_in_bounds_verified: Literal[True] = True
     csr_indptr_monotonic_verified: Literal[True] = True
     csr_terminal_offset_matches_nnz: Literal[True] = True
+
+
+class SourcePlaneDerivationRecord(StrictModel):
+    """Construction-time evidence for one locator-selected immutable source."""
+
+    source_id: str = Field(min_length=1)
+    selected_row_count: int = Field(gt=0)
+    selected_nnz: int = Field(ge=0)
+    selected_row_ids_hash: Sha256
+    source_row_pairs_hash: Sha256
+    scanner_implementation_sha256: Sha256
+    source_file_sha256: Sha256
+
+
+class SourcePlaneDerivationReceipt(StrictModel):
+    """Content-addressed construction scan behind routine G00B verification."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str
+    records: tuple[SourcePlaneDerivationRecord, ...]
+    model_fitting_performed: Literal[False] = False
+    protected_outcome_scientific_use: Literal[False] = False
+
+    @model_validator(mode="after")
+    def validate_derivation(self) -> SourcePlaneDerivationReceipt:
+        source_ids = [record.source_id for record in self.records]
+        if not source_ids or len(source_ids) != len(set(source_ids)):
+            raise ValueError("Source-plane derivation records must be nonempty and unique.")
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
+        return self
+
+
+class SourceHashBinding(StrictModel):
+    """One immutable source identity in a format-upgrade amendment."""
+
+    source_id: str = Field(min_length=1)
+    source_file_sha256: Sha256
+
+
+class G00SourcePlaneV2Amendment(StrictModel):
+    """No-model provenance bridge from accepted Dev29 v1 evidence to v2."""
+
+    schema_version: Literal[1] = 1
+    amendment_id: str
+    parent_g00a_v1_authority_id: str = Field(min_length=1)
+    parent_g00a_v1: ArtifactRef
+    parent_g00b_v1_virtual_store_id: str = Field(min_length=1)
+    parent_g00b_v1_manifest: ArtifactRef
+    immutable_source_hashes: tuple[SourceHashBinding, ...]
+    v2_guide_target_crosswalk: ArtifactRef
+    v2_numerical_audit: ArtifactRef
+    v2_source_derivation_receipt: ArtifactRef
+    v2_row_locator: ArtifactRef
+    builder_implementation_sha256: Sha256
+    environment_hash: Sha256
+    model_fitting_performed: Literal[False] = False
+    protected_outcome_scientific_use: Literal[False] = False
+
+    @model_validator(mode="after")
+    def validate_amendment(self) -> G00SourcePlaneV2Amendment:
+        source_ids = [source.source_id for source in self.immutable_source_hashes]
+        if len(source_ids) != 12 or len(source_ids) != len(set(source_ids)):
+            raise ValueError("The GSE314342 amendment must bind exactly 12 unique sources.")
+        expected = self.identity(id_field="amendment_id")
+        if self.amendment_id != expected:
+            raise ValueError(f"amendment_id mismatch: expected {expected}.")
+        return self
+
+
+class G00SourcePlaneV2AmendmentReceipt(StrictModel):
+    """Decision receipt for the no-model v1-to-v2 authority upgrade."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str
+    amendment_id: str = Field(min_length=1)
+    derived_g00a_v2_authority_id: str = Field(min_length=1)
+    derived_g00a_v2: ArtifactRef
+    derived_g00b_v2_virtual_store_id: str = Field(min_length=1)
+    derived_g00b_v2: ArtifactRef
+    parent_files_verified: bool
+    all_source_hashes_verified: bool
+    derivation_receipt_verified: bool
+    v2_parent_equality_verified: bool
+    model_fitting_performed: Literal[False] = False
+    protected_outcome_scientific_use: Literal[False] = False
+    status: Literal["pass", "fail"]
+
+    @model_validator(mode="after")
+    def validate_amendment_receipt(self) -> G00SourcePlaneV2AmendmentReceipt:
+        passed = (
+            self.parent_files_verified
+            and self.all_source_hashes_verified
+            and self.derivation_receipt_verified
+            and self.v2_parent_equality_verified
+        )
+        expected_status = "pass" if passed else "fail"
+        if self.status != expected_status:
+            raise ValueError(f"Source-plane amendment status must be {expected_status}.")
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
+        return self
 
 
 class VirtualCountSourceV2(StrictModel):
@@ -1738,6 +1843,8 @@ class G00SourceAuthorityV2(StrictModel):
 
     schema_version: Literal[2] = 2
     authority_id: str
+    source_plane_amendment_id: str = Field(min_length=1)
+    source_plane_amendment: ArtifactRef
     sources: tuple[VirtualCountSourceV2, ...]
     canonical_feature_index_hash: Sha256
     guide_catalog_hash: Sha256
@@ -1745,6 +1852,7 @@ class G00SourceAuthorityV2(StrictModel):
     guide_target_crosswalk_hash: Sha256
     guide_target_crosswalk: ArtifactRef
     source_numeric_audit: ArtifactRef
+    source_derivation_receipt: ArtifactRef
     guide_count: int = Field(gt=0)
     target_control_count: int = Field(gt=0)
     eligibility_rule: Literal["guide_group == targeting single sgRNA AND low_quality == false"]
@@ -1787,12 +1895,15 @@ class VirtualCanonicalCountStoreManifestV2(StrictModel):
     virtual_store_id: str
     backend: Literal["virtual_canonical_h5ad_csr_v2"] = "virtual_canonical_h5ad_csr_v2"
     source_authority_id: str
+    source_plane_amendment_id: str = Field(min_length=1)
+    source_plane_amendment: ArtifactRef
     canonical_feature_index_hash: Sha256
     guide_catalog_hash: Sha256
     target_catalog_hash: Sha256
     guide_target_crosswalk_hash: Sha256
     guide_target_crosswalk: ArtifactRef
     source_numeric_audit: ArtifactRef
+    source_derivation_receipt: ArtifactRef
     guide_count: int = Field(gt=0)
     target_control_count: int = Field(gt=0)
     eligibility_rule: Literal["guide_group == targeting single sgRNA AND low_quality == false"]
@@ -1843,7 +1954,7 @@ class FoldRowRoleRecord(StrictModel):
         "heldout_source_query",
         "protected_heldout_stimulated",
     ]
-    rows: int = Field(ge=0)
+    rows: int = Field(gt=0)
     row_ids_hash: Sha256
 
 
@@ -1853,13 +1964,19 @@ class TrainingOnlyFeatureSelectionContract(StrictModel):
     method: Literal["training_only_ranked_prefix_v1"] = "training_only_ranked_prefix_v1"
     implementation_sha256: Sha256
     fit_rows_hash: Sha256
-    candidate_feature_counts: tuple[int, ...]
+    candidate_feature_counts: tuple[int, ...] = (256, 512, 1024, 2048, 4096)
     selection_metric: Literal["training_validation_negative_log_likelihood"] = (
         "training_validation_negative_log_likelihood"
     )
     minimum_improvement_margin: float = Field(ge=0)
     paired_refit_draws: Literal[59] = 59
-    selected_feature_count: int = Field(gt=0, le=4096)
+    maximum_feature_count: Literal[4096] = 4096
+    paired_statistic: Literal["p95_absolute_paired_nll_difference_to_4096"] = (
+        "p95_absolute_paired_nll_difference_to_4096"
+    )
+    selection_rule: Literal["smallest_prefix_with_p95_difference_le_margin"] = (
+        "smallest_prefix_with_p95_difference_le_margin"
+    )
     ordered_feature_table: ArtifactRef
     custom001_puror_role: Literal["technical_assay_feature"] = "technical_assay_feature"
     custom001_puror_in_primary_biological_metric: Literal[False] = False
@@ -1867,14 +1984,8 @@ class TrainingOnlyFeatureSelectionContract(StrictModel):
 
     @model_validator(mode="after")
     def validate_candidates(self) -> TrainingOnlyFeatureSelectionContract:
-        if (
-            not self.candidate_feature_counts
-            or tuple(sorted(set(self.candidate_feature_counts)))
-            != self.candidate_feature_counts
-            or self.selected_feature_count not in self.candidate_feature_counts
-            or self.candidate_feature_counts[-1] != 4096
-        ):
-            raise ValueError("Feature candidates must be unique increasing prefixes through 4096.")
+        if self.candidate_feature_counts != (256, 512, 1024, 2048, 4096):
+            raise ValueError("Feature candidates must equal the frozen positive prefix grid.")
         return self
 
 
@@ -1891,7 +2002,6 @@ class TrainingOnlySampleSizeSelectionContract(StrictModel):
     paired_refit_draws: Literal[59] = 59
     equivalence_epsilon: float = Field(gt=0)
     candidate_cells: tuple[int, ...]
-    selected_training_cells: int = Field(gt=0)
     two_million_extension_triggered_by_no_saturation: bool = False
 
     @model_validator(mode="after")
@@ -1900,8 +2010,6 @@ class TrainingOnlySampleSizeSelectionContract(StrictModel):
         allowed = {base, (*base, 2_000_000)}
         if self.candidate_cells not in allowed:
             raise ValueError("Sample-size grid must be the frozen G00C grid.")
-        if self.selected_training_cells not in self.candidate_cells:
-            raise ValueError("Selected training-cell count must occur in the frozen grid.")
         includes_extension = 2_000_000 in self.candidate_cells
         if includes_extension != self.two_million_extension_triggered_by_no_saturation:
             raise ValueError("The two-million-cell extension requires documented nonsaturation.")
@@ -1952,9 +2060,9 @@ class FoldNativeCompactViewContractV2(StrictModel):
     sampler: CompactSamplerContract
     count_dtype: Literal["uint16", "int32"]
     index_dtype: Literal["uint16", "int32"]
-    count_maximum_audit_pass: bool
+    maximum_observed_count: int = Field(ge=0)
     physical_layout: Literal["donor_checkpoint_target_guide_row"]
-    protected_expression_values_used: Literal[False] = False
+    protected_outer_stimulated_expression_values_used: Literal[False] = False
 
     @model_validator(mode="after")
     def validate_fold_view(self) -> FoldNativeCompactViewContractV2:
@@ -1973,11 +2081,109 @@ class FoldNativeCompactViewContractV2(StrictModel):
         }
         if len(roles) != len(expected_roles) or set(roles) != expected_roles:
             raise ValueError("Fold-native row-role audit must contain every role exactly once.")
-        if self.count_dtype == "uint16" and not self.count_maximum_audit_pass:
-            raise ValueError("uint16 counts require a passed maximum-count audit.")
+        uint16_safe = self.maximum_observed_count <= 65_535
+        if self.count_dtype == "uint16" and not uint16_safe:
+            raise ValueError("uint16 counts require maximum_observed_count <= 65535.")
         expected = self.identity(id_field="fold_view_id")
         if self.fold_view_id != expected:
             raise ValueError(f"fold_view_id mismatch: expected {expected}.")
+        return self
+
+
+class G00CFeatureSelectionResult(StrictModel):
+    """Hash-bound evidence and derived decision for one ranked-prefix curve."""
+
+    curve: ArtifactRef
+    paired_refit_draws: ArtifactRef
+    ordered_features: ArtifactRef
+    selected_feature_count: int = Field(gt=0, le=4096)
+
+
+class G00CSampleSizeSelectionResult(StrictModel):
+    """Hash-bound evidence and derived decision for one training-cell scale curve."""
+
+    curve: ArtifactRef
+    paired_refit_draws: ArtifactRef
+    selected_training_cells: int = Field(gt=0)
+    two_million_extension_opened: bool
+
+
+class G00CSamplerEvidence(StrictModel):
+    """Compact deterministic row/weight/RNG/resume sequence evidence."""
+
+    sampler_plan: ArtifactRef
+    epoch_index: ArtifactRef
+    resume_test: ArtifactRef
+
+
+class G00CExecutionBundle(StrictModel):
+    """Complete non-model G00C materialization evidence."""
+
+    schema_version: Literal[1] = 1
+    bundle_id: str
+    fold_view_id: str = Field(min_length=1)
+    row_roles: ArtifactRef
+    feature_selection: G00CFeatureSelectionResult
+    sample_size_selection: G00CSampleSizeSelectionResult
+    sampler: G00CSamplerEvidence
+    compact_payload: ArtifactRef
+    publication_manifest: ArtifactRef
+    reload_receipt: ArtifactRef
+    compact_payload_row_ids_hash: Sha256
+    compact_payload_feature_order_hash: Sha256
+    compact_payload_counts_sha256: Sha256
+    protected_rows_in_compact_payload: Literal[0] = 0
+    maximum_observed_count: int = Field(ge=0)
+    count_dtype: Literal["uint16", "int32"]
+    index_dtype: Literal["uint16", "int32"]
+
+    @model_validator(mode="after")
+    def validate_bundle(self) -> G00CExecutionBundle:
+        if self.count_dtype == "uint16" and self.maximum_observed_count > 65_535:
+            raise ValueError("G00C uint16 payload exceeds the observed-count limit.")
+        expected = self.identity(id_field="bundle_id")
+        if self.bundle_id != expected:
+            raise ValueError(f"bundle_id mismatch: expected {expected}.")
+        return self
+
+
+class G00CDecisionReceipt(StrictModel):
+    """Derived G00C execution decision; no biological outcome is represented."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str
+    fold_view_id: str = Field(min_length=1)
+    execution_bundle_id: str = Field(min_length=1)
+    row_roles_verified: bool
+    feature_selection_verified: bool
+    sample_size_selection_verified: bool
+    sampler_sequence_verified: bool
+    compact_counts_verified: bool
+    protected_rows_absent: bool
+    immutable_publication_verified: bool
+    full_reload_verified: bool
+    status: Literal["pass", "fail"]
+
+    @model_validator(mode="after")
+    def validate_decision(self) -> G00CDecisionReceipt:
+        passed = all(
+            (
+                self.row_roles_verified,
+                self.feature_selection_verified,
+                self.sample_size_selection_verified,
+                self.sampler_sequence_verified,
+                self.compact_counts_verified,
+                self.protected_rows_absent,
+                self.immutable_publication_verified,
+                self.full_reload_verified,
+            )
+        )
+        expected_status = "pass" if passed else "fail"
+        if self.status != expected_status:
+            raise ValueError(f"G00C decision status must be {expected_status}.")
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
         return self
 
 
@@ -1996,6 +2202,7 @@ class IntegratedLoaderQualificationContractV2(StrictModel):
     cpu_count: int = Field(ge=1)
     storage_authority_hash: Sha256
     microbatch_cells: Literal[512] = 512
+    microbatches_per_update: Literal[8] = 8
     macrobatch_cells: Literal[4096] = 4096
     prefetch_depth: int = Field(ge=1)
     warmup_updates: int = Field(gt=0)
@@ -2009,7 +2216,10 @@ class IntegratedLoaderQualificationContractV2(StrictModel):
     minimum_steady_state_gpu_utilization: float = Field(default=0.85, ge=0.85, le=1)
     maximum_p95_batch_ready_seconds: float = Field(gt=0)
     maximum_loader_rss_bytes: int = Field(gt=0)
+    maximum_process_loader_rss_bytes: int = Field(gt=0)
+    maximum_aggregate_worker_rss_bytes: int = Field(gt=0)
     maximum_open_shards: int = Field(ge=1)
+    maximum_open_file_handles: int = Field(ge=1)
     maximum_rss_slope_upper_bytes_per_second: float = Field(ge=0)
     maximum_rss_excursion_fraction: float = Field(gt=0, le=1)
     parity_absolute_tolerance: float = Field(default=1e-6, gt=0)
@@ -2023,6 +2233,25 @@ class IntegratedLoaderQualificationContractV2(StrictModel):
         return self
 
 
+class G00DParityGateEvidence(StrictModel):
+    """Per-gate exact or numerical parity evidence."""
+
+    gate: Literal[
+        "row_ids",
+        "raw_counts",
+        "sample_weights",
+        "thinning_rng",
+        "loss",
+        "gradient",
+        "parameter",
+        "interrupted_resume",
+    ]
+    reference_sha256: Sha256
+    observed_sha256: Sha256
+    maximum_absolute_error: float = Field(ge=0)
+    maximum_relative_error: float = Field(ge=0)
+
+
 class IntegratedLoaderQualificationReceiptV2(StrictModel):
     """Dev30 observed G00D performance, parity, and memory evidence."""
 
@@ -2031,6 +2260,7 @@ class IntegratedLoaderQualificationReceiptV2(StrictModel):
     qualification_contract_id: str
     gpu_name: str = Field(min_length=1)
     gpu_uuid: str = Field(min_length=1)
+    gpu_count: int = Field(ge=1)
     cuda_version: str = Field(min_length=1)
     torch_version: str = Field(min_length=1)
     container_digest: Sha256
@@ -2038,6 +2268,7 @@ class IntegratedLoaderQualificationReceiptV2(StrictModel):
     cpu_count: int = Field(ge=1)
     storage_authority_hash: Sha256
     microbatch_cells: int = Field(gt=0)
+    microbatches_per_update: int = Field(gt=0)
     macrobatch_cells: int = Field(gt=0)
     prefetch_depth: int = Field(ge=1)
     warmup_updates: int = Field(gt=0)
@@ -2045,7 +2276,11 @@ class IntegratedLoaderQualificationReceiptV2(StrictModel):
     cold_start_measured: bool
     steady_state_measured: bool
     cache_policy: str = Field(min_length=1)
-    measurement_sha256: Sha256
+    measurement_protocol_sha256: Sha256
+    measurement_evidence: ArtifactRef
+    telemetry_artifact: ArtifactRef
+    parity_artifact: ArtifactRef
+    memory_trace_artifact: ArtifactRef
     telemetry_interval_seconds: float = Field(gt=0)
     median_compute_seconds: float = Field(ge=0)
     p95_compute_seconds: float = Field(ge=0)
@@ -2054,18 +2289,14 @@ class IntegratedLoaderQualificationReceiptV2(StrictModel):
     data_wait_fraction: float = Field(ge=0, le=1)
     steady_state_gpu_utilization: float = Field(ge=0, le=1)
     peak_loader_rss_bytes: int = Field(ge=0)
+    peak_process_loader_rss_bytes: int = Field(ge=0)
+    peak_aggregate_worker_rss_bytes: int = Field(ge=0)
     peak_open_shards: int = Field(ge=0)
+    peak_open_file_handles: int = Field(ge=0)
     rss_slope_bytes_per_second: float
     rss_slope_upper_ci_bytes_per_second: float
     maximum_rss_excursion_bytes: int = Field(ge=0)
-    row_ids_parity_pass: bool
-    raw_counts_parity_pass: bool
-    sample_weights_parity_pass: bool
-    thinning_rng_parity_pass: bool
-    loss_parity_pass: bool
-    gradient_parity_pass: bool
-    parameter_parity_pass: bool
-    interrupted_resume_parity_pass: bool
+    parity_gates: tuple[G00DParityGateEvidence, ...]
     lru_bound_pass: bool
     loader_error_count: int = Field(ge=0)
     cuda_error_count: int = Field(ge=0)
@@ -2077,6 +2308,26 @@ class IntegratedLoaderQualificationReceiptV2(StrictModel):
 
     @model_validator(mode="after")
     def validate_loader_receipt(self) -> IntegratedLoaderQualificationReceiptV2:
+        gate_names = [gate.gate for gate in self.parity_gates]
+        expected_gates = {
+            "row_ids",
+            "raw_counts",
+            "sample_weights",
+            "thinning_rng",
+            "loss",
+            "gradient",
+            "parameter",
+            "interrupted_resume",
+        }
+        if len(gate_names) != len(expected_gates) or set(gate_names) != expected_gates:
+            raise ValueError("G00D receipt must contain every parity gate exactly once.")
+        observed_absolute = max(gate.maximum_absolute_error for gate in self.parity_gates)
+        observed_relative = max(gate.maximum_relative_error for gate in self.parity_gates)
+        if (
+            self.maximum_parity_absolute_error != observed_absolute
+            or self.maximum_parity_relative_error != observed_relative
+        ):
+            raise ValueError("Aggregate parity errors must be derived from per-gate evidence.")
         expected = self.identity(id_field="receipt_id")
         if self.receipt_id != expected:
             raise ValueError(f"receipt_id mismatch: expected {expected}.")

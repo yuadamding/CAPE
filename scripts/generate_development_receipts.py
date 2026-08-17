@@ -107,12 +107,13 @@ def main() -> None:
     t07r_v2_bundle = t07r_v2_evidence / "T07R_A0_PHYSICAL_POOL_CONDITIONAL_DM_V2_R2"
     gse314342_g00 = workspace / "credo_v4_gse314342_g00_20260816"
     gse314342_g00_dev29_review = Path(
-        "/home/yding1995/.codex/attachments/ceb54c9f-8842-40ab-bb98-6b847b7198e9/"
-        "pasted-text.txt"
+        "/home/yding1995/.codex/attachments/ceb54c9f-8842-40ab-bb98-6b847b7198e9/pasted-text.txt"
     )
     gse314342_g00_dev30_review = Path(
-        "/home/yding1995/.codex/attachments/79794ce7-3c6f-4734-9bf8-1cfc9f5fd183/"
-        "pasted-text.txt"
+        "/home/yding1995/.codex/attachments/79794ce7-3c6f-4734-9bf8-1cfc9f5fd183/pasted-text.txt"
+    )
+    gse314342_g00_dev30_r2_review = Path(
+        "/home/yding1995/.codex/attachments/284492a6-f9f4-4550-b2ca-d4dbbf27efd1/pasted-text.txt"
     )
     gse314342_g00_source_plane = gse314342_g00 / "G00_SOURCE_PLANE_DEV29"
     receipt = {
@@ -260,6 +261,11 @@ def main() -> None:
             if gse314342_g00_dev30_review.is_file()
             else None
         ),
+        "gse314342_g00_dev30_r2_review_sha256": (
+            sha256_file(gse314342_g00_dev30_r2_review)
+            if gse314342_g00_dev30_r2_review.is_file()
+            else None
+        ),
         "gse314342_g00_dev29_builder_sha256": (
             sha256_file(gse314342_g00 / "freeze_g00_source_plane_dev29.py")
             if (gse314342_g00 / "freeze_g00_source_plane_dev29.py").is_file()
@@ -276,14 +282,8 @@ def main() -> None:
             else None
         ),
         "gse314342_g00_virtual_store_manifest_sha256": (
-            sha256_file(
-                gse314342_g00_source_plane
-                / "G00B_VIRTUAL_CANONICAL_STORE/manifest.json"
-            )
-            if (
-                gse314342_g00_source_plane
-                / "G00B_VIRTUAL_CANONICAL_STORE/manifest.json"
-            ).is_file()
+            sha256_file(gse314342_g00_source_plane / "G00B_VIRTUAL_CANONICAL_STORE/manifest.json")
+            if (gse314342_g00_source_plane / "G00B_VIRTUAL_CANONICAL_STORE/manifest.json").is_file()
             else None
         ),
         "tests_passed": args.tests_passed,

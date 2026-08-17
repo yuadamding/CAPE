@@ -1,5 +1,16 @@
 # Changelog
 
+## Dev30-A-r2
+
+- Added an immutable Dev29-v1-to-v2 source-plane amendment and derivation
+  receipt without running cohort preprocessing or model fitting.
+- Completed locator, crosswalk, selected-nonzero receipt, and finite-count
+  verification for future G00A/G00B v2 evidence.
+- Added derived G00C feature, scale, row-role, sampler, publication, and reload
+  decisions while keeping protected stimulated rows outside compact payloads.
+- Bound G00D GPU count, measurement protocol, telemetry, parity, memory, and
+  file-handle evidence to a fail-closed decision.
+
 ## 4.0.0.dev30 — 2026-08-16
 
 - preserve accepted Dev29 G00A/G00B v1 evidence as read-only compatible;

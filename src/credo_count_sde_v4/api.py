@@ -28,8 +28,12 @@ from .contracts import (
     EvaluationBundleManifest,
     FoldNativeCompactViewContractV1,
     FoldNativeCompactViewContractV2,
+    G00CDecisionReceipt,
+    G00CExecutionBundle,
     G00SourceAuthorityV1,
     G00SourceAuthorityV2,
+    G00SourcePlaneV2Amendment,
+    G00SourcePlaneV2AmendmentReceipt,
     G14MultiplicityContract,
     G14MultiplicityContractV1,
     G14RobustnessPlan,
@@ -65,6 +69,7 @@ from .contracts import (
     SelectionManifest,
     SemanticStudySnapshot,
     ShardedCountStoreManifest,
+    SourcePlaneDerivationReceipt,
     StateSelectionCalibration,
     StateSelectionCalibrationResults,
     VerifyLevel,
@@ -343,10 +348,22 @@ def validate_contract(path: Path) -> dict[str, Any]:
             )
         elif "authority_id" in payload and "source_reconciliation_pass" in payload:
             selected = (
-                G00SourceAuthorityV1
-                if payload.get("schema_version") == 1
-                else G00SourceAuthorityV2
+                G00SourceAuthorityV1 if payload.get("schema_version") == 1 else G00SourceAuthorityV2
             )
+        elif "parent_g00a_v1_authority_id" in payload:
+            selected = G00SourcePlaneV2Amendment
+        elif "derived_g00a_v2_authority_id" in payload:
+            selected = G00SourcePlaneV2AmendmentReceipt
+        elif (
+            "receipt_id" in payload
+            and "records" in payload
+            and "model_fitting_performed" in payload
+        ):
+            selected = SourcePlaneDerivationReceipt
+        elif "bundle_id" in payload and "compact_payload" in payload:
+            selected = G00CExecutionBundle
+        elif "execution_bundle_id" in payload:
+            selected = G00CDecisionReceipt
         elif "qualification_contract_id" in payload and "raw_rows_per_second_gate" in payload:
             selected = IntegratedLoaderQualificationContractV1
         elif "qualification_contract_id" in payload and "measurement_protocol_sha256" in payload:
@@ -447,6 +464,11 @@ def validate_contract(path: Path) -> dict[str, Any]:
         FoldNativeCompactViewContractV2: "FoldNativeCompactViewContract",
         IntegratedLoaderQualificationContractV2: "IntegratedLoaderQualificationContract",
         IntegratedLoaderQualificationReceiptV2: "IntegratedLoaderQualificationReceipt",
+        G00SourcePlaneV2Amendment: "G00SourcePlaneV2Amendment",
+        G00SourcePlaneV2AmendmentReceipt: "G00SourcePlaneV2AmendmentReceipt",
+        G00CExecutionBundle: "G00CExecutionBundle",
+        G00CDecisionReceipt: "G00CDecisionReceipt",
+        SourcePlaneDerivationReceipt: "SourcePlaneDerivationReceipt",
     }.get(selected, selected.__name__)
     return {
         "path": str(path),

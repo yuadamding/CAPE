@@ -1,4 +1,97 @@
 {
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    },
+    "G00DParityGateEvidence": {
+      "additionalProperties": false,
+      "description": "Per-gate exact or numerical parity evidence.",
+      "properties": {
+        "gate": {
+          "enum": [
+            "row_ids",
+            "raw_counts",
+            "sample_weights",
+            "thinning_rng",
+            "loss",
+            "gradient",
+            "parameter",
+            "interrupted_resume"
+          ],
+          "title": "Gate",
+          "type": "string"
+        },
+        "maximum_absolute_error": {
+          "minimum": 0,
+          "title": "Maximum Absolute Error",
+          "type": "number"
+        },
+        "maximum_relative_error": {
+          "minimum": 0,
+          "title": "Maximum Relative Error",
+          "type": "number"
+        },
+        "observed_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Observed Sha256",
+          "type": "string"
+        },
+        "reference_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Reference Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "gate",
+        "reference_sha256",
+        "observed_sha256",
+        "maximum_absolute_error",
+        "maximum_relative_error"
+      ],
+      "title": "G00DParityGateEvidence",
+      "type": "object"
+    }
+  },
   "$id": "https://credo.local/schemas/integrated-loader-qualification-receipt.v2.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
@@ -39,6 +132,11 @@
       "title": "Data Wait Fraction",
       "type": "number"
     },
+    "gpu_count": {
+      "minimum": 1,
+      "title": "Gpu Count",
+      "type": "integer"
+    },
     "gpu_name": {
       "minLength": 1,
       "title": "Gpu Name",
@@ -49,22 +147,10 @@
       "title": "Gpu Uuid",
       "type": "string"
     },
-    "gradient_parity_pass": {
-      "title": "Gradient Parity Pass",
-      "type": "boolean"
-    },
-    "interrupted_resume_parity_pass": {
-      "title": "Interrupted Resume Parity Pass",
-      "type": "boolean"
-    },
     "loader_error_count": {
       "minimum": 0,
       "title": "Loader Error Count",
       "type": "integer"
-    },
-    "loss_parity_pass": {
-      "title": "Loss Parity Pass",
-      "type": "boolean"
     },
     "lru_bound_pass": {
       "title": "Lru Bound Pass",
@@ -95,9 +181,12 @@
       "title": "Measured Updates",
       "type": "integer"
     },
-    "measurement_sha256": {
+    "measurement_evidence": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "measurement_protocol_sha256": {
       "pattern": "^[0-9a-f]{64}$",
-      "title": "Measurement Sha256",
+      "title": "Measurement Protocol Sha256",
       "type": "string"
     },
     "median_compute_seconds": {
@@ -114,9 +203,17 @@
       "title": "Memory Growth Pass",
       "type": "boolean"
     },
+    "memory_trace_artifact": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
     "microbatch_cells": {
       "exclusiveMinimum": 0,
       "title": "Microbatch Cells",
+      "type": "integer"
+    },
+    "microbatches_per_update": {
+      "exclusiveMinimum": 0,
+      "title": "Microbatches Per Update",
       "type": "integer"
     },
     "monitor_error_count": {
@@ -134,18 +231,39 @@
       "title": "P95 Compute Seconds",
       "type": "number"
     },
-    "parameter_parity_pass": {
-      "title": "Parameter Parity Pass",
-      "type": "boolean"
+    "parity_artifact": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "parity_gates": {
+      "items": {
+        "$ref": "#/$defs/G00DParityGateEvidence"
+      },
+      "title": "Parity Gates",
+      "type": "array"
+    },
+    "peak_aggregate_worker_rss_bytes": {
+      "minimum": 0,
+      "title": "Peak Aggregate Worker Rss Bytes",
+      "type": "integer"
     },
     "peak_loader_rss_bytes": {
       "minimum": 0,
       "title": "Peak Loader Rss Bytes",
       "type": "integer"
     },
+    "peak_open_file_handles": {
+      "minimum": 0,
+      "title": "Peak Open File Handles",
+      "type": "integer"
+    },
     "peak_open_shards": {
       "minimum": 0,
       "title": "Peak Open Shards",
+      "type": "integer"
+    },
+    "peak_process_loader_rss_bytes": {
+      "minimum": 0,
+      "title": "Peak Process Loader Rss Bytes",
       "type": "integer"
     },
     "prefetch_depth": {
@@ -157,17 +275,9 @@
       "title": "Qualification Contract Id",
       "type": "string"
     },
-    "raw_counts_parity_pass": {
-      "title": "Raw Counts Parity Pass",
-      "type": "boolean"
-    },
     "receipt_id": {
       "title": "Receipt Id",
       "type": "string"
-    },
-    "row_ids_parity_pass": {
-      "title": "Row Ids Parity Pass",
-      "type": "boolean"
     },
     "rss_slope_bytes_per_second": {
       "title": "Rss Slope Bytes Per Second",
@@ -176,10 +286,6 @@
     "rss_slope_upper_ci_bytes_per_second": {
       "title": "Rss Slope Upper Ci Bytes Per Second",
       "type": "number"
-    },
-    "sample_weights_parity_pass": {
-      "title": "Sample Weights Parity Pass",
-      "type": "boolean"
     },
     "schema_version": {
       "const": 2,
@@ -210,14 +316,13 @@
       "title": "Storage Authority Hash",
       "type": "string"
     },
+    "telemetry_artifact": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
     "telemetry_interval_seconds": {
       "exclusiveMinimum": 0,
       "title": "Telemetry Interval Seconds",
       "type": "number"
-    },
-    "thinning_rng_parity_pass": {
-      "title": "Thinning Rng Parity Pass",
-      "type": "boolean"
     },
     "torch_version": {
       "minLength": 1,
@@ -240,6 +345,7 @@
     "qualification_contract_id",
     "gpu_name",
     "gpu_uuid",
+    "gpu_count",
     "cuda_version",
     "torch_version",
     "container_digest",
@@ -247,6 +353,7 @@
     "cpu_count",
     "storage_authority_hash",
     "microbatch_cells",
+    "microbatches_per_update",
     "macrobatch_cells",
     "prefetch_depth",
     "warmup_updates",
@@ -254,7 +361,11 @@
     "cold_start_measured",
     "steady_state_measured",
     "cache_policy",
-    "measurement_sha256",
+    "measurement_protocol_sha256",
+    "measurement_evidence",
+    "telemetry_artifact",
+    "parity_artifact",
+    "memory_trace_artifact",
     "telemetry_interval_seconds",
     "median_compute_seconds",
     "p95_compute_seconds",
@@ -263,18 +374,14 @@
     "data_wait_fraction",
     "steady_state_gpu_utilization",
     "peak_loader_rss_bytes",
+    "peak_process_loader_rss_bytes",
+    "peak_aggregate_worker_rss_bytes",
     "peak_open_shards",
+    "peak_open_file_handles",
     "rss_slope_bytes_per_second",
     "rss_slope_upper_ci_bytes_per_second",
     "maximum_rss_excursion_bytes",
-    "row_ids_parity_pass",
-    "raw_counts_parity_pass",
-    "sample_weights_parity_pass",
-    "thinning_rng_parity_pass",
-    "loss_parity_pass",
-    "gradient_parity_pass",
-    "parameter_parity_pass",
-    "interrupted_resume_parity_pass",
+    "parity_gates",
     "lru_bound_pass",
     "loader_error_count",
     "cuda_error_count",

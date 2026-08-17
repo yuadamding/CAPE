@@ -11,18 +11,25 @@ from pydantic import TypeAdapter
 from scipy import sparse
 
 from credo_count_sde_v4 import validate_contract
-from credo_count_sde_v4.canonical import contract_id, sha256_file
+from credo_count_sde_v4.canonical import canonical_json_bytes, contract_id, sha256_file
 from credo_count_sde_v4.contracts import (
     ArtifactRef,
     ProtectedSourceAccessSemantics,
     SourceNumericIntegrity,
+    SourcePlaneDerivationReceipt,
+    SourcePlaneDerivationRecord,
     VirtualCanonicalCountStoreManifestV1,
     VirtualCanonicalCountStoreManifestV2,
     VirtualCountSourceV1,
     VirtualCountSourceV2,
 )
+from credo_count_sde_v4.errors import IntegrityError
 from credo_count_sde_v4.store import VirtualCanonicalCountStore
-from credo_count_sde_v4.store.virtual import _csr_rows
+from credo_count_sde_v4.store.virtual import (
+    _csr_rows,
+    _int64_hash,
+    _source_row_pairs_hash,
+)
 
 
 def _write_source(path: Path, matrix: np.ndarray) -> None:
@@ -158,6 +165,23 @@ def _refresh_manifest_artifact(
     return VirtualCanonicalCountStore(store.path, source_root=store.source_root)
 
 
+def _rewrite_v2_manifest(
+    store: VirtualCanonicalCountStore, payload: dict[str, object]
+) -> VirtualCanonicalCountStore:
+    payload["virtual_store_id"] = "pending"
+    normalized = VirtualCanonicalCountStoreManifestV2.model_construct(
+        **{
+            name: TypeAdapter(field.annotation).validate_python(payload[name])
+            for name, field in VirtualCanonicalCountStoreManifestV2.model_fields.items()
+            if name in payload
+        }
+    ).model_dump(mode="json")
+    payload["virtual_store_id"] = contract_id(normalized, id_field="virtual_store_id")
+    manifest = VirtualCanonicalCountStoreManifestV2.model_validate(payload)
+    (store.path / "manifest.json").write_text(manifest.model_dump_json() + "\n")
+    return VirtualCanonicalCountStore(store.path, source_root=store.source_root)
+
+
 def _upgrade_virtual_store_to_v2(store: VirtualCanonicalCountStore) -> VirtualCanonicalCountStore:
     crosswalk = store.path / "GUIDE_TARGET_CROSSWALK.parquet"
     pd.DataFrame(
@@ -189,10 +213,49 @@ def _upgrade_virtual_store_to_v2(store: VirtualCanonicalCountStore) -> VirtualCa
         )
         for source in store.manifest.sources
     )
+    amendment = store.path / "G00_SOURCE_PLANE_V2_AMENDMENT.json"
+    amendment.write_text('{"amendment_id":"synthetic-amendment"}\n')
+    row_ids, source_indices, source_rows = store._locator()
+    records = tuple(
+        SourcePlaneDerivationRecord(
+            source_id=source.source_id,
+            selected_row_count=source.eligible_rows,
+            selected_nnz=source.eligible_nnz,
+            selected_row_ids_hash=_int64_hash(row_ids[source_indices == index]),
+            source_row_pairs_hash=_source_row_pairs_hash(
+                index, source_rows[source_indices == index]
+            ),
+            scanner_implementation_sha256="f" * 64,
+            source_file_sha256=source.source_file_sha256,
+        )
+        for index, source in enumerate(sources)
+    )
+    derivation_payload = {
+        "schema_version": 1,
+        "receipt_id": "pending",
+        "records": [record.model_dump(mode="json") for record in records],
+    }
+    derivation_normalized = SourcePlaneDerivationReceipt.model_construct(
+        **{
+            name: TypeAdapter(field.annotation).validate_python(derivation_payload[name])
+            for name, field in SourcePlaneDerivationReceipt.model_fields.items()
+            if name in derivation_payload
+        }
+    ).model_dump(mode="json")
+    derivation_payload["receipt_id"] = contract_id(
+        derivation_normalized, id_field="receipt_id"
+    )
+    derivation_receipt = SourcePlaneDerivationReceipt.model_validate(derivation_payload)
+    derivation = store.path / "SOURCE_PLANE_DERIVATION_RECEIPT.json"
+    derivation.write_text(derivation_receipt.model_dump_json() + "\n")
     payload = {
         "schema_version": 2,
         "virtual_store_id": "pending",
         "source_authority_id": "authority-v2",
+        "source_plane_amendment_id": "synthetic-amendment",
+        "source_plane_amendment": _artifact(
+            amendment, root=store.path, media_type="application/json"
+        ).model_dump(mode="json"),
         "canonical_feature_index_hash": store.manifest.canonical_feature_index_hash,
         "guide_catalog_hash": store.manifest.guide_catalog_hash,
         "target_catalog_hash": store.manifest.target_catalog_hash,
@@ -203,10 +266,13 @@ def _upgrade_virtual_store_to_v2(store: VirtualCanonicalCountStore) -> VirtualCa
         "source_numeric_audit": _artifact(
             numeric, root=store.path, media_type="application/vnd.apache.parquet"
         ).model_dump(mode="json"),
+        "source_derivation_receipt": _artifact(
+            derivation, root=store.path, media_type="application/json"
+        ).model_dump(mode="json"),
         "guide_count": 2,
         "target_control_count": 2,
         "eligibility_rule": "guide_group == targeting single sgRNA AND low_quality == false",
-        "eligible_row_ids_hash": hashlib.sha256(b"rows").hexdigest(),
+        "eligible_row_ids_hash": _int64_hash(row_ids),
         "eligible_rows": 4,
         "eligible_nnz": 12,
         "features": 3,
@@ -375,4 +441,58 @@ def test_dev30_virtual_store_rejects_crosswalk_row_assignment_drift(tmp_path: Pa
     (store.path / "manifest.json").write_text(manifest.model_dump_json() + "\n")
     changed = VirtualCanonicalCountStore(store.path, source_root=store.source_root)
     with pytest.raises(Exception, match="guide-target assignments"):
+        changed.verify(full=False)
+
+
+def test_dev30_virtual_store_recomputes_row_hash_counts_and_source_row_uniqueness(
+    tmp_path: Path,
+) -> None:
+    store = _upgrade_virtual_store_to_v2(_virtual_store(tmp_path))
+    payload = store.manifest.model_dump(mode="json")
+    payload["eligible_row_ids_hash"] = "0" * 64
+    changed = _rewrite_v2_manifest(store, payload)
+    with pytest.raises(IntegrityError, match="eligible-row hash"):
+        changed.verify(full=False)
+
+    store = _upgrade_virtual_store_to_v2(_virtual_store(tmp_path / "counts"))
+    crosswalk = store.path / store.manifest.guide_target_crosswalk.relative_uri
+    frame = pd.read_parquet(crosswalk)
+    frame.loc[0, "eligible_cell_count"] = 3
+    frame.to_parquet(crosswalk, index=False)
+    payload = store.manifest.model_dump(mode="json")
+    payload["guide_target_crosswalk"]["sha256"] = sha256_file(crosswalk)
+    payload["guide_target_crosswalk"]["size_bytes"] = crosswalk.stat().st_size
+    payload["guide_target_crosswalk_hash"] = sha256_file(crosswalk)
+    changed = _rewrite_v2_manifest(store, payload)
+    with pytest.raises(IntegrityError, match="support counts"):
+        changed.verify(full=False)
+
+    store = _upgrade_virtual_store_to_v2(_virtual_store(tmp_path / "duplicate"))
+    locator = store.path / store.manifest.row_locator.relative_uri
+    with h5py.File(locator, "r+") as handle:
+        handle["source_rows_sorted"][-1] = 0
+    changed = _refresh_manifest_artifact(store, "row_locator", locator)
+    with pytest.raises(IntegrityError, match="rows are duplicated"):
+        changed.verify(full=False)
+
+
+def test_dev30_virtual_store_rejects_unused_target_catalog_category(tmp_path: Path) -> None:
+    store = _upgrade_virtual_store_to_v2(_virtual_store(tmp_path))
+    locator = store.path / store.manifest.row_locator.relative_uri
+    with h5py.File(locator, "r+") as handle:
+        del handle["target_ids"]
+        handle.create_dataset(
+            "target_ids",
+            data=np.asarray(
+                ["target-a", "target-b", "target-unused"], dtype=h5py.string_dtype()
+            ),
+        )
+    payload = store.manifest.model_dump(mode="json")
+    payload["target_catalog_hash"] = hashlib.sha256(
+        canonical_json_bytes(["target-a", "target-b", "target-unused"])
+    ).hexdigest()
+    payload["row_locator"]["sha256"] = sha256_file(locator)
+    payload["row_locator"]["size_bytes"] = locator.stat().st_size
+    changed = _rewrite_v2_manifest(store, payload)
+    with pytest.raises(IntegrityError, match="target catalogs differ"):
         changed.verify(full=False)

@@ -1,0 +1,229 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    },
+    "G00CFeatureSelectionResult": {
+      "additionalProperties": false,
+      "description": "Hash-bound evidence and derived decision for one ranked-prefix curve.",
+      "properties": {
+        "curve": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "ordered_features": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "paired_refit_draws": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "selected_feature_count": {
+          "exclusiveMinimum": 0,
+          "maximum": 4096,
+          "title": "Selected Feature Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "curve",
+        "paired_refit_draws",
+        "ordered_features",
+        "selected_feature_count"
+      ],
+      "title": "G00CFeatureSelectionResult",
+      "type": "object"
+    },
+    "G00CSampleSizeSelectionResult": {
+      "additionalProperties": false,
+      "description": "Hash-bound evidence and derived decision for one training-cell scale curve.",
+      "properties": {
+        "curve": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "paired_refit_draws": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "selected_training_cells": {
+          "exclusiveMinimum": 0,
+          "title": "Selected Training Cells",
+          "type": "integer"
+        },
+        "two_million_extension_opened": {
+          "title": "Two Million Extension Opened",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "curve",
+        "paired_refit_draws",
+        "selected_training_cells",
+        "two_million_extension_opened"
+      ],
+      "title": "G00CSampleSizeSelectionResult",
+      "type": "object"
+    },
+    "G00CSamplerEvidence": {
+      "additionalProperties": false,
+      "description": "Compact deterministic row/weight/RNG/resume sequence evidence.",
+      "properties": {
+        "epoch_index": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "resume_test": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "sampler_plan": {
+          "$ref": "#/$defs/ArtifactRef"
+        }
+      },
+      "required": [
+        "sampler_plan",
+        "epoch_index",
+        "resume_test"
+      ],
+      "title": "G00CSamplerEvidence",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/g00c-execution-bundle.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Complete non-model G00C materialization evidence.",
+  "properties": {
+    "bundle_id": {
+      "title": "Bundle Id",
+      "type": "string"
+    },
+    "compact_payload": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "compact_payload_counts_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Compact Payload Counts Sha256",
+      "type": "string"
+    },
+    "compact_payload_feature_order_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Compact Payload Feature Order Hash",
+      "type": "string"
+    },
+    "compact_payload_row_ids_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Compact Payload Row Ids Hash",
+      "type": "string"
+    },
+    "count_dtype": {
+      "enum": [
+        "uint16",
+        "int32"
+      ],
+      "title": "Count Dtype",
+      "type": "string"
+    },
+    "feature_selection": {
+      "$ref": "#/$defs/G00CFeatureSelectionResult"
+    },
+    "fold_view_id": {
+      "minLength": 1,
+      "title": "Fold View Id",
+      "type": "string"
+    },
+    "index_dtype": {
+      "enum": [
+        "uint16",
+        "int32"
+      ],
+      "title": "Index Dtype",
+      "type": "string"
+    },
+    "maximum_observed_count": {
+      "minimum": 0,
+      "title": "Maximum Observed Count",
+      "type": "integer"
+    },
+    "protected_rows_in_compact_payload": {
+      "const": 0,
+      "default": 0,
+      "title": "Protected Rows In Compact Payload",
+      "type": "integer"
+    },
+    "publication_manifest": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "reload_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "row_roles": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "sample_size_selection": {
+      "$ref": "#/$defs/G00CSampleSizeSelectionResult"
+    },
+    "sampler": {
+      "$ref": "#/$defs/G00CSamplerEvidence"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "bundle_id",
+    "fold_view_id",
+    "row_roles",
+    "feature_selection",
+    "sample_size_selection",
+    "sampler",
+    "compact_payload",
+    "publication_manifest",
+    "reload_receipt",
+    "compact_payload_row_ids_hash",
+    "compact_payload_feature_order_hash",
+    "compact_payload_counts_sha256",
+    "maximum_observed_count",
+    "count_dtype",
+    "index_dtype"
+  ],
+  "title": "G00CExecutionBundle",
+  "type": "object"
+}

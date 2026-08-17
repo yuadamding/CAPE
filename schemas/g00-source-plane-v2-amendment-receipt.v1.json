@@ -1,0 +1,134 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/g00-source-plane-v2-amendment-receipt.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Decision receipt for the no-model v1-to-v2 authority upgrade.",
+  "properties": {
+    "all_source_hashes_verified": {
+      "title": "All Source Hashes Verified",
+      "type": "boolean"
+    },
+    "amendment_id": {
+      "minLength": 1,
+      "title": "Amendment Id",
+      "type": "string"
+    },
+    "derivation_receipt_verified": {
+      "title": "Derivation Receipt Verified",
+      "type": "boolean"
+    },
+    "derived_g00a_v2": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "derived_g00a_v2_authority_id": {
+      "minLength": 1,
+      "title": "Derived G00A V2 Authority Id",
+      "type": "string"
+    },
+    "derived_g00b_v2": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "derived_g00b_v2_virtual_store_id": {
+      "minLength": 1,
+      "title": "Derived G00B V2 Virtual Store Id",
+      "type": "string"
+    },
+    "model_fitting_performed": {
+      "const": false,
+      "default": false,
+      "title": "Model Fitting Performed",
+      "type": "boolean"
+    },
+    "parent_files_verified": {
+      "title": "Parent Files Verified",
+      "type": "boolean"
+    },
+    "protected_outcome_scientific_use": {
+      "const": false,
+      "default": false,
+      "title": "Protected Outcome Scientific Use",
+      "type": "boolean"
+    },
+    "receipt_id": {
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "v2_parent_equality_verified": {
+      "title": "V2 Parent Equality Verified",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "amendment_id",
+    "derived_g00a_v2_authority_id",
+    "derived_g00a_v2",
+    "derived_g00b_v2_virtual_store_id",
+    "derived_g00b_v2",
+    "parent_files_verified",
+    "all_source_hashes_verified",
+    "derivation_receipt_verified",
+    "v2_parent_equality_verified",
+    "status"
+  ],
+  "title": "G00SourcePlaneV2AmendmentReceipt",
+  "type": "object"
+}

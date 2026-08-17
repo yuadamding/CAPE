@@ -1,5 +1,9 @@
 # G00 Dev30-A contract amendment
 
+> Superseded for future execution by
+> [Dev30-A-r2 contract finalization](g00-dev30a-r2-contract-finalization.md).
+> This page remains the historical first amendment.
+
 Last verified: 2026-08-16. Status: authoritative contract-only amendment for
 `4.0.0.dev30`. Authority: the accepted Dev29 G00A/G00B evidence remains the
 only executed GSE314342 source-plane result.

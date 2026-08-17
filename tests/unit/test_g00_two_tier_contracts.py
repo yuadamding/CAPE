@@ -15,6 +15,7 @@ from credo_count_sde_v4.contracts import (
     FoldNativeCompactViewContractV1,
     FoldNativeCompactViewContractV2,
     FoldRowRoleRecord,
+    G00DParityGateEvidence,
     G00SourceAuthorityV1,
     G00SourceAuthorityV2,
     IntegratedLoaderQualificationContractV1,
@@ -330,13 +331,18 @@ def _dev30_source_plane() -> tuple[G00SourceAuthorityV2, VirtualCanonicalCountSt
     )
     crosswalk = _artifact("6", "GUIDE_TARGET_CROSSWALK.parquet")
     numeric = _artifact("7", "SOURCE_NUMERIC_AUDIT.parquet")
+    amendment = _artifact("a", "G00_SOURCE_PLANE_V2_AMENDMENT.json")
+    derivation = _artifact("f", "SOURCE_PLANE_DERIVATION_RECEIPT.json")
     shared = {
+        "source_plane_amendment_id": "amendment-v1",
+        "source_plane_amendment": amendment.model_dump(mode="json"),
         "canonical_feature_index_hash": "d" * 64,
         "guide_catalog_hash": "4" * 64,
         "target_catalog_hash": "5" * 64,
         "guide_target_crosswalk_hash": crosswalk.sha256,
         "guide_target_crosswalk": crosswalk.model_dump(mode="json"),
         "source_numeric_audit": numeric.model_dump(mode="json"),
+        "source_derivation_receipt": derivation.model_dump(mode="json"),
         "guide_count": 25_956,
         "target_control_count": 12_732,
         "eligibility_rule": "guide_group == targeting single sgRNA AND low_quality == false",
@@ -399,15 +405,12 @@ def _dev30_fold_view(
     feature = TrainingOnlyFeatureSelectionContract(
         implementation_sha256="1" * 64,
         fit_rows_hash="2" * 64,
-        candidate_feature_counts=(512, 1024, 2048, 4096),
         minimum_improvement_margin=0.001,
-        selected_feature_count=2048,
         ordered_feature_table=_artifact("3", "ORDERED_FEATURES.parquet"),
     )
     sample = TrainingOnlySampleSizeSelectionContract(
         equivalence_epsilon=0.002,
         candidate_cells=(50_000, 100_000, 250_000, 500_000, 1_000_000),
-        selected_training_cells=250_000,
     )
     sampler = CompactSamplerContract(
         implementation_sha256="4" * 64,
@@ -445,7 +448,7 @@ def _dev30_fold_view(
             "sampler": sampler.model_dump(mode="json"),
             "count_dtype": "int32",
             "index_dtype": "uint16",
-            "count_maximum_audit_pass": True,
+            "maximum_observed_count": 312,
             "physical_layout": "donor_checkpoint_target_guide_row",
         },
         "fold_view_id",
@@ -460,7 +463,6 @@ def test_dev30_g00c_freezes_selection_roles_sampler_and_technical_feature() -> N
         TrainingOnlySampleSizeSelectionContract(
             equivalence_epsilon=0.001,
             candidate_cells=(50_000, 75_000),
-            selected_training_cells=50_000,
         )
     with pytest.raises(ValidationError, match="documented nonsaturation"):
         TrainingOnlySampleSizeSelectionContract(
@@ -473,7 +475,6 @@ def test_dev30_g00c_freezes_selection_roles_sampler_and_technical_feature() -> N
                 1_000_000,
                 2_000_000,
             ),
-            selected_training_cells=1_000_000,
         )
     bad = fold.model_dump(mode="json")
     bad["fold_view_id"] = "pending"
@@ -520,7 +521,10 @@ def _dev30_g00d() -> tuple[
             "telemetry_interval_seconds": 0.1,
             "maximum_p95_batch_ready_seconds": 0.05,
             "maximum_loader_rss_bytes": 16_000_000_000,
+            "maximum_process_loader_rss_bytes": 10_000_000_000,
+            "maximum_aggregate_worker_rss_bytes": 16_000_000_000,
             "maximum_open_shards": 8,
+            "maximum_open_file_handles": 128,
             "maximum_rss_slope_upper_bytes_per_second": 1000.0,
             "maximum_rss_excursion_fraction": 0.10,
         },
@@ -533,6 +537,7 @@ def _dev30_g00d() -> tuple[
             "qualification_contract_id": contract.qualification_contract_id,
             "gpu_name": contract.expected_gpu_name,
             "gpu_uuid": "GPU-0123",
+            "gpu_count": 1,
             "cuda_version": contract.expected_cuda_version,
             "torch_version": contract.expected_torch_version,
             "container_digest": contract.expected_container_digest,
@@ -540,6 +545,7 @@ def _dev30_g00d() -> tuple[
             "cpu_count": contract.cpu_count,
             "storage_authority_hash": contract.storage_authority_hash,
             "microbatch_cells": 512,
+            "microbatches_per_update": 8,
             "macrobatch_cells": 4096,
             "prefetch_depth": contract.prefetch_depth,
             "warmup_updates": contract.warmup_updates,
@@ -547,7 +553,11 @@ def _dev30_g00d() -> tuple[
             "cold_start_measured": True,
             "steady_state_measured": True,
             "cache_policy": contract.cache_policy,
-            "measurement_sha256": "d" * 64,
+            "measurement_protocol_sha256": contract.measurement_protocol_sha256,
+            "measurement_evidence": _artifact("d", "MEASUREMENT.json").model_dump(mode="json"),
+            "telemetry_artifact": _artifact("e", "TELEMETRY.parquet").model_dump(mode="json"),
+            "parity_artifact": _artifact("f", "PARITY.parquet").model_dump(mode="json"),
+            "memory_trace_artifact": _artifact("0", "MEMORY.parquet").model_dump(mode="json"),
             "telemetry_interval_seconds": contract.telemetry_interval_seconds,
             "median_compute_seconds": 0.2,
             "p95_compute_seconds": 0.25,
@@ -556,18 +566,32 @@ def _dev30_g00d() -> tuple[
             "data_wait_fraction": 0.05,
             "steady_state_gpu_utilization": 0.90,
             "peak_loader_rss_bytes": 8_000_000_000,
+            "peak_process_loader_rss_bytes": 7_000_000_000,
+            "peak_aggregate_worker_rss_bytes": 8_000_000_000,
             "peak_open_shards": 4,
+            "peak_open_file_handles": 64,
             "rss_slope_bytes_per_second": 100.0,
             "rss_slope_upper_ci_bytes_per_second": 500.0,
             "maximum_rss_excursion_bytes": 500_000_000,
-            "row_ids_parity_pass": True,
-            "raw_counts_parity_pass": True,
-            "sample_weights_parity_pass": True,
-            "thinning_rng_parity_pass": True,
-            "loss_parity_pass": True,
-            "gradient_parity_pass": True,
-            "parameter_parity_pass": True,
-            "interrupted_resume_parity_pass": True,
+            "parity_gates": [
+                G00DParityGateEvidence(
+                    gate=gate,
+                    reference_sha256="1" * 64,
+                    observed_sha256="1" * 64,
+                    maximum_absolute_error=5e-7,
+                    maximum_relative_error=5e-6,
+                ).model_dump(mode="json")
+                for gate in (
+                    "row_ids",
+                    "raw_counts",
+                    "sample_weights",
+                    "thinning_rng",
+                    "loss",
+                    "gradient",
+                    "parameter",
+                    "interrupted_resume",
+                )
+            ],
             "lru_bound_pass": True,
             "loader_error_count": 0,
             "cuda_error_count": 0,
@@ -585,9 +609,17 @@ def _dev30_g00d() -> tuple[
 def test_dev30_g00d_is_fail_closed_for_parity_memory_and_environment() -> None:
     contract, receipt = _dev30_g00d()
     validate_integrated_loader_qualification(contract, receipt)
-    with pytest.raises(IntegrityError, match="raw_counts_parity_pass|status must be fail"):
+    failed_gate = receipt.parity_gates[0].model_copy(
+        update={
+            "observed_sha256": "2" * 64,
+            "maximum_absolute_error": 2e-6,
+            "maximum_relative_error": 2e-5,
+        }
+    )
+    with pytest.raises(IntegrityError, match="status must be fail"):
         validate_integrated_loader_qualification(
-            contract, receipt.model_copy(update={"raw_counts_parity_pass": False})
+            contract,
+            receipt.model_copy(update={"parity_gates": (failed_gate, *receipt.parity_gates[1:])}),
         )
     with pytest.raises(IntegrityError, match="memory-growth flag"):
         validate_integrated_loader_qualification(
@@ -597,4 +629,13 @@ def test_dev30_g00d_is_fail_closed_for_parity_memory_and_environment() -> None:
     with pytest.raises(IntegrityError, match="gpu_name differs"):
         validate_integrated_loader_qualification(
             contract, receipt.model_copy(update={"gpu_name": "Different GPU"})
+        )
+    with pytest.raises(IntegrityError, match="gpu_count differs"):
+        validate_integrated_loader_qualification(
+            contract, receipt.model_copy(update={"gpu_count": 2})
+        )
+    with pytest.raises(IntegrityError, match="measurement_protocol_sha256 differs"):
+        validate_integrated_loader_qualification(
+            contract,
+            receipt.model_copy(update={"measurement_protocol_sha256": "9" * 64}),
         )
