@@ -1,0 +1,435 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    },
+    "ProtectedSourceAccessSemantics": {
+      "additionalProperties": false,
+      "description": "Exact distinction between source-byte authority reads and outcome use.",
+      "properties": {
+        "protected_csr_structure_scanned_for_authority": {
+          "const": true,
+          "default": true,
+          "title": "Protected Csr Structure Scanned For Authority",
+          "type": "boolean"
+        },
+        "protected_csr_values_scanned_for_numeric_authority": {
+          "const": true,
+          "default": true,
+          "title": "Protected Csr Values Scanned For Numeric Authority",
+          "type": "boolean"
+        },
+        "protected_expression_values_used_for_evaluation": {
+          "const": false,
+          "default": false,
+          "title": "Protected Expression Values Used For Evaluation",
+          "type": "boolean"
+        },
+        "protected_expression_values_used_for_feature_selection": {
+          "const": false,
+          "default": false,
+          "title": "Protected Expression Values Used For Feature Selection",
+          "type": "boolean"
+        },
+        "protected_expression_values_used_for_model_fitting": {
+          "const": false,
+          "default": false,
+          "title": "Protected Expression Values Used For Model Fitting",
+          "type": "boolean"
+        },
+        "protected_expression_values_used_for_model_selection": {
+          "const": false,
+          "default": false,
+          "title": "Protected Expression Values Used For Model Selection",
+          "type": "boolean"
+        },
+        "protected_obs_metadata_read_for_authority": {
+          "const": true,
+          "default": true,
+          "title": "Protected Obs Metadata Read For Authority",
+          "type": "boolean"
+        },
+        "protected_source_bytes_hashed": {
+          "const": true,
+          "default": true,
+          "title": "Protected Source Bytes Hashed",
+          "type": "boolean"
+        }
+      },
+      "title": "ProtectedSourceAccessSemantics",
+      "type": "object"
+    },
+    "SourceNumericIntegrity": {
+      "additionalProperties": false,
+      "description": "Observed sparse-storage invariants for one source matrix.",
+      "properties": {
+        "counts_integral_verified": {
+          "const": true,
+          "default": true,
+          "title": "Counts Integral Verified",
+          "type": "boolean"
+        },
+        "counts_nonnegative_verified": {
+          "const": true,
+          "default": true,
+          "title": "Counts Nonnegative Verified",
+          "type": "boolean"
+        },
+        "csr_indices_in_bounds_verified": {
+          "const": true,
+          "default": true,
+          "title": "Csr Indices In Bounds Verified",
+          "type": "boolean"
+        },
+        "csr_indptr_monotonic_verified": {
+          "const": true,
+          "default": true,
+          "title": "Csr Indptr Monotonic Verified",
+          "type": "boolean"
+        },
+        "csr_terminal_offset_matches_nnz": {
+          "const": true,
+          "default": true,
+          "title": "Csr Terminal Offset Matches Nnz",
+          "type": "boolean"
+        },
+        "indices_dtype": {
+          "minLength": 1,
+          "title": "Indices Dtype",
+          "type": "string"
+        },
+        "indptr_dtype": {
+          "minLength": 1,
+          "title": "Indptr Dtype",
+          "type": "string"
+        },
+        "matrix_encoding": {
+          "const": "csr",
+          "default": "csr",
+          "title": "Matrix Encoding",
+          "type": "string"
+        },
+        "maximum_observed_count": {
+          "minimum": 0,
+          "title": "Maximum Observed Count",
+          "type": "integer"
+        },
+        "storage_value_dtype": {
+          "minLength": 1,
+          "title": "Storage Value Dtype",
+          "type": "string"
+        }
+      },
+      "required": [
+        "storage_value_dtype",
+        "indices_dtype",
+        "indptr_dtype",
+        "maximum_observed_count"
+      ],
+      "title": "SourceNumericIntegrity",
+      "type": "object"
+    },
+    "VirtualCountSourceV2": {
+      "additionalProperties": false,
+      "description": "Dev30 immutable source record with numerical CSR authority.",
+      "properties": {
+        "canonical_permutation_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Canonical Permutation Hash",
+          "type": "string"
+        },
+        "checkpoint": {
+          "minLength": 1,
+          "title": "Checkpoint",
+          "type": "string"
+        },
+        "dataset_path": {
+          "default": "X",
+          "minLength": 1,
+          "title": "Dataset Path",
+          "type": "string"
+        },
+        "donor_id": {
+          "minLength": 1,
+          "title": "Donor Id",
+          "type": "string"
+        },
+        "eligible_nnz": {
+          "minimum": 0,
+          "title": "Eligible Nnz",
+          "type": "integer"
+        },
+        "eligible_rows": {
+          "exclusiveMinimum": 0,
+          "title": "Eligible Rows",
+          "type": "integer"
+        },
+        "features": {
+          "exclusiveMinimum": 0,
+          "title": "Features",
+          "type": "integer"
+        },
+        "nnz": {
+          "minimum": 0,
+          "title": "Nnz",
+          "type": "integer"
+        },
+        "numeric_integrity": {
+          "$ref": "#/$defs/SourceNumericIntegrity"
+        },
+        "physical_time_hours": {
+          "title": "Physical Time Hours",
+          "type": "number"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "rows": {
+          "exclusiveMinimum": 0,
+          "title": "Rows",
+          "type": "integer"
+        },
+        "source_feature_order_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Feature Order Hash",
+          "type": "string"
+        },
+        "source_file_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source File Sha256",
+          "type": "string"
+        },
+        "source_id": {
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "donor_id",
+        "checkpoint",
+        "physical_time_hours",
+        "relative_uri",
+        "source_file_sha256",
+        "rows",
+        "features",
+        "nnz",
+        "eligible_rows",
+        "eligible_nnz",
+        "source_feature_order_hash",
+        "canonical_permutation_hash",
+        "numeric_integrity"
+      ],
+      "title": "VirtualCountSourceV2",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/virtual-canonical-count-store.v2.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Dev30 G00B metadata-only access with exact G00A parent binding.",
+  "properties": {
+    "access_semantics": {
+      "$ref": "#/$defs/ProtectedSourceAccessSemantics"
+    },
+    "archival_shard_plan": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "backend": {
+      "const": "virtual_canonical_h5ad_csr_v2",
+      "default": "virtual_canonical_h5ad_csr_v2",
+      "title": "Backend",
+      "type": "string"
+    },
+    "canonical_feature_index_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Canonical Feature Index Hash",
+      "type": "string"
+    },
+    "direct_h100_training_backend": {
+      "const": false,
+      "default": false,
+      "title": "Direct H100 Training Backend",
+      "type": "boolean"
+    },
+    "eligibility_rule": {
+      "const": "guide_group == targeting single sgRNA AND low_quality == false",
+      "title": "Eligibility Rule",
+      "type": "string"
+    },
+    "eligibility_uses_heldout_stimulated_outcomes": {
+      "const": false,
+      "default": false,
+      "title": "Eligibility Uses Heldout Stimulated Outcomes",
+      "type": "boolean"
+    },
+    "eligible_nnz": {
+      "minimum": 0,
+      "title": "Eligible Nnz",
+      "type": "integer"
+    },
+    "eligible_row_ids_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Eligible Row Ids Hash",
+      "type": "string"
+    },
+    "eligible_rows": {
+      "exclusiveMinimum": 0,
+      "title": "Eligible Rows",
+      "type": "integer"
+    },
+    "feature_permutations": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "features": {
+      "exclusiveMinimum": 0,
+      "title": "Features",
+      "type": "integer"
+    },
+    "guide_catalog_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Guide Catalog Hash",
+      "type": "string"
+    },
+    "guide_count": {
+      "exclusiveMinimum": 0,
+      "title": "Guide Count",
+      "type": "integer"
+    },
+    "guide_target_crosswalk": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "guide_target_crosswalk_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Guide Target Crosswalk Hash",
+      "type": "string"
+    },
+    "intended_use": {
+      "const": "sequential_statistics_and_fold_materialization",
+      "default": "sequential_statistics_and_fold_materialization",
+      "title": "Intended Use",
+      "type": "string"
+    },
+    "raw_counts_materialized": {
+      "const": false,
+      "default": false,
+      "title": "Raw Counts Materialized",
+      "type": "boolean"
+    },
+    "row_locator": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "row_locator_schema": {
+      "const": "canonical_row_source_row_guide_target_v2",
+      "default": "canonical_row_source_row_guide_target_v2",
+      "title": "Row Locator Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "default": 2,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "source_authority_id": {
+      "title": "Source Authority Id",
+      "type": "string"
+    },
+    "source_numeric_audit": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/VirtualCountSourceV2"
+      },
+      "title": "Sources",
+      "type": "array"
+    },
+    "target_catalog_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Target Catalog Hash",
+      "type": "string"
+    },
+    "target_control_count": {
+      "exclusiveMinimum": 0,
+      "title": "Target Control Count",
+      "type": "integer"
+    },
+    "virtual_store_id": {
+      "title": "Virtual Store Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "virtual_store_id",
+    "source_authority_id",
+    "canonical_feature_index_hash",
+    "guide_catalog_hash",
+    "target_catalog_hash",
+    "guide_target_crosswalk_hash",
+    "guide_target_crosswalk",
+    "source_numeric_audit",
+    "guide_count",
+    "target_control_count",
+    "eligibility_rule",
+    "eligible_row_ids_hash",
+    "eligible_rows",
+    "eligible_nnz",
+    "features",
+    "row_locator",
+    "feature_permutations",
+    "sources",
+    "access_semantics"
+  ],
+  "title": "VirtualCanonicalCountStoreManifestV2",
+  "type": "object"
+}

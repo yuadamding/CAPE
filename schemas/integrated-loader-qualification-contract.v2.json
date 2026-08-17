@@ -1,0 +1,193 @@
+{
+  "$id": "https://credo.local/schemas/integrated-loader-qualification-contract.v2.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Dev30 G00D benchmark, parity, and bounded-memory protocol.",
+  "properties": {
+    "cache_policy": {
+      "minLength": 1,
+      "title": "Cache Policy",
+      "type": "string"
+    },
+    "cpu_count": {
+      "minimum": 1,
+      "title": "Cpu Count",
+      "type": "integer"
+    },
+    "expected_container_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Container Digest",
+      "type": "string"
+    },
+    "expected_cuda_version": {
+      "minLength": 1,
+      "title": "Expected Cuda Version",
+      "type": "string"
+    },
+    "expected_gpu_count": {
+      "const": 1,
+      "default": 1,
+      "title": "Expected Gpu Count",
+      "type": "integer"
+    },
+    "expected_gpu_name": {
+      "minLength": 1,
+      "title": "Expected Gpu Name",
+      "type": "string"
+    },
+    "expected_torch_version": {
+      "minLength": 1,
+      "title": "Expected Torch Version",
+      "type": "string"
+    },
+    "fold_view_id": {
+      "title": "Fold View Id",
+      "type": "string"
+    },
+    "macrobatch_cells": {
+      "const": 4096,
+      "default": 4096,
+      "title": "Macrobatch Cells",
+      "type": "integer"
+    },
+    "maximum_data_wait_fraction": {
+      "default": 0.1,
+      "maximum": 0.1,
+      "minimum": 0,
+      "title": "Maximum Data Wait Fraction",
+      "type": "number"
+    },
+    "maximum_loader_rss_bytes": {
+      "exclusiveMinimum": 0,
+      "title": "Maximum Loader Rss Bytes",
+      "type": "integer"
+    },
+    "maximum_open_shards": {
+      "minimum": 1,
+      "title": "Maximum Open Shards",
+      "type": "integer"
+    },
+    "maximum_p95_batch_ready_seconds": {
+      "exclusiveMinimum": 0,
+      "title": "Maximum P95 Batch Ready Seconds",
+      "type": "number"
+    },
+    "maximum_rss_excursion_fraction": {
+      "exclusiveMinimum": 0,
+      "maximum": 1,
+      "title": "Maximum Rss Excursion Fraction",
+      "type": "number"
+    },
+    "maximum_rss_slope_upper_bytes_per_second": {
+      "minimum": 0,
+      "title": "Maximum Rss Slope Upper Bytes Per Second",
+      "type": "number"
+    },
+    "measured_updates": {
+      "exclusiveMinimum": 0,
+      "title": "Measured Updates",
+      "type": "integer"
+    },
+    "measurement_protocol_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Measurement Protocol Sha256",
+      "type": "string"
+    },
+    "microbatch_cells": {
+      "const": 512,
+      "default": 512,
+      "title": "Microbatch Cells",
+      "type": "integer"
+    },
+    "minimum_steady_state_gpu_utilization": {
+      "default": 0.85,
+      "maximum": 1,
+      "minimum": 0.85,
+      "title": "Minimum Steady State Gpu Utilization",
+      "type": "number"
+    },
+    "parity_absolute_tolerance": {
+      "default": 1e-06,
+      "exclusiveMinimum": 0,
+      "title": "Parity Absolute Tolerance",
+      "type": "number"
+    },
+    "parity_relative_tolerance": {
+      "default": 1e-05,
+      "exclusiveMinimum": 0,
+      "title": "Parity Relative Tolerance",
+      "type": "number"
+    },
+    "prefetch_depth": {
+      "minimum": 1,
+      "title": "Prefetch Depth",
+      "type": "integer"
+    },
+    "qualification_contract_id": {
+      "title": "Qualification Contract Id",
+      "type": "string"
+    },
+    "require_cold_start_measurement": {
+      "const": true,
+      "default": true,
+      "title": "Require Cold Start Measurement",
+      "type": "boolean"
+    },
+    "require_steady_state_measurement": {
+      "const": true,
+      "default": true,
+      "title": "Require Steady State Measurement",
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": 2,
+      "default": 2,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "storage_authority_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Storage Authority Hash",
+      "type": "string"
+    },
+    "telemetry_interval_seconds": {
+      "exclusiveMinimum": 0,
+      "title": "Telemetry Interval Seconds",
+      "type": "number"
+    },
+    "warmup_updates": {
+      "exclusiveMinimum": 0,
+      "title": "Warmup Updates",
+      "type": "integer"
+    },
+    "worker_count": {
+      "minimum": 1,
+      "title": "Worker Count",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "qualification_contract_id",
+    "fold_view_id",
+    "expected_gpu_name",
+    "expected_cuda_version",
+    "expected_torch_version",
+    "expected_container_digest",
+    "worker_count",
+    "cpu_count",
+    "storage_authority_hash",
+    "prefetch_depth",
+    "warmup_updates",
+    "measured_updates",
+    "cache_policy",
+    "measurement_protocol_sha256",
+    "telemetry_interval_seconds",
+    "maximum_p95_batch_ready_seconds",
+    "maximum_loader_rss_bytes",
+    "maximum_open_shards",
+    "maximum_rss_slope_upper_bytes_per_second",
+    "maximum_rss_excursion_fraction"
+  ],
+  "title": "IntegratedLoaderQualificationContractV2",
+  "type": "object"
+}

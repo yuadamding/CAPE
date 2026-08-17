@@ -3,16 +3,23 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Iterator
 from pathlib import Path
 from typing import cast
 
 import h5py
 import numpy as np
+import pandas as pd
 from scipy import sparse
 
 from ..canonical import canonical_json_bytes, sha256_file
-from ..contracts import VirtualCanonicalCountStoreManifest, VirtualCountSource
+from ..contracts import (
+    VirtualCanonicalCountStoreManifest,
+    VirtualCanonicalCountStoreManifestV2,
+    VirtualCountSource,
+    VirtualCountSourceV2,
+)
 from ..errors import ContractError, IntegrityError
 from .csr import SparseCountBatch
 
@@ -22,7 +29,9 @@ def _permutation_hash(values: np.ndarray) -> str:
     return hashlib.sha256(permutation.tobytes(order="C")).hexdigest()
 
 
-def _csr_rows(path: Path, source: VirtualCountSource, rows: np.ndarray) -> sparse.csr_matrix:
+def _csr_rows(
+    path: Path, source: VirtualCountSourceV2 | VirtualCountSource, rows: np.ndarray
+) -> sparse.csr_matrix:
     requested = np.asarray(rows, dtype=np.int64)
     if np.any(requested < 0) or np.any(requested >= source.rows):
         raise KeyError(f"Source row is outside {source.source_id} bounds.")
@@ -64,9 +73,17 @@ class VirtualCanonicalCountStore:
             raise IntegrityError("Virtual canonical store lacks manifest.json.")
         self.path = path
         self.source_root = source_root
-        self.manifest = VirtualCanonicalCountStoreManifest.model_validate_json(
-            manifest_path.read_text()
+        payload = manifest_path.read_text()
+        version = int(json.loads(payload).get("schema_version", 0))
+        self.manifest: (
+            VirtualCanonicalCountStoreManifest | VirtualCanonicalCountStoreManifestV2
         )
+        if version == 1:
+            self.manifest = VirtualCanonicalCountStoreManifest.model_validate_json(payload)
+        elif version == 2:
+            self.manifest = VirtualCanonicalCountStoreManifestV2.model_validate_json(payload)
+        else:
+            raise IntegrityError(f"Unsupported virtual canonical schema version: {version}.")
         self._locator_cache: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
         self._permutations: tuple[np.ndarray, ...] | None = None
 
@@ -75,6 +92,9 @@ class VirtualCanonicalCountStore:
         if self._locator_cache is None:
             return 0
         return sum(array.nbytes for array in self._locator_cache)
+
+    def _sources(self) -> tuple[VirtualCountSource | VirtualCountSourceV2, ...]:
+        return cast(tuple[VirtualCountSource | VirtualCountSourceV2, ...], self.manifest.sources)
 
     def _locator(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         if self._locator_cache is None:
@@ -119,6 +139,89 @@ class VirtualCanonicalCountStore:
         ).hexdigest()
         return guide_hash, target_hash
 
+    def _verify_dev30_authority_artifacts(self) -> None:
+        if not isinstance(self.manifest, VirtualCanonicalCountStoreManifestV2):
+            return
+        crosswalk_path = self.path / self.manifest.guide_target_crosswalk.relative_uri
+        numeric_path = self.path / self.manifest.source_numeric_audit.relative_uri
+        if (
+            sha256_file(crosswalk_path) != self.manifest.guide_target_crosswalk.sha256
+            or sha256_file(numeric_path) != self.manifest.source_numeric_audit.sha256
+        ):
+            raise IntegrityError("Virtual canonical authority-artifact hash mismatch.")
+        crosswalk = pd.read_parquet(crosswalk_path)
+        expected_column_order = (
+            "guide_id",
+            "target_id",
+            "is_control",
+            "raw_guide_group",
+            "eligible_cell_count",
+            "observed_source_count",
+        )
+        if tuple(crosswalk.columns) != expected_column_order:
+            raise IntegrityError("Guide-target crosswalk has an unexpected schema.")
+        if (
+            len(crosswalk) != self.manifest.guide_count
+            or crosswalk["guide_id"].duplicated().any()
+            or crosswalk["guide_id"].isna().any()
+            or crosswalk["target_id"].isna().any()
+            or (crosswalk["eligible_cell_count"] <= 0).any()
+            or (crosswalk["observed_source_count"] <= 0).any()
+            or crosswalk["raw_guide_group"].astype(str).str.contains("multi_sgRNA").any()
+            or crosswalk["target_id"].nunique() != self.manifest.target_control_count
+            or not pd.api.types.is_bool_dtype(crosswalk["is_control"])
+            or not pd.api.types.is_integer_dtype(crosswalk["eligible_cell_count"])
+            or not pd.api.types.is_integer_dtype(crosswalk["observed_source_count"])
+        ):
+            raise IntegrityError("Guide-target crosswalk invariants failed.")
+        control_targets = set(crosswalk.loc[crosswalk["is_control"], "target_id"].astype(str))
+        targeting_targets = set(
+            crosswalk.loc[~crosswalk["is_control"], "target_id"].astype(str)
+        )
+        if control_targets & targeting_targets:
+            raise IntegrityError("Control and targeting crosswalk target sets overlap.")
+        locator_path = self.path / self.manifest.row_locator.relative_uri
+        with h5py.File(locator_path, "r") as handle:
+            guide_ids = handle["guide_ids"].asstr()[:]
+            target_ids = handle["target_ids"].asstr()[:]
+            guide_codes = np.asarray(handle["guide_codes_sorted"][:], dtype=np.int64)
+            target_codes = np.asarray(handle["target_codes_sorted"][:], dtype=np.int64)
+        mapping = crosswalk.set_index("guide_id")["target_id"].to_dict()
+        if set(mapping) != set(guide_ids.tolist()):
+            raise IntegrityError("Crosswalk and row-locator guide catalogs differ.")
+        mapped_targets = np.asarray([mapping[str(guide_ids[code])] for code in guide_codes])
+        locator_targets = target_ids[target_codes]
+        if not np.array_equal(mapped_targets, locator_targets):
+            raise IntegrityError("Eligible row guide-target assignments violate the crosswalk.")
+        numeric = pd.read_parquet(numeric_path)
+        numeric_columns = {
+            "source_id",
+            "matrix_encoding",
+            "storage_value_dtype",
+            "indices_dtype",
+            "indptr_dtype",
+            "counts_nonnegative_verified",
+            "counts_integral_verified",
+            "maximum_observed_count",
+            "csr_indices_in_bounds_verified",
+            "csr_indptr_monotonic_verified",
+            "csr_terminal_offset_matches_nnz",
+        }
+        if set(numeric.columns) != numeric_columns or numeric["source_id"].duplicated().any():
+            raise IntegrityError("Source numeric audit has an unexpected schema.")
+        observed = {
+            str(row.source_id): {
+                key: getattr(row, key) for key in numeric_columns - {"source_id"}
+            }
+            for row in numeric.itertuples(index=False)
+        }
+        expected = {
+            source.source_id: source.numeric_integrity.model_dump(mode="python")
+            for source in self.manifest.sources
+        }
+        if observed != expected:
+            raise IntegrityError("Source numeric audit differs from source records.")
+
     def _feature_permutations(self) -> tuple[np.ndarray, ...]:
         if self._permutations is None:
             path = self.path / self.manifest.feature_permutations.relative_uri
@@ -127,7 +230,7 @@ class VirtualCanonicalCountStore:
                     np.asarray(archive[f"source_{index:06d}"], dtype=np.int32)
                     for index in range(len(self.manifest.sources))
                 )
-            for source, permutation in zip(self.manifest.sources, values, strict=True):
+            for source, permutation in zip(self._sources(), values, strict=True):
                 if (
                     len(permutation) != self.manifest.features
                     or len(np.unique(permutation)) != len(permutation)
@@ -139,7 +242,9 @@ class VirtualCanonicalCountStore:
             self._permutations = values
         return self._permutations
 
-    def verify(self, *, full: bool = True) -> VirtualCanonicalCountStoreManifest:
+    def verify(
+        self, *, full: bool = True
+    ) -> VirtualCanonicalCountStoreManifestV2 | VirtualCanonicalCountStoreManifest:
         locator_path = self.path / self.manifest.row_locator.relative_uri
         permutation_path = self.path / self.manifest.feature_permutations.relative_uri
         if (
@@ -157,7 +262,7 @@ class VirtualCanonicalCountStore:
             or np.any(source_indices >= len(self.manifest.sources))
         ):
             raise IntegrityError("Virtual canonical row locator is invalid.")
-        for index, source in enumerate(self.manifest.sources):
+        for index, source in enumerate(self._sources()):
             selected = source_indices == index
             if np.any(source_rows[selected] < 0) or np.any(source_rows[selected] >= source.rows):
                 raise IntegrityError(f"Virtual source rows exceed {source.source_id} bounds.")
@@ -172,6 +277,7 @@ class VirtualCanonicalCountStore:
             or target_hash != self.manifest.target_catalog_hash
         ):
             raise IntegrityError("Virtual row locator guide/target catalog hash mismatch.")
+        self._verify_dev30_authority_artifacts()
         self._feature_permutations()
         return self.manifest
 

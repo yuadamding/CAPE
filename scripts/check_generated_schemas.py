@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from generate_schemas import MODELS
+from generate_schemas import LEGACY_SCHEMAS, MODELS
 
 
 def main() -> None:
@@ -19,7 +19,11 @@ def main() -> None:
         path = root / name
         if not path.is_file() or path.read_text() != expected:
             failures.append(name)
-    extras = sorted(path.name for path in root.glob("*.json") if path.name not in MODELS)
+    extras = sorted(
+        path.name
+        for path in root.glob("*.json")
+        if path.name not in MODELS and path.name not in LEGACY_SCHEMAS
+    )
     if failures or extras:
         raise SystemExit(f"Schema drift: changed={failures}, extra={extras}")
 

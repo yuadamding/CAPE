@@ -1,5 +1,21 @@
 # Changelog
 
+## 4.0.0.dev30 — 2026-08-16
+
+- preserve accepted Dev29 G00A/G00B v1 evidence as read-only compatible;
+- distinguish protected-source hashing, metadata reads, and CSR-structure
+  scans from forbidden protected-expression use;
+- add v2 numerical CSR and guide-target crosswalk authority with exact
+  G00A-to-G00B parent recomputation;
+- freeze G00C training-only feature ranking, paired sample-size saturation,
+  row roles, technical `CUSTOM001_PuroR` sidecar, and resumable weighted
+  512 x 8 sampler contracts;
+- expand G00D to bind environment, benchmark protocol, cold/steady telemetry,
+  full row/count/weight/RNG/loss/gradient/parameter/resume parity, and numerical
+  bounded-memory evidence;
+- add fail-closed validators and adversarial tests without reading protected
+  expression, constructing G00C, running G00D, or changing scientific status.
+
 ## 4.0.0.dev29 — 2026-08-16
 
 - split GSE314342 G00 into source authority, virtual canonical access,

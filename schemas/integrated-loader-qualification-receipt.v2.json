@@ -1,0 +1,289 @@
+{
+  "$id": "https://credo.local/schemas/integrated-loader-qualification-receipt.v2.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Dev30 observed G00D performance, parity, and memory evidence.",
+  "properties": {
+    "cache_policy": {
+      "minLength": 1,
+      "title": "Cache Policy",
+      "type": "string"
+    },
+    "cold_start_measured": {
+      "title": "Cold Start Measured",
+      "type": "boolean"
+    },
+    "container_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Container Digest",
+      "type": "string"
+    },
+    "cpu_count": {
+      "minimum": 1,
+      "title": "Cpu Count",
+      "type": "integer"
+    },
+    "cuda_error_count": {
+      "minimum": 0,
+      "title": "Cuda Error Count",
+      "type": "integer"
+    },
+    "cuda_version": {
+      "minLength": 1,
+      "title": "Cuda Version",
+      "type": "string"
+    },
+    "data_wait_fraction": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Data Wait Fraction",
+      "type": "number"
+    },
+    "gpu_name": {
+      "minLength": 1,
+      "title": "Gpu Name",
+      "type": "string"
+    },
+    "gpu_uuid": {
+      "minLength": 1,
+      "title": "Gpu Uuid",
+      "type": "string"
+    },
+    "gradient_parity_pass": {
+      "title": "Gradient Parity Pass",
+      "type": "boolean"
+    },
+    "interrupted_resume_parity_pass": {
+      "title": "Interrupted Resume Parity Pass",
+      "type": "boolean"
+    },
+    "loader_error_count": {
+      "minimum": 0,
+      "title": "Loader Error Count",
+      "type": "integer"
+    },
+    "loss_parity_pass": {
+      "title": "Loss Parity Pass",
+      "type": "boolean"
+    },
+    "lru_bound_pass": {
+      "title": "Lru Bound Pass",
+      "type": "boolean"
+    },
+    "macrobatch_cells": {
+      "exclusiveMinimum": 0,
+      "title": "Macrobatch Cells",
+      "type": "integer"
+    },
+    "maximum_parity_absolute_error": {
+      "minimum": 0,
+      "title": "Maximum Parity Absolute Error",
+      "type": "number"
+    },
+    "maximum_parity_relative_error": {
+      "minimum": 0,
+      "title": "Maximum Parity Relative Error",
+      "type": "number"
+    },
+    "maximum_rss_excursion_bytes": {
+      "minimum": 0,
+      "title": "Maximum Rss Excursion Bytes",
+      "type": "integer"
+    },
+    "measured_updates": {
+      "exclusiveMinimum": 0,
+      "title": "Measured Updates",
+      "type": "integer"
+    },
+    "measurement_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Measurement Sha256",
+      "type": "string"
+    },
+    "median_compute_seconds": {
+      "minimum": 0,
+      "title": "Median Compute Seconds",
+      "type": "number"
+    },
+    "median_data_wait_seconds": {
+      "minimum": 0,
+      "title": "Median Data Wait Seconds",
+      "type": "number"
+    },
+    "memory_growth_pass": {
+      "title": "Memory Growth Pass",
+      "type": "boolean"
+    },
+    "microbatch_cells": {
+      "exclusiveMinimum": 0,
+      "title": "Microbatch Cells",
+      "type": "integer"
+    },
+    "monitor_error_count": {
+      "minimum": 0,
+      "title": "Monitor Error Count",
+      "type": "integer"
+    },
+    "p95_batch_ready_seconds": {
+      "minimum": 0,
+      "title": "P95 Batch Ready Seconds",
+      "type": "number"
+    },
+    "p95_compute_seconds": {
+      "minimum": 0,
+      "title": "P95 Compute Seconds",
+      "type": "number"
+    },
+    "parameter_parity_pass": {
+      "title": "Parameter Parity Pass",
+      "type": "boolean"
+    },
+    "peak_loader_rss_bytes": {
+      "minimum": 0,
+      "title": "Peak Loader Rss Bytes",
+      "type": "integer"
+    },
+    "peak_open_shards": {
+      "minimum": 0,
+      "title": "Peak Open Shards",
+      "type": "integer"
+    },
+    "prefetch_depth": {
+      "minimum": 1,
+      "title": "Prefetch Depth",
+      "type": "integer"
+    },
+    "qualification_contract_id": {
+      "title": "Qualification Contract Id",
+      "type": "string"
+    },
+    "raw_counts_parity_pass": {
+      "title": "Raw Counts Parity Pass",
+      "type": "boolean"
+    },
+    "receipt_id": {
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "row_ids_parity_pass": {
+      "title": "Row Ids Parity Pass",
+      "type": "boolean"
+    },
+    "rss_slope_bytes_per_second": {
+      "title": "Rss Slope Bytes Per Second",
+      "type": "number"
+    },
+    "rss_slope_upper_ci_bytes_per_second": {
+      "title": "Rss Slope Upper Ci Bytes Per Second",
+      "type": "number"
+    },
+    "sample_weights_parity_pass": {
+      "title": "Sample Weights Parity Pass",
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": 2,
+      "default": 2,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "steady_state_gpu_utilization": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Steady State Gpu Utilization",
+      "type": "number"
+    },
+    "steady_state_measured": {
+      "title": "Steady State Measured",
+      "type": "boolean"
+    },
+    "storage_authority_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Storage Authority Hash",
+      "type": "string"
+    },
+    "telemetry_interval_seconds": {
+      "exclusiveMinimum": 0,
+      "title": "Telemetry Interval Seconds",
+      "type": "number"
+    },
+    "thinning_rng_parity_pass": {
+      "title": "Thinning Rng Parity Pass",
+      "type": "boolean"
+    },
+    "torch_version": {
+      "minLength": 1,
+      "title": "Torch Version",
+      "type": "string"
+    },
+    "warmup_updates": {
+      "exclusiveMinimum": 0,
+      "title": "Warmup Updates",
+      "type": "integer"
+    },
+    "worker_count": {
+      "minimum": 1,
+      "title": "Worker Count",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "qualification_contract_id",
+    "gpu_name",
+    "gpu_uuid",
+    "cuda_version",
+    "torch_version",
+    "container_digest",
+    "worker_count",
+    "cpu_count",
+    "storage_authority_hash",
+    "microbatch_cells",
+    "macrobatch_cells",
+    "prefetch_depth",
+    "warmup_updates",
+    "measured_updates",
+    "cold_start_measured",
+    "steady_state_measured",
+    "cache_policy",
+    "measurement_sha256",
+    "telemetry_interval_seconds",
+    "median_compute_seconds",
+    "p95_compute_seconds",
+    "median_data_wait_seconds",
+    "p95_batch_ready_seconds",
+    "data_wait_fraction",
+    "steady_state_gpu_utilization",
+    "peak_loader_rss_bytes",
+    "peak_open_shards",
+    "rss_slope_bytes_per_second",
+    "rss_slope_upper_ci_bytes_per_second",
+    "maximum_rss_excursion_bytes",
+    "row_ids_parity_pass",
+    "raw_counts_parity_pass",
+    "sample_weights_parity_pass",
+    "thinning_rng_parity_pass",
+    "loss_parity_pass",
+    "gradient_parity_pass",
+    "parameter_parity_pass",
+    "interrupted_resume_parity_pass",
+    "lru_bound_pass",
+    "loader_error_count",
+    "cuda_error_count",
+    "monitor_error_count",
+    "maximum_parity_absolute_error",
+    "maximum_parity_relative_error",
+    "memory_growth_pass",
+    "status"
+  ],
+  "title": "IntegratedLoaderQualificationReceiptV2",
+  "type": "object"
+}

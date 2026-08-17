@@ -26,8 +26,10 @@ from .contracts import (
     CountRepresentationBundle,
     CountStoreManifest,
     EvaluationBundleManifest,
-    FoldNativeCompactViewContract,
-    G00SourceAuthority,
+    FoldNativeCompactViewContractV1,
+    FoldNativeCompactViewContractV2,
+    G00SourceAuthorityV1,
+    G00SourceAuthorityV2,
     G14MultiplicityContract,
     G14MultiplicityContractV1,
     G14RobustnessPlan,
@@ -35,8 +37,10 @@ from .contracts import (
     G14SealContract,
     G14SealContractV1,
     InferenceBundleManifest,
-    IntegratedLoaderQualificationContract,
-    IntegratedLoaderQualificationReceipt,
+    IntegratedLoaderQualificationContractV1,
+    IntegratedLoaderQualificationContractV2,
+    IntegratedLoaderQualificationReceiptV1,
+    IntegratedLoaderQualificationReceiptV2,
     LifecycleState,
     ParticleEngineQualificationBundle,
     ParticleEngineTestReceipt,
@@ -64,7 +68,8 @@ from .contracts import (
     StateSelectionCalibration,
     StateSelectionCalibrationResults,
     VerifyLevel,
-    VirtualCanonicalCountStoreManifest,
+    VirtualCanonicalCountStoreManifestV1,
+    VirtualCanonicalCountStoreManifestV2,
 )
 from .data import build_pooled_finite_measures, verify_pooled_finite_measures
 from .errors import ContractError, IntegrityError
@@ -327,16 +332,37 @@ def validate_contract(path: Path) -> dict[str, Any]:
     else:
         if payload.get("backend") == "csr_hdf5_sharded":
             selected = ShardedCountStoreManifest
-        elif payload.get("backend") == "virtual_canonical_h5ad_csr_v1":
-            selected = VirtualCanonicalCountStoreManifest
+        elif payload.get("backend") in {
+            "virtual_canonical_h5ad_csr_v1",
+            "virtual_canonical_h5ad_csr_v2",
+        }:
+            selected = (
+                VirtualCanonicalCountStoreManifestV1
+                if payload.get("schema_version") == 1
+                else VirtualCanonicalCountStoreManifestV2
+            )
         elif "authority_id" in payload and "source_reconciliation_pass" in payload:
-            selected = G00SourceAuthority
+            selected = (
+                G00SourceAuthorityV1
+                if payload.get("schema_version") == 1
+                else G00SourceAuthorityV2
+            )
         elif "qualification_contract_id" in payload and "raw_rows_per_second_gate" in payload:
-            selected = IntegratedLoaderQualificationContract
+            selected = IntegratedLoaderQualificationContractV1
+        elif "qualification_contract_id" in payload and "measurement_protocol_sha256" in payload:
+            selected = IntegratedLoaderQualificationContractV2
         elif "receipt_id" in payload and "data_wait_fraction" in payload:
-            selected = IntegratedLoaderQualificationReceipt
+            selected = (
+                IntegratedLoaderQualificationReceiptV1
+                if payload.get("schema_version") == 1
+                else IntegratedLoaderQualificationReceiptV2
+            )
         elif "fold_view_id" in payload:
-            selected = FoldNativeCompactViewContract
+            selected = (
+                FoldNativeCompactViewContractV1
+                if payload.get("schema_version") == 1
+                else FoldNativeCompactViewContractV2
+            )
         elif "decoder_contract_id" in payload:
             selected = (
                 CheckpointMultinomialDecoderContractV1
@@ -410,11 +436,23 @@ def validate_contract(path: Path) -> dict[str, Any]:
     if selected is None:
         raise ValueError("Unknown contract discriminator.")
     selected.model_validate(payload)
+    public_name = {
+        G00SourceAuthorityV1: "G00SourceAuthority",
+        VirtualCanonicalCountStoreManifestV1: "VirtualCanonicalCountStoreManifest",
+        FoldNativeCompactViewContractV1: "FoldNativeCompactViewContract",
+        IntegratedLoaderQualificationContractV1: "IntegratedLoaderQualificationContract",
+        IntegratedLoaderQualificationReceiptV1: "IntegratedLoaderQualificationReceipt",
+        G00SourceAuthorityV2: "G00SourceAuthority",
+        VirtualCanonicalCountStoreManifestV2: "VirtualCanonicalCountStoreManifest",
+        FoldNativeCompactViewContractV2: "FoldNativeCompactViewContract",
+        IntegratedLoaderQualificationContractV2: "IntegratedLoaderQualificationContract",
+        IntegratedLoaderQualificationReceiptV2: "IntegratedLoaderQualificationReceipt",
+    }.get(selected, selected.__name__)
     return {
         "path": str(path),
         "sha256": sha256_file(path),
         "schema_version": payload["schema_version"],
-        "contract_type": selected.__name__,
+        "contract_type": public_name,
     }
 
 

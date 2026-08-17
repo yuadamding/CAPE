@@ -28,16 +28,20 @@ from credo_count_sde_v4.contracts import (
     EvaluationPlan,
     ExposureRegistry,
     FeatureIndex,
-    FoldNativeCompactViewContract,
-    G00SourceAuthority,
+    FoldNativeCompactViewContractV1,
+    FoldNativeCompactViewContractV2,
+    G00SourceAuthorityV1,
+    G00SourceAuthorityV2,
     G14MultiplicityContract,
     G14RobustnessPlan,
     G14SealContract,
     ImplementationCapabilities,
     InferenceBundleManifest,
     InputViewArtifact,
-    IntegratedLoaderQualificationContract,
-    IntegratedLoaderQualificationReceipt,
+    IntegratedLoaderQualificationContractV1,
+    IntegratedLoaderQualificationContractV2,
+    IntegratedLoaderQualificationReceiptV1,
+    IntegratedLoaderQualificationReceiptV2,
     MultiplicityPlan,
     ParticleEngineQualificationBundle,
     ParticleEngineTestReceipt,
@@ -73,7 +77,8 @@ from credo_count_sde_v4.contracts import (
     StateSelectionCalibration,
     StateSelectionCalibrationResults,
     TransportTopologyContract,
-    VirtualCanonicalCountStoreManifest,
+    VirtualCanonicalCountStoreManifestV1,
+    VirtualCanonicalCountStoreManifestV2,
 )
 
 MODELS = {
@@ -81,11 +86,20 @@ MODELS = {
     "semantic-snapshot.v1.json": SemanticStudySnapshot,
     "count-store.v1.json": CountStoreManifest,
     "sharded-count-store.v1.json": ShardedCountStoreManifest,
-    "virtual-canonical-count-store.v1.json": VirtualCanonicalCountStoreManifest,
-    "g00-source-authority.v1.json": G00SourceAuthority,
-    "fold-native-compact-view.v1.json": FoldNativeCompactViewContract,
-    "integrated-loader-qualification-contract.v1.json": IntegratedLoaderQualificationContract,
-    "integrated-loader-qualification-receipt.v1.json": IntegratedLoaderQualificationReceipt,
+    "virtual-canonical-count-store.v1.json": VirtualCanonicalCountStoreManifestV1,
+    "virtual-canonical-count-store.v2.json": VirtualCanonicalCountStoreManifestV2,
+    "g00-source-authority.v1.json": G00SourceAuthorityV1,
+    "g00-source-authority.v2.json": G00SourceAuthorityV2,
+    "fold-native-compact-view.v1.json": FoldNativeCompactViewContractV1,
+    "fold-native-compact-view.v2.json": FoldNativeCompactViewContractV2,
+    "integrated-loader-qualification-contract.v1.json": (
+        IntegratedLoaderQualificationContractV1
+    ),
+    "integrated-loader-qualification-contract.v2.json": (
+        IntegratedLoaderQualificationContractV2
+    ),
+    "integrated-loader-qualification-receipt.v1.json": IntegratedLoaderQualificationReceiptV1,
+    "integrated-loader-qualification-receipt.v2.json": IntegratedLoaderQualificationReceiptV2,
     "count-representation-bundle.v1.json": CountRepresentationBundle,
     "checkpoint-multinomial-decoder.v2.json": CheckpointMultinomialDecoderContract,
     "claim-registry.v2.json": ClaimRegistry,
@@ -145,6 +159,16 @@ MODELS = {
     "inference-bundle.v1.json": InferenceBundleManifest,
     "evaluation-bundle.v1.json": EvaluationBundleManifest,
     "sealed-run.v1.json": SealedRunManifest,
+}
+
+# Immutable accepted schemas whose active construction advanced to v2. They are
+# validated by explicit v1 models and compatibility tests, never regenerated.
+LEGACY_SCHEMAS = {
+    "checkpoint-multinomial-decoder.v1.json",
+    "claim-registry.v1.json",
+    "g14-multiplicity-contract.v1.json",
+    "g14-robustness-plan.v1.json",
+    "g14-seal-contract.v1.json",
 }
 
 

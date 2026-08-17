@@ -8,7 +8,7 @@ count_state → count_measure → count_context
 ```
 
 It is a sibling of, not a modification to, the frozen CREDO checkout. Version
-`4.0.0.dev29` is engineering software; it is not a biological result and cannot
+`4.0.0.dev30` is engineering software; it is not a biological result and cannot
 be relabeled as stable `4.0`.
 
 Implemented surfaces include strict hash-bound contracts, sparse count storage,
@@ -53,6 +53,12 @@ finalization crash window, binds appends to exact frozen chunk identities,
 bounds reader handles, restores physical checkpoint chronology, and hardens the
 G14 evidence graph. See the
 [G00 two-tier data-plane contract](docs/g00-two-tier-data-plane.md).
+
+Dev30-A preserves those accepted v1 results and adds v2 protected-access,
+numeric-CSR, guide-target crosswalk, exact-parent, G00C selection/sampler, and
+G00D parity/performance contracts. It runs no G00C/G00D workload and changes no
+scientific gate. See the
+[G00 Dev30-A amendment](docs/g00-dev30a-contract-amendment.md).
 
 ## Quick start
 
@@ -105,6 +111,7 @@ credo-v4 qualify-raw-noise \
 See [architecture](docs/architecture.md), [contracts](docs/contracts.md),
 [lifecycle](docs/lifecycle.md),
 [the G00 two-tier data-plane contract](docs/g00-two-tier-data-plane.md),
+[the G00 Dev30-A contract amendment](docs/g00-dev30a-contract-amendment.md),
 [component qualification](docs/component-qualification.md),
 [the detailed T01 record](docs/t01-representation-qualification.md),
 [the detailed T02A record](docs/t02a-raw-count-mass-noise.md),

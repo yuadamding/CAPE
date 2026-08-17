@@ -1,6 +1,7 @@
 # G00 two-tier data plane
 
-Last verified: 2026-08-16. Status: authoritative dev29 engineering contract.
+Last verified: 2026-08-16. Status: Dev29 executed evidence plus authoritative
+Dev30-A v2 contract amendment.
 This page defines storage and loader qualification, not a biological result.
 
 ## Decision
@@ -29,7 +30,9 @@ flowchart LR
 | G00D integrated loader qualification | implemented contract and validator | not run |
 | Full duplicated raw CountStore | retained archival fallback | not required |
 
-No G00C or G00D status may be inferred from dev28 raw-layout probes.
+No G00C or G00D status may be inferred from dev28 raw-layout probes or the
+contract-only Dev30-A amendment. See the
+[Dev30-A contract amendment](g00-dev30a-contract-amendment.md).
 
 ## G00A: source authority
 
@@ -44,8 +47,11 @@ hash completion is mandatory; byte size or path identity is not a substitute.
 
 The external dev29 authority reconciles 21,996,842 eligible rows,
 90,997,745,441 eligible nonzeros, 18,130 features, 25,956 guide identities, and
-12,732 target/control identities. Full-file hashing is a byte-integrity
-operation; it does not semantically decode protected stimulated expression.
+12,732 target/control identities. Full-file hashing, observation-metadata reads,
+CSR-structure scans, and CSR-value numerical scans are authority operations.
+Dev30 v2 records those
+explicitly and separately records that protected expression values were not
+used for feature selection, fitting, selection, or evaluation.
 
 ## G00B: virtual canonical plane
 
@@ -60,6 +66,10 @@ remain reconstructable from their immutable source but are not model-facing.
 Reads preserve caller order and duplicates,
 and reject unknown rows, invalid permutations, missing catalogs, or changed
 artifacts.
+
+New v2 evidence must also bind the numerical CSR audit and exact guide-target
+crosswalk. G00B must recompute every relevant G00A parent field, not merely
+reference its authority ID.
 
 This plane is intended for sequential sufficient statistics, training-only
 feature selection, one-time compact extraction, and forensic reconstruction.
@@ -84,6 +94,11 @@ macro-batch is assembled by gradient accumulation and must remain donor-,
 checkpoint-, target-, and guide-balanced. A parity test must bind identical row
 IDs, weights, RNG order, gradients, and resume sequence.
 
+Dev30 v2 additionally freezes 59 paired refits, the p95 absolute paired-NLL
+equivalence statistic, the ordered feature table, `CUSTOM001_PuroR` as a
+technical sidecar, all four row-role counts/hashes, and exact 512 x 8 = 4,096
+sampler semantics.
+
 ## G00D: integrated qualification
 
 The old raw rows/s ceiling is not a gate. One exact compact view passes only if
@@ -96,7 +111,9 @@ all of the following hold together:
 - observed metric absolute and relative errors within frozen tolerances (the
   validator derives the parity decision rather than trusting a receipt flag);
 - peak RSS and open-shard counts within contract limits;
-- no unbounded loader-memory growth.
+- no unbounded loader-memory growth, based on RSS slope upper confidence bound
+  and maximum excursion;
+- zero loader, CUDA, and monitor errors.
 
 The sharded reader exposes locator bytes, per-shard index bytes, configured
 HDF5 raw-data chunk-cache bytes, open handles, and the configurable LRU limit.

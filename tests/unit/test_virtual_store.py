@@ -5,6 +5,7 @@ from pathlib import Path
 
 import h5py
 import numpy as np
+import pandas as pd
 import pytest
 from pydantic import TypeAdapter
 from scipy import sparse
@@ -13,8 +14,12 @@ from credo_count_sde_v4 import validate_contract
 from credo_count_sde_v4.canonical import contract_id, sha256_file
 from credo_count_sde_v4.contracts import (
     ArtifactRef,
-    VirtualCanonicalCountStoreManifest,
-    VirtualCountSource,
+    ProtectedSourceAccessSemantics,
+    SourceNumericIntegrity,
+    VirtualCanonicalCountStoreManifestV1,
+    VirtualCanonicalCountStoreManifestV2,
+    VirtualCountSourceV1,
+    VirtualCountSourceV2,
 )
 from credo_count_sde_v4.store import VirtualCanonicalCountStore
 from credo_count_sde_v4.store.virtual import _csr_rows
@@ -70,7 +75,7 @@ def _virtual_store(tmp_path: Path) -> VirtualCanonicalCountStore:
     rotated = np.asarray([1, 2, 0], dtype=np.int32)
     np.savez(permutations, source_000000=identity, source_000001=rotated)
     sources = (
-        VirtualCountSource(
+        VirtualCountSourceV1(
             source_id="D1_Rest",
             donor_id="D1",
             checkpoint="Rest",
@@ -85,7 +90,7 @@ def _virtual_store(tmp_path: Path) -> VirtualCanonicalCountStore:
             source_feature_order_hash=hashlib.sha256(b"g0,g1,g2").hexdigest(),
             canonical_permutation_hash=hashlib.sha256(identity.astype("<i4").tobytes()).hexdigest(),
         ),
-        VirtualCountSource(
+        VirtualCountSourceV1(
             source_id="D2_Stim8hr",
             donor_id="D2",
             checkpoint="Stim8hr",
@@ -121,14 +126,14 @@ def _virtual_store(tmp_path: Path) -> VirtualCanonicalCountStore:
     }
     normalized_fields = {
         name: TypeAdapter(field.annotation).validate_python(payload[name])
-        for name, field in VirtualCanonicalCountStoreManifest.model_fields.items()
+        for name, field in VirtualCanonicalCountStoreManifestV1.model_fields.items()
         if name in payload
     }
-    normalized = VirtualCanonicalCountStoreManifest.model_construct(**normalized_fields).model_dump(
-        mode="json"
-    )
+    normalized = VirtualCanonicalCountStoreManifestV1.model_construct(
+        **normalized_fields
+    ).model_dump(mode="json")
     payload["virtual_store_id"] = contract_id(normalized, id_field="virtual_store_id")
-    manifest = VirtualCanonicalCountStoreManifest.model_validate(payload)
+    manifest = VirtualCanonicalCountStoreManifestV1.model_validate(payload)
     (store_root / "manifest.json").write_text(manifest.model_dump_json() + "\n")
     return VirtualCanonicalCountStore(store_root, source_root=source_root)
 
@@ -140,16 +145,86 @@ def _refresh_manifest_artifact(
     payload[field]["sha256"] = sha256_file(path)
     payload[field]["size_bytes"] = path.stat().st_size
     payload["virtual_store_id"] = "pending"
+    model = type(store.manifest)
     normalized_fields = {
         name: TypeAdapter(model_field.annotation).validate_python(payload[name])
-        for name, model_field in VirtualCanonicalCountStoreManifest.model_fields.items()
+        for name, model_field in model.model_fields.items()
         if name in payload
     }
-    normalized = VirtualCanonicalCountStoreManifest.model_construct(**normalized_fields).model_dump(
-        mode="json"
-    )
+    normalized = model.model_construct(**normalized_fields).model_dump(mode="json")
     payload["virtual_store_id"] = contract_id(normalized, id_field="virtual_store_id")
-    manifest = VirtualCanonicalCountStoreManifest.model_validate(payload)
+    manifest = model.model_validate(payload)
+    (store.path / "manifest.json").write_text(manifest.model_dump_json() + "\n")
+    return VirtualCanonicalCountStore(store.path, source_root=store.source_root)
+
+
+def _upgrade_virtual_store_to_v2(store: VirtualCanonicalCountStore) -> VirtualCanonicalCountStore:
+    crosswalk = store.path / "GUIDE_TARGET_CROSSWALK.parquet"
+    pd.DataFrame(
+        {
+            "guide_id": ["guide-a", "guide-b"],
+            "target_id": ["target-a", "target-b"],
+            "is_control": [False, False],
+            "raw_guide_group": ["targeting single sgRNA", "targeting single sgRNA"],
+            "eligible_cell_count": [2, 2],
+            "observed_source_count": [2, 2],
+        }
+    ).to_parquet(crosswalk, index=False)
+    numeric = store.path / "SOURCE_NUMERIC_AUDIT.parquet"
+    integrity = SourceNumericIntegrity(
+        storage_value_dtype="int32",
+        indices_dtype="int32",
+        indptr_dtype="int64",
+        maximum_observed_count=60,
+    )
+    pd.DataFrame(
+        [
+            {"source_id": source.source_id, **integrity.model_dump(mode="python")}
+            for source in store.manifest.sources
+        ]
+    ).to_parquet(numeric, index=False)
+    sources = tuple(
+        VirtualCountSourceV2(
+            **source.model_dump(mode="python"), numeric_integrity=integrity
+        )
+        for source in store.manifest.sources
+    )
+    payload = {
+        "schema_version": 2,
+        "virtual_store_id": "pending",
+        "source_authority_id": "authority-v2",
+        "canonical_feature_index_hash": store.manifest.canonical_feature_index_hash,
+        "guide_catalog_hash": store.manifest.guide_catalog_hash,
+        "target_catalog_hash": store.manifest.target_catalog_hash,
+        "guide_target_crosswalk_hash": sha256_file(crosswalk),
+        "guide_target_crosswalk": _artifact(
+            crosswalk, root=store.path, media_type="application/vnd.apache.parquet"
+        ).model_dump(mode="json"),
+        "source_numeric_audit": _artifact(
+            numeric, root=store.path, media_type="application/vnd.apache.parquet"
+        ).model_dump(mode="json"),
+        "guide_count": 2,
+        "target_control_count": 2,
+        "eligibility_rule": "guide_group == targeting single sgRNA AND low_quality == false",
+        "eligible_row_ids_hash": hashlib.sha256(b"rows").hexdigest(),
+        "eligible_rows": 4,
+        "eligible_nnz": 12,
+        "features": 3,
+        "row_locator": store.manifest.row_locator.model_dump(mode="json"),
+        "feature_permutations": store.manifest.feature_permutations.model_dump(mode="json"),
+        "sources": [source.model_dump(mode="json") for source in sources],
+        "access_semantics": ProtectedSourceAccessSemantics().model_dump(mode="json"),
+    }
+    normalized_fields = {
+        name: TypeAdapter(field.annotation).validate_python(payload[name])
+        for name, field in VirtualCanonicalCountStoreManifestV2.model_fields.items()
+        if name in payload
+    }
+    normalized = VirtualCanonicalCountStoreManifestV2.model_construct(
+        **normalized_fields
+    ).model_dump(mode="json")
+    payload["virtual_store_id"] = contract_id(normalized, id_field="virtual_store_id")
+    manifest = VirtualCanonicalCountStoreManifestV2.model_validate(payload)
     (store.path / "manifest.json").write_text(manifest.model_dump_json() + "\n")
     return VirtualCanonicalCountStore(store.path, source_root=store.source_root)
 
@@ -269,3 +344,35 @@ def test_virtual_source_row_reader_rejects_out_of_bounds(tmp_path: Path) -> None
     source = store.manifest.sources[0]
     with pytest.raises(KeyError, match="outside .* bounds"):
         _csr_rows(store.source_root / source.relative_uri, source, np.asarray([source.rows]))
+
+
+def test_dev30_virtual_store_verifies_crosswalk_and_numeric_authority(tmp_path: Path) -> None:
+    store = _upgrade_virtual_store_to_v2(_virtual_store(tmp_path))
+    assert store.verify(full=True) == store.manifest
+    assert validate_contract(store.path / "manifest.json")["schema_version"] == 2
+
+
+def test_dev30_virtual_store_rejects_crosswalk_row_assignment_drift(tmp_path: Path) -> None:
+    store = _upgrade_virtual_store_to_v2(_virtual_store(tmp_path))
+    crosswalk = store.path / store.manifest.guide_target_crosswalk.relative_uri
+    frame = pd.read_parquet(crosswalk)
+    frame["target_id"] = frame["target_id"].iloc[::-1].to_numpy()
+    frame.to_parquet(crosswalk, index=False)
+    payload = store.manifest.model_dump(mode="json")
+    payload["guide_target_crosswalk"]["sha256"] = sha256_file(crosswalk)
+    payload["guide_target_crosswalk"]["size_bytes"] = crosswalk.stat().st_size
+    payload["guide_target_crosswalk_hash"] = sha256_file(crosswalk)
+    payload["virtual_store_id"] = "pending"
+    normalized = VirtualCanonicalCountStoreManifestV2.model_construct(
+        **{
+            name: TypeAdapter(field.annotation).validate_python(payload[name])
+            for name, field in VirtualCanonicalCountStoreManifestV2.model_fields.items()
+            if name in payload
+        }
+    ).model_dump(mode="json")
+    payload["virtual_store_id"] = contract_id(normalized, id_field="virtual_store_id")
+    manifest = VirtualCanonicalCountStoreManifestV2.model_validate(payload)
+    (store.path / "manifest.json").write_text(manifest.model_dump_json() + "\n")
+    changed = VirtualCanonicalCountStore(store.path, source_root=store.source_root)
+    with pytest.raises(Exception, match="guide-target assignments"):
+        changed.verify(full=False)

@@ -77,8 +77,8 @@ software/synthetic qualification, not evidence about a cohort. See the
 [dev24 R1 amendment](t07s-reaction-metric-amendment.md) and authoritative
 [dev25 unified R0/R1 amendment](t07s-null-interval-amendment.md).
 
-Local acceptance completed with 198 CPU tests passing and one CUDA-only test
-skipped on the CPU validation host, with 85.71% branch-aware coverage. The exact
+Local acceptance completed with 205 CPU tests passing and one CUDA-only test
+skipped on the CPU validation host, with 85.72% branch-aware coverage. The exact
 test and coverage results are in
 `receipts/local-validation.json`. Ruff,
 mypy, generated-schema, documentation-link, wheel
@@ -113,6 +113,16 @@ outer-donor stimulated outcome is opened by package tests. See the
 Dev29 emits checkpoint-decoder and G14 schema v2 contracts. The public
 validator retains explicit read-only v1 models so the immutable dev28 evidence
 continues to validate; new construction and cross-contract sealing require v2.
+
+Dev30-A extends the same compatibility policy to G00. Accepted Dev29 G00A/G00B
+v1 bytes remain valid. New v2 construction distinguishes authority reads from
+forbidden protected-expression use, binds numerical CSR and guide-target
+crosswalk artifacts, enforces complete G00A-to-G00B parent recomputation,
+freezes the training-only G00C feature/sample/sampler contract, and makes G00D
+environment, parity, performance, and numerical memory gates fail-closed. This
+is contract-only work: G00C and G00D remain not run and downstream real-data
+components remain blocked. See the
+[Dev30-A contract amendment](g00-dev30a-contract-amendment.md).
 
 Dev7 replaced the invalid reconstructed-SVD softmax with a checkpoint-owned
 multinomial count-composition decoder. Dev10 added a deterministic
@@ -160,7 +170,7 @@ conditional-interaction, and joint nulls, freezes fold and seed identities,
 and strengthens noninteraction comparators. That T03 code remains unqualified
 until T01, T02, and the prescribed pooled pilot pass.
 
-Deliberately not asserted complete in `4.0.0.dev29`:
+Deliberately not asserted complete in `4.0.0.dev30`:
 
 - stable CREDO entry-point discovery;
 - in-repository real-cohort adapters, biological thresholds, or biological claims;
@@ -206,5 +216,5 @@ authority.
 
 Exact future use depends on the branch commit, `REPOSITORY.sha256`, the
 wheel/sdist bytes, generated schemas, and the local validation receipt. A clean
-dev29 commit and release receipt are necessary—but not sufficient—before any
+dev30 commit and release receipt are necessary—but not sufficient—before any
 pilot deployment or stable promotion.

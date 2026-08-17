@@ -1665,6 +1665,424 @@ class IntegratedLoaderQualificationReceipt(StrictModel):
         return self
 
 
+# Expose explicit aliases for accepted dev29 v1 evidence.
+VirtualCountSourceV1 = VirtualCountSource
+G00SourceAuthorityV1 = G00SourceAuthority
+VirtualCanonicalCountStoreManifestV1 = VirtualCanonicalCountStoreManifest
+FoldNativeCompactViewContractV1 = FoldNativeCompactViewContract
+IntegratedLoaderQualificationContractV1 = IntegratedLoaderQualificationContract
+IntegratedLoaderQualificationReceiptV1 = IntegratedLoaderQualificationReceipt
+
+
+class ProtectedSourceAccessSemantics(StrictModel):
+    """Exact distinction between source-byte authority reads and outcome use."""
+
+    protected_source_bytes_hashed: Literal[True] = True
+    protected_obs_metadata_read_for_authority: Literal[True] = True
+    protected_csr_structure_scanned_for_authority: Literal[True] = True
+    protected_csr_values_scanned_for_numeric_authority: Literal[True] = True
+    protected_expression_values_used_for_feature_selection: Literal[False] = False
+    protected_expression_values_used_for_model_fitting: Literal[False] = False
+    protected_expression_values_used_for_model_selection: Literal[False] = False
+    protected_expression_values_used_for_evaluation: Literal[False] = False
+
+
+class SourceNumericIntegrity(StrictModel):
+    """Observed sparse-storage invariants for one source matrix."""
+
+    matrix_encoding: Literal["csr"] = "csr"
+    storage_value_dtype: str = Field(min_length=1)
+    indices_dtype: str = Field(min_length=1)
+    indptr_dtype: str = Field(min_length=1)
+    counts_nonnegative_verified: Literal[True] = True
+    counts_integral_verified: Literal[True] = True
+    maximum_observed_count: int = Field(ge=0)
+    csr_indices_in_bounds_verified: Literal[True] = True
+    csr_indptr_monotonic_verified: Literal[True] = True
+    csr_terminal_offset_matches_nnz: Literal[True] = True
+
+
+class VirtualCountSourceV2(StrictModel):
+    """Dev30 immutable source record with numerical CSR authority."""
+
+    source_id: str = Field(min_length=1)
+    donor_id: str = Field(min_length=1)
+    checkpoint: str = Field(min_length=1)
+    physical_time_hours: float
+    relative_uri: str
+    source_file_sha256: Sha256
+    dataset_path: str = Field(default="X", min_length=1)
+    rows: int = Field(gt=0)
+    features: int = Field(gt=0)
+    nnz: int = Field(ge=0)
+    eligible_rows: int = Field(gt=0)
+    eligible_nnz: int = Field(ge=0)
+    source_feature_order_hash: Sha256
+    canonical_permutation_hash: Sha256
+    numeric_integrity: SourceNumericIntegrity
+
+    _safe_uri = field_validator("relative_uri")(
+        classmethod(lambda cls, value: validate_relative_uri(value))
+    )
+
+    @field_validator("physical_time_hours")
+    @classmethod
+    def finite_physical_time(cls, value: float) -> float:
+        if not math.isfinite(value) or value < 0:
+            raise ValueError("Source physical time must be finite and nonnegative.")
+        return value
+
+
+class G00SourceAuthorityV2(StrictModel):
+    """Dev30 G00A source, numeric, feature, and guide-target authority."""
+
+    schema_version: Literal[2] = 2
+    authority_id: str
+    sources: tuple[VirtualCountSourceV2, ...]
+    canonical_feature_index_hash: Sha256
+    guide_catalog_hash: Sha256
+    target_catalog_hash: Sha256
+    guide_target_crosswalk_hash: Sha256
+    guide_target_crosswalk: ArtifactRef
+    source_numeric_audit: ArtifactRef
+    guide_count: int = Field(gt=0)
+    target_control_count: int = Field(gt=0)
+    eligibility_rule: Literal["guide_group == targeting single sgRNA AND low_quality == false"]
+    eligibility_uses_heldout_stimulated_outcomes: Literal[False] = False
+    eligible_row_ids_hash: Sha256
+    eligible_rows: int = Field(gt=0)
+    eligible_nnz: int = Field(ge=0)
+    canonical_row_id_rule: Literal["(sample_index << 32) | source_row_index"] = (
+        "(sample_index << 32) | source_row_index"
+    )
+    access_semantics: ProtectedSourceAccessSemantics
+    full_source_hashes_verified: Literal[True] = True
+    source_reconciliation_pass: Literal[True] = True
+    guide_target_crosswalk_invariants_pass: Literal[True] = True
+    model_facing_output: Literal[False] = False
+
+    @model_validator(mode="after")
+    def validate_source_authority(self) -> G00SourceAuthorityV2:
+        ids = [source.source_id for source in self.sources]
+        if not ids or len(ids) != len(set(ids)):
+            raise ValueError("G00A sources must be nonempty and uniquely identified.")
+        if sum(source.eligible_rows for source in self.sources) != self.eligible_rows:
+            raise ValueError("G00A source eligible rows do not reconcile to the authority total.")
+        if sum(source.eligible_nnz for source in self.sources) != self.eligible_nnz:
+            raise ValueError(
+                "G00A source eligible nonzeros do not reconcile to the authority total."
+            )
+        if self.guide_target_crosswalk.sha256 != self.guide_target_crosswalk_hash:
+            raise ValueError("Guide-target crosswalk hash must equal its ArtifactRef hash.")
+        expected = self.identity(id_field="authority_id")
+        if self.authority_id != expected:
+            raise ValueError(f"authority_id mismatch: expected {expected}.")
+        return self
+
+
+class VirtualCanonicalCountStoreManifestV2(StrictModel):
+    """Dev30 G00B metadata-only access with exact G00A parent binding."""
+
+    schema_version: Literal[2] = 2
+    virtual_store_id: str
+    backend: Literal["virtual_canonical_h5ad_csr_v2"] = "virtual_canonical_h5ad_csr_v2"
+    source_authority_id: str
+    canonical_feature_index_hash: Sha256
+    guide_catalog_hash: Sha256
+    target_catalog_hash: Sha256
+    guide_target_crosswalk_hash: Sha256
+    guide_target_crosswalk: ArtifactRef
+    source_numeric_audit: ArtifactRef
+    guide_count: int = Field(gt=0)
+    target_control_count: int = Field(gt=0)
+    eligibility_rule: Literal["guide_group == targeting single sgRNA AND low_quality == false"]
+    eligibility_uses_heldout_stimulated_outcomes: Literal[False] = False
+    eligible_row_ids_hash: Sha256
+    eligible_rows: int = Field(gt=0)
+    eligible_nnz: int = Field(ge=0)
+    features: int = Field(gt=0)
+    row_locator: ArtifactRef
+    feature_permutations: ArtifactRef
+    row_locator_schema: Literal["canonical_row_source_row_guide_target_v2"] = (
+        "canonical_row_source_row_guide_target_v2"
+    )
+    sources: tuple[VirtualCountSourceV2, ...]
+    access_semantics: ProtectedSourceAccessSemantics
+    raw_counts_materialized: Literal[False] = False
+    intended_use: Literal["sequential_statistics_and_fold_materialization"] = (
+        "sequential_statistics_and_fold_materialization"
+    )
+    direct_h100_training_backend: Literal[False] = False
+    archival_shard_plan: ArtifactRef | None = None
+
+    @model_validator(mode="after")
+    def validate_virtual_store(self) -> VirtualCanonicalCountStoreManifestV2:
+        ids = [source.source_id for source in self.sources]
+        if not ids or len(ids) != len(set(ids)):
+            raise ValueError("Virtual canonical sources must be nonempty and unique.")
+        if any(source.features != self.features for source in self.sources):
+            raise ValueError("Every virtual source must expose the canonical feature width.")
+        if sum(source.eligible_rows for source in self.sources) != self.eligible_rows:
+            raise ValueError("Virtual source eligible rows do not reconcile to the manifest.")
+        if sum(source.eligible_nnz for source in self.sources) != self.eligible_nnz:
+            raise ValueError("Virtual source eligible nonzeros do not reconcile to the manifest.")
+        if self.guide_target_crosswalk.sha256 != self.guide_target_crosswalk_hash:
+            raise ValueError("Guide-target crosswalk hash must equal its ArtifactRef hash.")
+        expected = self.identity(id_field="virtual_store_id")
+        if self.virtual_store_id != expected:
+            raise ValueError(f"virtual_store_id mismatch: expected {expected}.")
+        return self
+
+
+class FoldRowRoleRecord(StrictModel):
+    """One frozen row role in a fold-native extraction."""
+
+    role: Literal[
+        "training_fit",
+        "training_validation",
+        "heldout_source_query",
+        "protected_heldout_stimulated",
+    ]
+    rows: int = Field(ge=0)
+    row_ids_hash: Sha256
+
+
+class TrainingOnlyFeatureSelectionContract(StrictModel):
+    """No-outer-outcome ranked-prefix feature selection protocol."""
+
+    method: Literal["training_only_ranked_prefix_v1"] = "training_only_ranked_prefix_v1"
+    implementation_sha256: Sha256
+    fit_rows_hash: Sha256
+    candidate_feature_counts: tuple[int, ...]
+    selection_metric: Literal["training_validation_negative_log_likelihood"] = (
+        "training_validation_negative_log_likelihood"
+    )
+    minimum_improvement_margin: float = Field(ge=0)
+    paired_refit_draws: Literal[59] = 59
+    selected_feature_count: int = Field(gt=0, le=4096)
+    ordered_feature_table: ArtifactRef
+    custom001_puror_role: Literal["technical_assay_feature"] = "technical_assay_feature"
+    custom001_puror_in_primary_biological_metric: Literal[False] = False
+    custom001_puror_sidecar_required: Literal[True] = True
+
+    @model_validator(mode="after")
+    def validate_candidates(self) -> TrainingOnlyFeatureSelectionContract:
+        if (
+            not self.candidate_feature_counts
+            or tuple(sorted(set(self.candidate_feature_counts)))
+            != self.candidate_feature_counts
+            or self.selected_feature_count not in self.candidate_feature_counts
+            or self.candidate_feature_counts[-1] != 4096
+        ):
+            raise ValueError("Feature candidates must be unique increasing prefixes through 4096.")
+        return self
+
+
+class TrainingOnlySampleSizeSelectionContract(StrictModel):
+    """Paired-refit saturation rule for the training-only cell budget."""
+
+    comparison: Literal["NLL_N_minus_NLL_Nmax"] = "NLL_N_minus_NLL_Nmax"
+    equivalence_statistic: Literal["p95_absolute_paired_nll_difference"] = (
+        "p95_absolute_paired_nll_difference"
+    )
+    saturation_rule: Literal["smallest_N_with_p95_absolute_difference_le_epsilon"] = (
+        "smallest_N_with_p95_absolute_difference_le_epsilon"
+    )
+    paired_refit_draws: Literal[59] = 59
+    equivalence_epsilon: float = Field(gt=0)
+    candidate_cells: tuple[int, ...]
+    selected_training_cells: int = Field(gt=0)
+    two_million_extension_triggered_by_no_saturation: bool = False
+
+    @model_validator(mode="after")
+    def validate_grid(self) -> TrainingOnlySampleSizeSelectionContract:
+        base = (50_000, 100_000, 250_000, 500_000, 1_000_000)
+        allowed = {base, (*base, 2_000_000)}
+        if self.candidate_cells not in allowed:
+            raise ValueError("Sample-size grid must be the frozen G00C grid.")
+        if self.selected_training_cells not in self.candidate_cells:
+            raise ValueError("Selected training-cell count must occur in the frozen grid.")
+        includes_extension = 2_000_000 in self.candidate_cells
+        if includes_extension != self.two_million_extension_triggered_by_no_saturation:
+            raise ValueError("The two-million-cell extension requires documented nonsaturation.")
+        return self
+
+
+class CompactSamplerContract(StrictModel):
+    """Exact weighted, resumable fold-native sampler semantics."""
+
+    implementation_sha256: Sha256
+    microbatch_cells: Literal[512] = 512
+    microbatches_per_update: Literal[8] = 8
+    macrobatch_cells: Literal[4096] = 4096
+    donor_weighting: Literal["equal"] = "equal"
+    checkpoint_weighting: Literal["equal"] = "equal"
+    target_weighting: Literal["equal"] = "equal"
+    guide_weighting_within_target: Literal["equal"] = "equal"
+    rng_algorithm: str = Field(min_length=1)
+    rng_seed: int = Field(ge=0)
+    thinning_rule: str = Field(min_length=1)
+    resume_cursor_schema: str = Field(min_length=1)
+    resume_cursor_initial_hash: Sha256
+
+    @model_validator(mode="after")
+    def validate_batch(self) -> CompactSamplerContract:
+        if self.microbatch_cells * self.microbatches_per_update != self.macrobatch_cells:
+            raise ValueError("Sampler microbatches must multiply to the macrobatch size.")
+        return self
+
+
+class FoldNativeCompactViewContractV2(StrictModel):
+    """Dev30 G00C training-only selection and materialization contract."""
+
+    schema_version: Literal[2] = 2
+    fold_view_id: str
+    parent_source_authority_id: str
+    parent_virtual_store_id: str
+    parent_eligible_row_ids_hash: Sha256
+    parent_guide_target_crosswalk_hash: Sha256
+    outer_split_id: str
+    training_donor_ids: tuple[str, ...]
+    heldout_donor_id: str
+    row_roles: tuple[FoldRowRoleRecord, ...]
+    row_role_audit: ArtifactRef
+    row_role_assignment_implementation_sha256: Sha256
+    feature_selection: TrainingOnlyFeatureSelectionContract
+    sample_size_selection: TrainingOnlySampleSizeSelectionContract
+    sampler: CompactSamplerContract
+    count_dtype: Literal["uint16", "int32"]
+    index_dtype: Literal["uint16", "int32"]
+    count_maximum_audit_pass: bool
+    physical_layout: Literal["donor_checkpoint_target_guide_row"]
+    protected_expression_values_used: Literal[False] = False
+
+    @model_validator(mode="after")
+    def validate_fold_view(self) -> FoldNativeCompactViewContractV2:
+        if (
+            not self.training_donor_ids
+            or len(self.training_donor_ids) != len(set(self.training_donor_ids))
+            or self.heldout_donor_id in self.training_donor_ids
+        ):
+            raise ValueError("Fold-native donor roles must be nonempty, unique, and disjoint.")
+        roles = [record.role for record in self.row_roles]
+        expected_roles = {
+            "training_fit",
+            "training_validation",
+            "heldout_source_query",
+            "protected_heldout_stimulated",
+        }
+        if len(roles) != len(expected_roles) or set(roles) != expected_roles:
+            raise ValueError("Fold-native row-role audit must contain every role exactly once.")
+        if self.count_dtype == "uint16" and not self.count_maximum_audit_pass:
+            raise ValueError("uint16 counts require a passed maximum-count audit.")
+        expected = self.identity(id_field="fold_view_id")
+        if self.fold_view_id != expected:
+            raise ValueError(f"fold_view_id mismatch: expected {expected}.")
+        return self
+
+
+class IntegratedLoaderQualificationContractV2(StrictModel):
+    """Dev30 G00D benchmark, parity, and bounded-memory protocol."""
+
+    schema_version: Literal[2] = 2
+    qualification_contract_id: str
+    fold_view_id: str
+    expected_gpu_name: str = Field(min_length=1)
+    expected_gpu_count: Literal[1] = 1
+    expected_cuda_version: str = Field(min_length=1)
+    expected_torch_version: str = Field(min_length=1)
+    expected_container_digest: Sha256
+    worker_count: int = Field(ge=1)
+    cpu_count: int = Field(ge=1)
+    storage_authority_hash: Sha256
+    microbatch_cells: Literal[512] = 512
+    macrobatch_cells: Literal[4096] = 4096
+    prefetch_depth: int = Field(ge=1)
+    warmup_updates: int = Field(gt=0)
+    measured_updates: int = Field(gt=0)
+    require_cold_start_measurement: Literal[True] = True
+    require_steady_state_measurement: Literal[True] = True
+    cache_policy: str = Field(min_length=1)
+    measurement_protocol_sha256: Sha256
+    telemetry_interval_seconds: float = Field(gt=0)
+    maximum_data_wait_fraction: float = Field(default=0.10, ge=0, le=0.10)
+    minimum_steady_state_gpu_utilization: float = Field(default=0.85, ge=0.85, le=1)
+    maximum_p95_batch_ready_seconds: float = Field(gt=0)
+    maximum_loader_rss_bytes: int = Field(gt=0)
+    maximum_open_shards: int = Field(ge=1)
+    maximum_rss_slope_upper_bytes_per_second: float = Field(ge=0)
+    maximum_rss_excursion_fraction: float = Field(gt=0, le=1)
+    parity_absolute_tolerance: float = Field(default=1e-6, gt=0)
+    parity_relative_tolerance: float = Field(default=1e-5, gt=0)
+
+    @model_validator(mode="after")
+    def validate_loader_contract(self) -> IntegratedLoaderQualificationContractV2:
+        expected = self.identity(id_field="qualification_contract_id")
+        if self.qualification_contract_id != expected:
+            raise ValueError(f"qualification_contract_id mismatch: expected {expected}.")
+        return self
+
+
+class IntegratedLoaderQualificationReceiptV2(StrictModel):
+    """Dev30 observed G00D performance, parity, and memory evidence."""
+
+    schema_version: Literal[2] = 2
+    receipt_id: str
+    qualification_contract_id: str
+    gpu_name: str = Field(min_length=1)
+    gpu_uuid: str = Field(min_length=1)
+    cuda_version: str = Field(min_length=1)
+    torch_version: str = Field(min_length=1)
+    container_digest: Sha256
+    worker_count: int = Field(ge=1)
+    cpu_count: int = Field(ge=1)
+    storage_authority_hash: Sha256
+    microbatch_cells: int = Field(gt=0)
+    macrobatch_cells: int = Field(gt=0)
+    prefetch_depth: int = Field(ge=1)
+    warmup_updates: int = Field(gt=0)
+    measured_updates: int = Field(gt=0)
+    cold_start_measured: bool
+    steady_state_measured: bool
+    cache_policy: str = Field(min_length=1)
+    measurement_sha256: Sha256
+    telemetry_interval_seconds: float = Field(gt=0)
+    median_compute_seconds: float = Field(ge=0)
+    p95_compute_seconds: float = Field(ge=0)
+    median_data_wait_seconds: float = Field(ge=0)
+    p95_batch_ready_seconds: float = Field(ge=0)
+    data_wait_fraction: float = Field(ge=0, le=1)
+    steady_state_gpu_utilization: float = Field(ge=0, le=1)
+    peak_loader_rss_bytes: int = Field(ge=0)
+    peak_open_shards: int = Field(ge=0)
+    rss_slope_bytes_per_second: float
+    rss_slope_upper_ci_bytes_per_second: float
+    maximum_rss_excursion_bytes: int = Field(ge=0)
+    row_ids_parity_pass: bool
+    raw_counts_parity_pass: bool
+    sample_weights_parity_pass: bool
+    thinning_rng_parity_pass: bool
+    loss_parity_pass: bool
+    gradient_parity_pass: bool
+    parameter_parity_pass: bool
+    interrupted_resume_parity_pass: bool
+    lru_bound_pass: bool
+    loader_error_count: int = Field(ge=0)
+    cuda_error_count: int = Field(ge=0)
+    monitor_error_count: int = Field(ge=0)
+    maximum_parity_absolute_error: float = Field(ge=0)
+    maximum_parity_relative_error: float = Field(ge=0)
+    memory_growth_pass: bool
+    status: Literal["pass", "fail"]
+
+    @model_validator(mode="after")
+    def validate_loader_receipt(self) -> IntegratedLoaderQualificationReceiptV2:
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
+        return self
+
+
 class PreparedRepresentation(StrictModel):
     schema_version: int = 1
     prepared_id: str
@@ -2086,7 +2504,7 @@ class CompiledRunContract(StrictModel):
     schema_version: int = 1
     compiled_run_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev29"] = "4.0.dev29"
+    recipe_version: Literal["4.0.dev30"] = "4.0.dev30"
     recipe_wheel_hash: Sha256
     frozen_credo_artifact_hash: Sha256
     environment_lock_hash: Sha256
@@ -2153,7 +2571,7 @@ class InferenceBundleManifest(StrictModel):
     compiled_run_id: str
     selected_checkpoint_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev29"] = "4.0.dev29"
+    recipe_version: Literal["4.0.dev30"] = "4.0.dev30"
     selected_family: Literal[
         "configured_checkpoint",
         "gene_decoder_selected",
