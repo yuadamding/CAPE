@@ -1,0 +1,359 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    },
+    "LegacyAttestationArtifacts": {
+      "additionalProperties": false,
+      "description": "Wrapper-owned evidence used to derive the attestation.",
+      "properties": {
+        "checksum_verification": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "directory_inventory": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "parent_link": {
+          "$ref": "#/$defs/ArtifactRef"
+        }
+      },
+      "required": [
+        "directory_inventory",
+        "checksum_verification",
+        "parent_link"
+      ],
+      "title": "LegacyAttestationArtifacts",
+      "type": "object"
+    },
+    "LegacyAttestationBuilder": {
+      "additionalProperties": false,
+      "description": "Exact package and component identity that built the wrapper.",
+      "properties": {
+        "distribution_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Distribution Sha256",
+          "type": "string"
+        },
+        "environment_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Environment Sha256",
+          "type": "string"
+        },
+        "git_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Git Commit",
+          "type": "string"
+        },
+        "implementation_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Implementation Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "git_commit",
+        "distribution_sha256",
+        "implementation_sha256",
+        "environment_sha256"
+      ],
+      "title": "LegacyAttestationBuilder",
+      "type": "object"
+    },
+    "LegacyChecksumManifestBinding": {
+      "additionalProperties": false,
+      "description": "Byte identity of the historical checksum boundary inside its parent.",
+      "properties": {
+        "relative_uri": {
+          "const": "SHA256SUMS",
+          "default": "SHA256SUMS",
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "exclusiveMinimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sha256",
+        "size_bytes"
+      ],
+      "title": "LegacyChecksumManifestBinding",
+      "type": "object"
+    },
+    "LegacyChecksumVerificationSummary": {
+      "additionalProperties": false,
+      "description": "Fail-closed syntax, file-set, and byte verification summary.",
+      "properties": {
+        "duplicate_manifest_paths": {
+          "const": 0,
+          "default": 0,
+          "title": "Duplicate Manifest Paths",
+          "type": "integer"
+        },
+        "listed_files": {
+          "exclusiveMinimum": 0,
+          "title": "Listed Files",
+          "type": "integer"
+        },
+        "matched_files": {
+          "exclusiveMinimum": 0,
+          "title": "Matched Files",
+          "type": "integer"
+        },
+        "mismatched_files": {
+          "const": 0,
+          "default": 0,
+          "title": "Mismatched Files",
+          "type": "integer"
+        },
+        "missing_files": {
+          "const": 0,
+          "default": 0,
+          "title": "Missing Files",
+          "type": "integer"
+        },
+        "path_traversal_entries": {
+          "const": 0,
+          "default": 0,
+          "title": "Path Traversal Entries",
+          "type": "integer"
+        },
+        "special_files": {
+          "const": 0,
+          "default": 0,
+          "title": "Special Files",
+          "type": "integer"
+        },
+        "symlinks": {
+          "const": 0,
+          "default": 0,
+          "title": "Symlinks",
+          "type": "integer"
+        },
+        "uncovered_authoritative_files": {
+          "const": 0,
+          "default": 0,
+          "title": "Uncovered Authoritative Files",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "listed_files",
+        "matched_files"
+      ],
+      "title": "LegacyChecksumVerificationSummary",
+      "type": "object"
+    },
+    "LegacyExecutionBoundary": {
+      "additionalProperties": false,
+      "description": "Explicitly non-scientific and non-mutating wrapper execution boundary.",
+      "properties": {
+        "model_fitting_performed": {
+          "const": false,
+          "default": false,
+          "title": "Model Fitting Performed",
+          "type": "boolean"
+        },
+        "parent_writes_performed": {
+          "const": false,
+          "default": false,
+          "title": "Parent Writes Performed",
+          "type": "boolean"
+        },
+        "protected_expression_scientifically_used": {
+          "const": false,
+          "default": false,
+          "title": "Protected Expression Scientifically Used",
+          "type": "boolean"
+        },
+        "source_matrix_access_performed": {
+          "const": false,
+          "default": false,
+          "title": "Source Matrix Access Performed",
+          "type": "boolean"
+        }
+      },
+      "title": "LegacyExecutionBoundary",
+      "type": "object"
+    },
+    "LegacyParentDescriptor": {
+      "additionalProperties": false,
+      "description": "Accepted semantic identities behind one historical parent directory.",
+      "properties": {
+        "g00a_v1_authority_id": {
+          "minLength": 1,
+          "title": "G00A V1 Authority Id",
+          "type": "string"
+        },
+        "g00b_v1_virtual_store_id": {
+          "minLength": 1,
+          "title": "G00B V1 Virtual Store Id",
+          "type": "string"
+        },
+        "logical_name": {
+          "minLength": 1,
+          "title": "Logical Name",
+          "type": "string"
+        },
+        "sha256sums": {
+          "$ref": "#/$defs/LegacyChecksumManifestBinding"
+        }
+      },
+      "required": [
+        "logical_name",
+        "g00a_v1_authority_id",
+        "g00b_v1_virtual_store_id",
+        "sha256sums"
+      ],
+      "title": "LegacyParentDescriptor",
+      "type": "object"
+    },
+    "LegacyPublicationSemantics": {
+      "additionalProperties": false,
+      "description": "Statements that a non-retroactive wrapper may make about its parent.",
+      "properties": {
+        "artifacts_manifest_present": {
+          "const": false,
+          "default": false,
+          "title": "Artifacts Manifest Present",
+          "type": "boolean"
+        },
+        "atomic_publication_proven": {
+          "const": false,
+          "default": false,
+          "title": "Atomic Publication Proven",
+          "type": "boolean"
+        },
+        "committed_marker_present": {
+          "const": false,
+          "default": false,
+          "title": "Committed Marker Present",
+          "type": "boolean"
+        },
+        "manifest_last_publication_proven": {
+          "const": false,
+          "default": false,
+          "title": "Manifest Last Publication Proven",
+          "type": "boolean"
+        },
+        "sha256sums_present": {
+          "const": true,
+          "default": true,
+          "title": "Sha256Sums Present",
+          "type": "boolean"
+        },
+        "transactional_publication_proven": {
+          "const": false,
+          "default": false,
+          "title": "Transactional Publication Proven",
+          "type": "boolean"
+        }
+      },
+      "title": "LegacyPublicationSemantics",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/legacy-parent-attestation.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Non-retroactive wrapper around one accepted checksum-only parent.",
+  "properties": {
+    "artifacts": {
+      "$ref": "#/$defs/LegacyAttestationArtifacts"
+    },
+    "attestation_id": {
+      "title": "Attestation Id",
+      "type": "string"
+    },
+    "builder": {
+      "$ref": "#/$defs/LegacyAttestationBuilder"
+    },
+    "evidence_role": {
+      "const": "nonretroactive_legacy_checksum_parent_attestation",
+      "default": "nonretroactive_legacy_checksum_parent_attestation",
+      "title": "Evidence Role",
+      "type": "string"
+    },
+    "execution_boundary": {
+      "$ref": "#/$defs/LegacyExecutionBoundary"
+    },
+    "legacy_publication_semantics": {
+      "$ref": "#/$defs/LegacyPublicationSemantics"
+    },
+    "parent": {
+      "$ref": "#/$defs/LegacyParentDescriptor"
+    },
+    "schema_id": {
+      "const": "credo.legacy_parent_attestation",
+      "default": "credo.legacy_parent_attestation",
+      "title": "Schema Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "verification": {
+      "$ref": "#/$defs/LegacyChecksumVerificationSummary"
+    }
+  },
+  "required": [
+    "attestation_id",
+    "parent",
+    "legacy_publication_semantics",
+    "verification",
+    "artifacts",
+    "execution_boundary",
+    "builder"
+  ],
+  "title": "LegacyParentAttestationV1",
+  "type": "object"
+}

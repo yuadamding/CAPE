@@ -118,6 +118,12 @@ def main() -> None:
     gse314342_g00_dev31_review = Path(
         "/home/yding1995/.codex/attachments/cd0f8deb-9438-4af7-a3c9-b69d044977f5/pasted-text.txt"
     )
+    gse314342_g00_dev31_b0_authorization = Path(
+        "/home/yding1995/.codex/attachments/4190a8e6-5952-4025-8ade-fd320f4b0a6e/pasted-text.txt"
+    )
+    gse314342_g00_dev32_legacy_review = Path(
+        "/home/yding1995/.codex/attachments/73fc243c-804c-46fd-99d1-e1e573c0602d/pasted-text.txt"
+    )
     gse314342_g00_source_plane = gse314342_g00 / "G00_SOURCE_PLANE_DEV29"
     receipt = {
         "schema_version": 1,
@@ -272,6 +278,16 @@ def main() -> None:
         "gse314342_g00_dev31_review_sha256": (
             sha256_file(gse314342_g00_dev31_review)
             if gse314342_g00_dev31_review.is_file()
+            else None
+        ),
+        "gse314342_g00_dev31_b0_authorization_sha256": (
+            sha256_file(gse314342_g00_dev31_b0_authorization)
+            if gse314342_g00_dev31_b0_authorization.is_file()
+            else None
+        ),
+        "gse314342_g00_dev32_legacy_review_sha256": (
+            sha256_file(gse314342_g00_dev32_legacy_review)
+            if gse314342_g00_dev32_legacy_review.is_file()
             else None
         ),
         "gse314342_g00_dev29_builder_sha256": (

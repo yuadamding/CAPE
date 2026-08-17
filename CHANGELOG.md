@@ -1,5 +1,19 @@
 # Changelog
 
+## 4.0.0.dev32 — 2026-08-17
+
+- add a discriminated native-manifest-last versus legacy-checksum-attested
+  parent-publication boundary without weakening the native default;
+- add typed non-retroactive legacy-parent attestation, test-receipt, and B0.1
+  parent-resolution contracts;
+- publish and independently verify checksum syntax, complete regular-file
+  coverage, accepted G00A/G00B identities, and exact sibling wrapper semantics;
+- reject altered or missing parent files, duplicate/traversing manifest paths,
+  uncovered files, symlinks, false atomicity claims, unrelated/failed wrappers,
+  and native-to-legacy fallback; and
+- preserve Dev31 and failed B0 A1 unchanged; no raw source matrix, G00C, G00D,
+  GPU, model, or biological operation is part of this package release.
+
 ## 4.0.0.dev31 — 2026-08-16
 
 - require exact field-level projection of every accepted v1 source record into

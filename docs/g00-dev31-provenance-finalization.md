@@ -4,6 +4,12 @@ Last verified: 2026-08-16
 Status: contract-only engineering amendment; no G00 execution
 Authority: G00 v2 source, compact-view, and loader contracts in `4.0.0.dev31`
 
+> Dev31 is frozen. B0 A1 correctly rejected the historical checksum-only
+> Dev29 publication at its native-parent gate. The separately versioned
+> [Dev32 legacy-parent boundary](g00-dev32-legacy-parent-attestation.md) is the
+> only authorized compatibility path; this Dev31 record remains unchanged
+> evidence of the stronger native default.
+
 ## Decision
 
 Dev31 supersedes the Dev30-A-r2 contract draft and closes the provenance and

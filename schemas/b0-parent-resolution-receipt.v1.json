@@ -1,0 +1,279 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    },
+    "LegacyChecksumAttestedBoundary": {
+      "additionalProperties": false,
+      "description": "Distinct parent type admitted only by one passed sibling wrapper.",
+      "properties": {
+        "attestation": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "attestation_id": {
+          "minLength": 1,
+          "title": "Attestation Id",
+          "type": "string"
+        },
+        "attestation_receipt": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "attestation_receipt_id": {
+          "minLength": 1,
+          "title": "Attestation Receipt Id",
+          "type": "string"
+        },
+        "boundary_kind": {
+          "const": "legacy_checksum_attested_v1",
+          "default": "legacy_checksum_attested_v1",
+          "title": "Boundary Kind",
+          "type": "string"
+        },
+        "g00a_v1_authority_id": {
+          "minLength": 1,
+          "title": "G00A V1 Authority Id",
+          "type": "string"
+        },
+        "g00b_v1_virtual_store_id": {
+          "minLength": 1,
+          "title": "G00B V1 Virtual Store Id",
+          "type": "string"
+        },
+        "original_sha256sums": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "parent_logical_name": {
+          "minLength": 1,
+          "title": "Parent Logical Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "parent_logical_name",
+        "g00a_v1_authority_id",
+        "g00b_v1_virtual_store_id",
+        "original_sha256sums",
+        "attestation_id",
+        "attestation",
+        "attestation_receipt_id",
+        "attestation_receipt"
+      ],
+      "title": "LegacyChecksumAttestedBoundary",
+      "type": "object"
+    },
+    "LegacyPublicationSemantics": {
+      "additionalProperties": false,
+      "description": "Statements that a non-retroactive wrapper may make about its parent.",
+      "properties": {
+        "artifacts_manifest_present": {
+          "const": false,
+          "default": false,
+          "title": "Artifacts Manifest Present",
+          "type": "boolean"
+        },
+        "atomic_publication_proven": {
+          "const": false,
+          "default": false,
+          "title": "Atomic Publication Proven",
+          "type": "boolean"
+        },
+        "committed_marker_present": {
+          "const": false,
+          "default": false,
+          "title": "Committed Marker Present",
+          "type": "boolean"
+        },
+        "manifest_last_publication_proven": {
+          "const": false,
+          "default": false,
+          "title": "Manifest Last Publication Proven",
+          "type": "boolean"
+        },
+        "sha256sums_present": {
+          "const": true,
+          "default": true,
+          "title": "Sha256Sums Present",
+          "type": "boolean"
+        },
+        "transactional_publication_proven": {
+          "const": false,
+          "default": false,
+          "title": "Transactional Publication Proven",
+          "type": "boolean"
+        }
+      },
+      "title": "LegacyPublicationSemantics",
+      "type": "object"
+    },
+    "NativeManifestLastBoundary": {
+      "additionalProperties": false,
+      "description": "Native publication type; legacy dispatch may never construct this type.",
+      "properties": {
+        "artifacts_manifest": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "boundary_kind": {
+          "const": "native_manifest_last_v1",
+          "default": "native_manifest_last_v1",
+          "title": "Boundary Kind",
+          "type": "string"
+        },
+        "committed_marker": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "g00a_v1_authority_id": {
+          "minLength": 1,
+          "title": "G00A V1 Authority Id",
+          "type": "string"
+        },
+        "g00b_v1_virtual_store_id": {
+          "minLength": 1,
+          "title": "G00B V1 Virtual Store Id",
+          "type": "string"
+        },
+        "parent_logical_name": {
+          "minLength": 1,
+          "title": "Parent Logical Name",
+          "type": "string"
+        },
+        "sha256sums": {
+          "$ref": "#/$defs/ArtifactRef"
+        }
+      },
+      "required": [
+        "parent_logical_name",
+        "g00a_v1_authority_id",
+        "g00b_v1_virtual_store_id",
+        "artifacts_manifest",
+        "committed_marker",
+        "sha256sums"
+      ],
+      "title": "NativeManifestLastBoundary",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/b0-parent-resolution-receipt.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Fail-closed B0.1 result for exactly one discriminated parent type.",
+  "properties": {
+    "all_consumed_artifacts_covered": {
+      "title": "All Consumed Artifacts Covered",
+      "type": "boolean"
+    },
+    "boundary": {
+      "discriminator": {
+        "mapping": {
+          "legacy_checksum_attested_v1": "#/$defs/LegacyChecksumAttestedBoundary",
+          "native_manifest_last_v1": "#/$defs/NativeManifestLastBoundary"
+        },
+        "propertyName": "boundary_kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/NativeManifestLastBoundary"
+        },
+        {
+          "$ref": "#/$defs/LegacyChecksumAttestedBoundary"
+        }
+      ],
+      "title": "Boundary"
+    },
+    "g00a_g00b_relationship_valid": {
+      "title": "G00A G00B Relationship Valid",
+      "type": "boolean"
+    },
+    "g00a_v1_valid": {
+      "title": "G00A V1 Valid",
+      "type": "boolean"
+    },
+    "g00b_v1_valid": {
+      "title": "G00B V1 Valid",
+      "type": "boolean"
+    },
+    "historical_semantics": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LegacyPublicationSemantics"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "parent_checksum_boundary": {
+      "title": "Parent Checksum Boundary",
+      "type": "boolean"
+    },
+    "receipt_id": {
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "boundary",
+    "parent_checksum_boundary",
+    "all_consumed_artifacts_covered",
+    "g00a_v1_valid",
+    "g00b_v1_valid",
+    "g00a_g00b_relationship_valid",
+    "status"
+  ],
+  "title": "B0ParentResolutionReceiptV1",
+  "type": "object"
+}

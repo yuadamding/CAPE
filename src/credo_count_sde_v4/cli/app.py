@@ -11,6 +11,7 @@ import pandas as pd
 from .. import api
 from ..compat.credo3 import verify_frozen_credo
 from ..contracts import CounterfactualBranch, CounterfactualDesign, RunIntent
+from ..store import build_legacy_parent_attestation
 from ..synthetic import create_synthetic_project
 from ..version import RECIPE_DISPLAY, __version__
 
@@ -146,6 +147,15 @@ def build_parser() -> argparse.ArgumentParser:
     amendment.add_argument("--pooled-bundle", type=_path, required=True)
     amendment.add_argument("--count-store", type=_path, required=True)
     amendment.add_argument("--output", type=_path, required=True)
+    legacy_parent = sub.add_parser(
+        "attest-legacy-parent",
+        help="publish a non-retroactive wrapper around one checksum-only parent",
+    )
+    legacy_parent.add_argument("--parent", type=_path, required=True)
+    legacy_parent.add_argument("--output", type=_path, required=True)
+    legacy_parent.add_argument("--git-commit", required=True)
+    legacy_parent.add_argument("--distribution-sha256", required=True)
+    legacy_parent.add_argument("--environment-sha256", required=True)
     open_parser = sub.add_parser("open-run")
     open_parser.add_argument("run", type=_path)
     open_parser.add_argument("--device", default="cpu")
@@ -276,6 +286,14 @@ def main(argv: list[str] | None = None) -> int:
             t02a_bundle=args.t02a_bundle,
             pooled_bundle=args.pooled_bundle,
             count_store=args.count_store,
+        )
+    elif command == "attest-legacy-parent":
+        result = build_legacy_parent_attestation(
+            args.parent,
+            args.output,
+            git_commit=args.git_commit,
+            distribution_sha256=args.distribution_sha256,
+            environment_sha256=args.environment_sha256,
         )
     elif command == "finalize":
         result = api.finalize(args.config)

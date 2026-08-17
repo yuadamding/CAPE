@@ -1,0 +1,71 @@
+{
+  "$id": "https://credo.local/schemas/legacy-parent-attestation-test-contract.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Frozen gate list for one non-retroactive wrapper execution.",
+  "properties": {
+    "parent_logical_name": {
+      "minLength": 1,
+      "title": "Parent Logical Name",
+      "type": "string"
+    },
+    "require_complete_regular_file_coverage": {
+      "const": true,
+      "default": true,
+      "title": "Require Complete Regular File Coverage",
+      "type": "boolean"
+    },
+    "require_exact_parent_semantic_ids": {
+      "const": true,
+      "default": true,
+      "title": "Require Exact Parent Semantic Ids",
+      "type": "boolean"
+    },
+    "require_no_parent_writes": {
+      "const": true,
+      "default": true,
+      "title": "Require No Parent Writes",
+      "type": "boolean"
+    },
+    "require_no_source_matrix_access": {
+      "const": true,
+      "default": true,
+      "title": "Require No Source Matrix Access",
+      "type": "boolean"
+    },
+    "require_no_symlinks_or_special_files": {
+      "const": true,
+      "default": true,
+      "title": "Require No Symlinks Or Special Files",
+      "type": "boolean"
+    },
+    "require_parent_relationship_verification": {
+      "const": true,
+      "default": true,
+      "title": "Require Parent Relationship Verification",
+      "type": "boolean"
+    },
+    "require_strict_manifest_syntax": {
+      "const": true,
+      "default": true,
+      "title": "Require Strict Manifest Syntax",
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "test_contract_id": {
+      "title": "Test Contract Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "test_contract_id",
+    "parent_logical_name"
+  ],
+  "title": "LegacyParentAttestationTestContractV1",
+  "type": "object"
+}

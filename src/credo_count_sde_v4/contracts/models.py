@@ -1742,6 +1742,242 @@ class SourceHashBinding(StrictModel):
     source_file_sha256: Sha256
 
 
+class LegacyChecksumManifestBinding(StrictModel):
+    """Byte identity of the historical checksum boundary inside its parent."""
+
+    relative_uri: Literal["SHA256SUMS"] = "SHA256SUMS"
+    sha256: Sha256
+    size_bytes: int = Field(gt=0)
+
+
+class LegacyParentDescriptor(StrictModel):
+    """Accepted semantic identities behind one historical parent directory."""
+
+    logical_name: str = Field(min_length=1)
+    g00a_v1_authority_id: str = Field(min_length=1)
+    g00b_v1_virtual_store_id: str = Field(min_length=1)
+    sha256sums: LegacyChecksumManifestBinding
+
+
+class LegacyPublicationSemantics(StrictModel):
+    """Statements that a non-retroactive wrapper may make about its parent."""
+
+    sha256sums_present: Literal[True] = True
+    artifacts_manifest_present: Literal[False] = False
+    committed_marker_present: Literal[False] = False
+    manifest_last_publication_proven: Literal[False] = False
+    atomic_publication_proven: Literal[False] = False
+    transactional_publication_proven: Literal[False] = False
+
+
+class LegacyChecksumVerificationSummary(StrictModel):
+    """Fail-closed syntax, file-set, and byte verification summary."""
+
+    listed_files: int = Field(gt=0)
+    matched_files: int = Field(gt=0)
+    missing_files: Literal[0] = 0
+    mismatched_files: Literal[0] = 0
+    duplicate_manifest_paths: Literal[0] = 0
+    path_traversal_entries: Literal[0] = 0
+    symlinks: Literal[0] = 0
+    special_files: Literal[0] = 0
+    uncovered_authoritative_files: Literal[0] = 0
+
+    @model_validator(mode="after")
+    def validate_summary(self) -> LegacyChecksumVerificationSummary:
+        if self.matched_files != self.listed_files:
+            raise ValueError("Every legacy checksum entry must match exactly.")
+        return self
+
+
+class LegacyAttestationArtifacts(StrictModel):
+    """Wrapper-owned evidence used to derive the attestation."""
+
+    directory_inventory: ArtifactRef
+    checksum_verification: ArtifactRef
+    parent_link: ArtifactRef
+
+
+class LegacyExecutionBoundary(StrictModel):
+    """Explicitly non-scientific and non-mutating wrapper execution boundary."""
+
+    parent_writes_performed: Literal[False] = False
+    source_matrix_access_performed: Literal[False] = False
+    model_fitting_performed: Literal[False] = False
+    protected_expression_scientifically_used: Literal[False] = False
+
+
+class LegacyAttestationBuilder(StrictModel):
+    """Exact package and component identity that built the wrapper."""
+
+    git_commit: Annotated[str, Field(pattern=r"^[0-9a-f]{40}$")]
+    distribution_sha256: Sha256
+    implementation_sha256: Sha256
+    environment_sha256: Sha256
+
+
+class LegacyParentAttestationV1(StrictModel):
+    """Non-retroactive wrapper around one accepted checksum-only parent."""
+
+    schema_id: Literal["credo.legacy_parent_attestation"] = (
+        "credo.legacy_parent_attestation"
+    )
+    schema_version: Literal[1] = 1
+    attestation_id: str
+    evidence_role: Literal["nonretroactive_legacy_checksum_parent_attestation"] = (
+        "nonretroactive_legacy_checksum_parent_attestation"
+    )
+    parent: LegacyParentDescriptor
+    legacy_publication_semantics: LegacyPublicationSemantics
+    verification: LegacyChecksumVerificationSummary
+    artifacts: LegacyAttestationArtifacts
+    execution_boundary: LegacyExecutionBoundary
+    builder: LegacyAttestationBuilder
+
+    @model_validator(mode="after")
+    def validate_attestation(self) -> LegacyParentAttestationV1:
+        expected = self.identity(id_field="attestation_id")
+        if self.attestation_id != expected:
+            raise ValueError(f"attestation_id mismatch: expected {expected}.")
+        return self
+
+
+class LegacyParentAttestationTestContractV1(StrictModel):
+    """Frozen gate list for one non-retroactive wrapper execution."""
+
+    schema_version: Literal[1] = 1
+    test_contract_id: str
+    parent_logical_name: str = Field(min_length=1)
+    require_strict_manifest_syntax: Literal[True] = True
+    require_complete_regular_file_coverage: Literal[True] = True
+    require_no_symlinks_or_special_files: Literal[True] = True
+    require_exact_parent_semantic_ids: Literal[True] = True
+    require_parent_relationship_verification: Literal[True] = True
+    require_no_parent_writes: Literal[True] = True
+    require_no_source_matrix_access: Literal[True] = True
+
+    @model_validator(mode="after")
+    def validate_contract(self) -> LegacyParentAttestationTestContractV1:
+        expected = self.identity(id_field="test_contract_id")
+        if self.test_contract_id != expected:
+            raise ValueError(f"test_contract_id mismatch: expected {expected}.")
+        return self
+
+
+class LegacyParentAttestationReceiptV1(StrictModel):
+    """Passed decision receipt for one exact wrapper and historical parent."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str
+    test_contract_id: str = Field(min_length=1)
+    attestation_id: str = Field(min_length=1)
+    attestation: ArtifactRef
+    legacy_sha256sums_verified: bool
+    all_authoritative_files_covered: bool
+    parent_g00a_v1_verified: bool
+    parent_g00b_v1_verified: bool
+    parent_g00a_g00b_relationship_verified: bool
+    original_atomicity_not_claimed: bool
+    parent_writes_performed: Literal[False] = False
+    source_matrix_access_performed: Literal[False] = False
+    model_fitting_performed: Literal[False] = False
+    protected_expression_scientifically_used: Literal[False] = False
+    status: Literal["pass", "fail"]
+
+    @model_validator(mode="after")
+    def validate_receipt(self) -> LegacyParentAttestationReceiptV1:
+        passed = all(
+            (
+                self.legacy_sha256sums_verified,
+                self.all_authoritative_files_covered,
+                self.parent_g00a_v1_verified,
+                self.parent_g00b_v1_verified,
+                self.parent_g00a_g00b_relationship_verified,
+                self.original_atomicity_not_claimed,
+            )
+        )
+        expected_status = "pass" if passed else "fail"
+        if self.status != expected_status:
+            raise ValueError(f"Legacy-parent attestation status must be {expected_status}.")
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
+        return self
+
+
+class NativeManifestLastBoundary(StrictModel):
+    """Native publication type; legacy dispatch may never construct this type."""
+
+    boundary_kind: Literal["native_manifest_last_v1"] = "native_manifest_last_v1"
+    parent_logical_name: str = Field(min_length=1)
+    g00a_v1_authority_id: str = Field(min_length=1)
+    g00b_v1_virtual_store_id: str = Field(min_length=1)
+    artifacts_manifest: ArtifactRef
+    committed_marker: ArtifactRef
+    sha256sums: ArtifactRef
+
+
+class LegacyChecksumAttestedBoundary(StrictModel):
+    """Distinct parent type admitted only by one passed sibling wrapper."""
+
+    boundary_kind: Literal["legacy_checksum_attested_v1"] = (
+        "legacy_checksum_attested_v1"
+    )
+    parent_logical_name: str = Field(min_length=1)
+    g00a_v1_authority_id: str = Field(min_length=1)
+    g00b_v1_virtual_store_id: str = Field(min_length=1)
+    original_sha256sums: ArtifactRef
+    attestation_id: str = Field(min_length=1)
+    attestation: ArtifactRef
+    attestation_receipt_id: str = Field(min_length=1)
+    attestation_receipt: ArtifactRef
+
+
+ParentPublicationBoundary = Annotated[
+    NativeManifestLastBoundary | LegacyChecksumAttestedBoundary,
+    Field(discriminator="boundary_kind"),
+]
+
+
+class B0ParentResolutionReceiptV1(StrictModel):
+    """Fail-closed B0.1 result for exactly one discriminated parent type."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: str
+    boundary: ParentPublicationBoundary
+    parent_checksum_boundary: bool
+    all_consumed_artifacts_covered: bool
+    g00a_v1_valid: bool
+    g00b_v1_valid: bool
+    g00a_g00b_relationship_valid: bool
+    historical_semantics: LegacyPublicationSemantics | None = None
+    status: Literal["pass", "fail"]
+
+    @model_validator(mode="after")
+    def validate_resolution(self) -> B0ParentResolutionReceiptV1:
+        if isinstance(self.boundary, LegacyChecksumAttestedBoundary):
+            if self.historical_semantics is None:
+                raise ValueError("Legacy parent resolution requires historical semantics.")
+        elif self.historical_semantics is not None:
+            raise ValueError("Native parent resolution cannot carry legacy semantics.")
+        passed = all(
+            (
+                self.parent_checksum_boundary,
+                self.all_consumed_artifacts_covered,
+                self.g00a_v1_valid,
+                self.g00b_v1_valid,
+                self.g00a_g00b_relationship_valid,
+            )
+        )
+        expected_status = "pass" if passed else "fail"
+        if self.status != expected_status:
+            raise ValueError(f"B0 parent-resolution status must be {expected_status}.")
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
+        return self
+
+
 class G00SourcePlaneV2Amendment(StrictModel):
     """No-model provenance bridge from accepted Dev29 v1 evidence to v2."""
 
@@ -2802,7 +3038,7 @@ class CompiledRunContract(StrictModel):
     schema_version: int = 1
     compiled_run_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev31"] = "4.0.dev31"
+    recipe_version: Literal["4.0.dev32"] = "4.0.dev32"
     recipe_wheel_hash: Sha256
     frozen_credo_artifact_hash: Sha256
     environment_lock_hash: Sha256
@@ -2869,7 +3105,7 @@ class InferenceBundleManifest(StrictModel):
     compiled_run_id: str
     selected_checkpoint_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev31"] = "4.0.dev31"
+    recipe_version: Literal["4.0.dev32"] = "4.0.dev32"
     selected_family: Literal[
         "configured_checkpoint",
         "gene_decoder_selected",

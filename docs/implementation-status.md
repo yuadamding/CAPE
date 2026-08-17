@@ -1,6 +1,6 @@
 # Implementation status
 
-Last verified: 2026-08-16. Authority: package engineering status; biological
+Last verified: 2026-08-17. Authority: package engineering status; biological
 run receipts and cohort audits remain external to this repository.
 
 Implemented in this repository:
@@ -77,8 +77,8 @@ software/synthetic qualification, not evidence about a cohort. See the
 [dev24 R1 amendment](t07s-reaction-metric-amendment.md) and authoritative
 [dev25 unified R0/R1 amendment](t07s-null-interval-amendment.md).
 
-Local acceptance completed with 214 CPU tests passing and one CUDA-only test
-skipped on the CPU validation host, with 85.22% branch-aware coverage. The exact
+Local acceptance completed with 224 CPU tests passing and one CUDA-only test
+skipped on the CPU validation host, with 85.19% branch-aware coverage. The exact
 test and coverage results are in
 `receipts/local-validation.json`. Ruff,
 mypy, generated-schema, documentation-link, wheel
@@ -144,6 +144,17 @@ This remains contract-only work: Dev31 has not constructed the amendment or run
 G00C/G00D. See the
 [Dev31 provenance finalization](g00-dev31-provenance-finalization.md).
 
+Dev31-B0 A1 then failed correctly before source access: accepted Dev29 bytes
+passed their historical `SHA256SUMS`, but the original publication has no
+native `artifacts.json` or `COMMITTED` marker. Dev32 does not make those native
+markers optional. It introduces a discriminated
+`legacy_checksum_attested_v1` parent type whose separately published sibling
+wrapper proves current checksum coverage and exact accepted G00A/G00B
+semantics while explicitly denying historical atomic or manifest-last
+publication. The wrapper builder never opens the twelve raw expression
+matrices. See the
+[Dev32 legacy-parent attestation boundary](g00-dev32-legacy-parent-attestation.md).
+
 Dev7 replaced the invalid reconstructed-SVD softmax with a checkpoint-owned
 multinomial count-composition decoder. Dev10 added a deterministic
 training-only validation holdout and minimum-validation-cross-entropy
@@ -190,7 +201,7 @@ conditional-interaction, and joint nulls, freezes fold and seed identities,
 and strengthens noninteraction comparators. That T03 code remains unqualified
 until T01, T02, and the prescribed pooled pilot pass.
 
-Deliberately not asserted complete in `4.0.0.dev31`:
+Deliberately not asserted complete in `4.0.0.dev32`:
 
 - stable CREDO entry-point discovery;
 - in-repository real-cohort adapters, biological thresholds, or biological claims;

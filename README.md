@@ -8,7 +8,7 @@ count_state → count_measure → count_context
 ```
 
 It is a sibling of, not a modification to, the frozen CREDO checkout. Version
-`4.0.0.dev31` is engineering software; it is not a biological result and cannot
+`4.0.0.dev32` is engineering software; it is not a biological result and cannot
 be relabeled as stable `4.0`.
 
 Implemented surfaces include strict hash-bound contracts, sparse count storage,
@@ -60,8 +60,10 @@ G00D parity/performance contracts. It runs no G00C/G00D workload and changes no
 scientific gate. See the
 [G00 Dev30-A amendment](docs/g00-dev30a-contract-amendment.md) and its
 [superseded Dev30-A-r2 draft](docs/g00-dev30a-r2-contract-finalization.md).
-The active contract authority is the
-[Dev31 provenance finalization](docs/g00-dev31-provenance-finalization.md).
+Dev31 remains the frozen v2 provenance authority. Dev32 adds only the distinct
+[legacy-parent attestation boundary](docs/g00-dev32-legacy-parent-attestation.md)
+required after B0 A1 correctly rejected Dev29's historical checksum-only
+publication.
 
 ## Quick start
 
@@ -117,6 +119,7 @@ See [architecture](docs/architecture.md), [contracts](docs/contracts.md),
 [the G00 Dev30-A contract amendment](docs/g00-dev30a-contract-amendment.md),
 [the superseded G00 Dev30-A-r2 draft](docs/g00-dev30a-r2-contract-finalization.md),
 [the active G00 Dev31 provenance finalization](docs/g00-dev31-provenance-finalization.md),
+[the Dev32 legacy-parent attestation boundary](docs/g00-dev32-legacy-parent-attestation.md),
 [component qualification](docs/component-qualification.md),
 [the detailed T01 record](docs/t01-representation-qualification.md),
 [the detailed T02A record](docs/t02a-raw-count-mass-noise.md),

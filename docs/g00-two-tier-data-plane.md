@@ -34,6 +34,8 @@ No G00C or G00D status may be inferred from dev28 raw-layout probes or the
 contract-only Dev30-A amendment. The superseded r2 draft remains historical;
 the active execution contract is the
 [Dev31 provenance finalization](g00-dev31-provenance-finalization.md).
+Historical checksum-only parent admission is separately governed by the
+[Dev32 legacy-parent attestation](g00-dev32-legacy-parent-attestation.md).
 
 ## G00A: source authority
 

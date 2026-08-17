@@ -7,6 +7,7 @@ from pathlib import Path
 
 from credo_count_sde_v4.contracts import (
     ArtifactRef,
+    B0ParentResolutionReceiptV1,
     BaselineInformationSet,
     BaselineRegistry,
     CandidateSelectionPlan,
@@ -46,6 +47,9 @@ from credo_count_sde_v4.contracts import (
     IntegratedLoaderQualificationContractV2,
     IntegratedLoaderQualificationReceiptV1,
     IntegratedLoaderQualificationReceiptV2,
+    LegacyParentAttestationReceiptV1,
+    LegacyParentAttestationTestContractV1,
+    LegacyParentAttestationV1,
     MultiplicityPlan,
     ParticleEngineQualificationBundle,
     ParticleEngineTestReceipt,
@@ -100,6 +104,12 @@ MODELS = {
     "g00-source-plane-v2-amendment.v1.json": G00SourcePlaneV2Amendment,
     "g00-source-plane-v2-amendment-receipt.v1.json": G00SourcePlaneV2AmendmentReceipt,
     "source-plane-derivation-receipt.v1.json": SourcePlaneDerivationReceipt,
+    "legacy-parent-attestation.v1.json": LegacyParentAttestationV1,
+    "legacy-parent-attestation-test-contract.v1.json": (
+        LegacyParentAttestationTestContractV1
+    ),
+    "legacy-parent-attestation-receipt.v1.json": LegacyParentAttestationReceiptV1,
+    "b0-parent-resolution-receipt.v1.json": B0ParentResolutionReceiptV1,
     "g00c-execution-bundle.v1.json": G00CExecutionBundle,
     "g00c-decision-receipt.v1.json": G00CDecisionReceipt,
     "integrated-loader-qualification-contract.v1.json": (IntegratedLoaderQualificationContractV1),
