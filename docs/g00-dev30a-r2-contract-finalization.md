@@ -1,5 +1,10 @@
 # G00 Dev30-A-r2 contract finalization
 
+> **Superseded contract draft.** External review found incomplete source-record
+> projection and artifact wiring. Dev31 closes those blockers; use
+> [G00 Dev31 provenance finalization](g00-dev31-provenance-finalization.md) as
+> the active contract authority. This r2 document does not authorize B0.
+
 Last verified: 2026-08-16
 Status: contract-only engineering amendment
 Authority: source and execution contracts in `4.0.0.dev30`
@@ -85,9 +90,9 @@ per-gate parity records. Pass/fail is recomputed from exact hashes or numerical
 tolerances, performance thresholds, bounded-memory evidence, and zero error
 counts.
 
-## Authorized next operation
+## Historical proposed next operation
 
-The next permissible action is Dev30-B0: build the no-model v2 source-plane
+The draft proposed Dev30-B0: build the no-model v2 source-plane
 amendment from the accepted Dev29 v1 parents and immutable source hashes. G00C
 materialization remains forbidden until that amendment passes. G00D and G04
-remain downstream-blocked.
+remain downstream-blocked. This proposal was superseded before execution.

@@ -176,7 +176,7 @@
     },
     "VirtualCountSourceV2": {
       "additionalProperties": false,
-      "description": "Dev30 immutable source record with numerical CSR authority.",
+      "description": "Dev31 immutable source record with numerical CSR authority.",
       "properties": {
         "canonical_permutation_hash": {
           "pattern": "^[0-9a-f]{64}$",
@@ -274,7 +274,7 @@
   "$id": "https://credo.local/schemas/virtual-canonical-count-store.v2.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Dev30 G00B metadata-only access with exact G00A parent binding.",
+  "description": "Dev31 G00B metadata-only access with exact G00A parent binding.",
   "properties": {
     "access_semantics": {
       "$ref": "#/$defs/ProtectedSourceAccessSemantics"

@@ -1,5 +1,18 @@
 # Changelog
 
+## 4.0.0.dev31 — 2026-08-16
+
+- require exact field-level projection of every accepted v1 source record into
+  v2 and preserve all inherited source-plane authorities;
+- bind parent, amendment, derived G00A/G00B, and passed amendment-receipt files
+  by exact `ArtifactRef`, and parse the amendment during virtual-store checks;
+- derive G00C fit/validation roles, feature and cell prefixes, compact CSR
+  values, and interrupted sampler replay from actual artifacts;
+- derive G00D telemetry, parity, and bounded-memory decisions from bound files
+  with frozen gate-specific exact versus numerical comparison semantics; and
+- add adversarial provenance and artifact-tamper tests without executing G00,
+  opening protected outcomes, or changing scientific status.
+
 ## Dev30-A-r2
 
 - Added an immutable Dev29-v1-to-v2 source-plane amendment and derivation

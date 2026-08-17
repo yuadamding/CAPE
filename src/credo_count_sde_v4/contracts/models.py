@@ -1808,7 +1808,7 @@ class G00SourcePlaneV2AmendmentReceipt(StrictModel):
 
 
 class VirtualCountSourceV2(StrictModel):
-    """Dev30 immutable source record with numerical CSR authority."""
+    """Dev31 immutable source record with numerical CSR authority."""
 
     source_id: str = Field(min_length=1)
     donor_id: str = Field(min_length=1)
@@ -1839,7 +1839,7 @@ class VirtualCountSourceV2(StrictModel):
 
 
 class G00SourceAuthorityV2(StrictModel):
-    """Dev30 G00A source, numeric, feature, and guide-target authority."""
+    """Dev31 G00A source, numeric, feature, and guide-target authority."""
 
     schema_version: Literal[2] = 2
     authority_id: str
@@ -1889,7 +1889,7 @@ class G00SourceAuthorityV2(StrictModel):
 
 
 class VirtualCanonicalCountStoreManifestV2(StrictModel):
-    """Dev30 G00B metadata-only access with exact G00A parent binding."""
+    """Dev31 G00B metadata-only access with exact G00A parent binding."""
 
     schema_version: Literal[2] = 2
     virtual_store_id: str
@@ -1964,6 +1964,7 @@ class TrainingOnlyFeatureSelectionContract(StrictModel):
     method: Literal["training_only_ranked_prefix_v1"] = "training_only_ranked_prefix_v1"
     implementation_sha256: Sha256
     fit_rows_hash: Sha256
+    validation_rows_hash: Sha256
     candidate_feature_counts: tuple[int, ...] = (256, 512, 1024, 2048, 4096)
     selection_metric: Literal["training_validation_negative_log_likelihood"] = (
         "training_validation_negative_log_likelihood"
@@ -2041,12 +2042,16 @@ class CompactSamplerContract(StrictModel):
 
 
 class FoldNativeCompactViewContractV2(StrictModel):
-    """Dev30 G00C training-only selection and materialization contract."""
+    """Dev31 G00C training-only selection and materialization contract."""
 
     schema_version: Literal[2] = 2
     fold_view_id: str
     parent_source_authority_id: str
     parent_virtual_store_id: str
+    source_plane_amendment_id: str = Field(min_length=1)
+    source_plane_amendment: ArtifactRef
+    source_plane_amendment_receipt_id: str = Field(min_length=1)
+    source_plane_amendment_receipt: ArtifactRef
     parent_eligible_row_ids_hash: Sha256
     parent_guide_target_crosswalk_hash: Sha256
     outer_split_id: str
@@ -2096,6 +2101,8 @@ class G00CFeatureSelectionResult(StrictModel):
     curve: ArtifactRef
     paired_refit_draws: ArtifactRef
     ordered_features: ArtifactRef
+    fit_rows_hash: Sha256
+    validation_rows_hash: Sha256
     selected_feature_count: int = Field(gt=0, le=4096)
 
 
@@ -2104,6 +2111,8 @@ class G00CSampleSizeSelectionResult(StrictModel):
 
     curve: ArtifactRef
     paired_refit_draws: ArtifactRef
+    selected_training_rows: ArtifactRef
+    training_scale_row_order: ArtifactRef
     selected_training_cells: int = Field(gt=0)
     two_million_extension_opened: bool
 
@@ -2113,6 +2122,10 @@ class G00CSamplerEvidence(StrictModel):
 
     sampler_plan: ArtifactRef
     epoch_index: ArtifactRef
+    uninterrupted_draw_trace: ArtifactRef
+    resumed_draw_trace: ArtifactRef
+    uninterrupted_state_trace: ArtifactRef
+    resumed_state_trace: ArtifactRef
     resume_test: ArtifactRef
 
 
@@ -2129,6 +2142,9 @@ class G00CExecutionBundle(StrictModel):
     compact_payload: ArtifactRef
     publication_manifest: ArtifactRef
     reload_receipt: ArtifactRef
+    compact_payload_schema: Literal["g00c_compact_csr_hdf5_v1"] = "g00c_compact_csr_hdf5_v1"
+    compact_payload_rows: int = Field(gt=0)
+    compact_payload_features: int = Field(gt=0, le=4096)
     compact_payload_row_ids_hash: Sha256
     compact_payload_feature_order_hash: Sha256
     compact_payload_counts_sha256: Sha256
@@ -2187,8 +2203,24 @@ class G00CDecisionReceipt(StrictModel):
         return self
 
 
+class G00DParityGateContract(StrictModel):
+    """Frozen comparison semantics for one integrated-loader parity gate."""
+
+    gate: Literal[
+        "row_ids",
+        "raw_counts",
+        "sample_weights",
+        "thinning_rng",
+        "loss",
+        "gradient",
+        "parameter",
+        "interrupted_resume",
+    ]
+    comparison_mode: Literal["exact_hash", "exact_or_numerical", "numerical_tolerance"]
+
+
 class IntegratedLoaderQualificationContractV2(StrictModel):
-    """Dev30 G00D benchmark, parity, and bounded-memory protocol."""
+    """Dev31 G00D benchmark, parity, and bounded-memory protocol."""
 
     schema_version: Literal[2] = 2
     qualification_contract_id: str
@@ -2224,9 +2256,23 @@ class IntegratedLoaderQualificationContractV2(StrictModel):
     maximum_rss_excursion_fraction: float = Field(gt=0, le=1)
     parity_absolute_tolerance: float = Field(default=1e-6, gt=0)
     parity_relative_tolerance: float = Field(default=1e-5, gt=0)
+    parity_gates: tuple[G00DParityGateContract, ...]
 
     @model_validator(mode="after")
     def validate_loader_contract(self) -> IntegratedLoaderQualificationContractV2:
+        modes = {gate.gate: gate.comparison_mode for gate in self.parity_gates}
+        expected_modes = {
+            "row_ids": "exact_hash",
+            "raw_counts": "exact_hash",
+            "sample_weights": "exact_or_numerical",
+            "thinning_rng": "exact_hash",
+            "loss": "numerical_tolerance",
+            "gradient": "numerical_tolerance",
+            "parameter": "numerical_tolerance",
+            "interrupted_resume": "exact_hash",
+        }
+        if len(self.parity_gates) != len(expected_modes) or modes != expected_modes:
+            raise ValueError("G00D parity comparison modes must equal the frozen gate policy.")
         expected = self.identity(id_field="qualification_contract_id")
         if self.qualification_contract_id != expected:
             raise ValueError(f"qualification_contract_id mismatch: expected {expected}.")
@@ -2246,6 +2292,7 @@ class G00DParityGateEvidence(StrictModel):
         "parameter",
         "interrupted_resume",
     ]
+    comparison_mode: Literal["exact_hash", "exact_or_numerical", "numerical_tolerance"]
     reference_sha256: Sha256
     observed_sha256: Sha256
     maximum_absolute_error: float = Field(ge=0)
@@ -2253,7 +2300,7 @@ class G00DParityGateEvidence(StrictModel):
 
 
 class IntegratedLoaderQualificationReceiptV2(StrictModel):
-    """Dev30 observed G00D performance, parity, and memory evidence."""
+    """Dev31 observed G00D performance, parity, and memory evidence."""
 
     schema_version: Literal[2] = 2
     receipt_id: str
@@ -2755,7 +2802,7 @@ class CompiledRunContract(StrictModel):
     schema_version: int = 1
     compiled_run_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev30"] = "4.0.dev30"
+    recipe_version: Literal["4.0.dev31"] = "4.0.dev31"
     recipe_wheel_hash: Sha256
     frozen_credo_artifact_hash: Sha256
     environment_lock_hash: Sha256
@@ -2822,7 +2869,7 @@ class InferenceBundleManifest(StrictModel):
     compiled_run_id: str
     selected_checkpoint_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev30"] = "4.0.dev30"
+    recipe_version: Literal["4.0.dev31"] = "4.0.dev31"
     selected_family: Literal[
         "configured_checkpoint",
         "gene_decoder_selected",

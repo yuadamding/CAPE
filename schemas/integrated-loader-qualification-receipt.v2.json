@@ -46,6 +46,15 @@
       "additionalProperties": false,
       "description": "Per-gate exact or numerical parity evidence.",
       "properties": {
+        "comparison_mode": {
+          "enum": [
+            "exact_hash",
+            "exact_or_numerical",
+            "numerical_tolerance"
+          ],
+          "title": "Comparison Mode",
+          "type": "string"
+        },
         "gate": {
           "enum": [
             "row_ids",
@@ -83,6 +92,7 @@
       },
       "required": [
         "gate",
+        "comparison_mode",
         "reference_sha256",
         "observed_sha256",
         "maximum_absolute_error",
@@ -95,7 +105,7 @@
   "$id": "https://credo.local/schemas/integrated-loader-qualification-receipt.v2.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Dev30 observed G00D performance, parity, and memory evidence.",
+  "description": "Dev31 observed G00D performance, parity, and memory evidence.",
   "properties": {
     "cache_policy": {
       "minLength": 1,

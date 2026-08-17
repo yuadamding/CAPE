@@ -15,6 +15,7 @@ from scipy import sparse
 
 from ..canonical import canonical_json_bytes, sha256_file
 from ..contracts import (
+    G00SourcePlaneV2Amendment,
     SourcePlaneDerivationReceipt,
     VirtualCanonicalCountStoreManifest,
     VirtualCanonicalCountStoreManifestV2,
@@ -92,9 +93,7 @@ class VirtualCanonicalCountStore:
         self.source_root = source_root
         payload = manifest_path.read_text()
         version = int(json.loads(payload).get("schema_version", 0))
-        self.manifest: (
-            VirtualCanonicalCountStoreManifest | VirtualCanonicalCountStoreManifestV2
-        )
+        self.manifest: VirtualCanonicalCountStoreManifest | VirtualCanonicalCountStoreManifestV2
         if version == 1:
             self.manifest = VirtualCanonicalCountStoreManifest.model_validate_json(payload)
         elif version == 2:
@@ -148,12 +147,8 @@ class VirtualCanonicalCountStore:
                 or np.any(target_codes >= len(target_ids))
             ):
                 raise IntegrityError("Virtual row locator guide/target codes are invalid.")
-        guide_hash = hashlib.sha256(
-            canonical_json_bytes(guide_ids)
-        ).hexdigest()
-        target_hash = hashlib.sha256(
-            canonical_json_bytes(target_ids)
-        ).hexdigest()
+        guide_hash = hashlib.sha256(canonical_json_bytes(guide_ids)).hexdigest()
+        target_hash = hashlib.sha256(canonical_json_bytes(target_ids)).hexdigest()
         return guide_hash, target_hash
 
     def _verify_dev30_authority_artifacts(
@@ -172,6 +167,20 @@ class VirtualCanonicalCountStore:
             or sha256_file(amendment_path) != self.manifest.source_plane_amendment.sha256
         ):
             raise IntegrityError("Virtual canonical authority-artifact hash mismatch.")
+        amendment = G00SourcePlaneV2Amendment.model_validate_json(amendment_path.read_text())
+        if amendment.amendment_id != self.manifest.source_plane_amendment_id:
+            raise IntegrityError("Virtual canonical amendment ID differs from its manifest.")
+        amendment_wiring = (
+            (amendment.v2_guide_target_crosswalk, self.manifest.guide_target_crosswalk),
+            (amendment.v2_numerical_audit, self.manifest.source_numeric_audit),
+            (
+                amendment.v2_source_derivation_receipt,
+                self.manifest.source_derivation_receipt,
+            ),
+            (amendment.v2_row_locator, self.manifest.row_locator),
+        )
+        if any(expected != observed for expected, observed in amendment_wiring):
+            raise IntegrityError("Virtual canonical amendment artifact wiring differs.")
         crosswalk = pd.read_parquet(crosswalk_path)
         expected_column_order = (
             "guide_id",
@@ -198,9 +207,7 @@ class VirtualCanonicalCountStore:
         ):
             raise IntegrityError("Guide-target crosswalk invariants failed.")
         control_targets = set(crosswalk.loc[crosswalk["is_control"], "target_id"].astype(str))
-        targeting_targets = set(
-            crosswalk.loc[~crosswalk["is_control"], "target_id"].astype(str)
-        )
+        targeting_targets = set(crosswalk.loc[~crosswalk["is_control"], "target_id"].astype(str))
         if control_targets & targeting_targets:
             raise IntegrityError("Control and targeting crosswalk target sets overlap.")
         locator_path = self.path / self.manifest.row_locator.relative_uri
@@ -253,9 +260,7 @@ class VirtualCanonicalCountStore:
         if set(numeric.columns) != numeric_columns or numeric["source_id"].duplicated().any():
             raise IntegrityError("Source numeric audit has an unexpected schema.")
         observed = {
-            str(row.source_id): {
-                key: getattr(row, key) for key in numeric_columns - {"source_id"}
-            }
+            str(row.source_id): {key: getattr(row, key) for key in numeric_columns - {"source_id"}}
             for row in numeric.itertuples(index=False)
         }
         expected = {
@@ -264,9 +269,7 @@ class VirtualCanonicalCountStore:
         }
         if observed != expected:
             raise IntegrityError("Source numeric audit differs from source records.")
-        derivation = SourcePlaneDerivationReceipt.model_validate_json(
-            derivation_path.read_text()
-        )
+        derivation = SourcePlaneDerivationReceipt.model_validate_json(derivation_path.read_text())
         records = {record.source_id: record for record in derivation.records}
         if set(records) != {source.source_id for source in self.manifest.sources}:
             raise IntegrityError("Source derivation receipt has a different source catalog.")
@@ -284,9 +287,7 @@ class VirtualCanonicalCountStore:
                 != _source_row_pairs_hash(source_index, selected_rows)
                 or record.source_file_sha256 != source.source_file_sha256
             ):
-                raise IntegrityError(
-                    f"Source derivation receipt differs for {source.source_id}."
-                )
+                raise IntegrityError(f"Source derivation receipt differs for {source.source_id}.")
 
     def _feature_permutations(self) -> tuple[np.ndarray, ...]:
         if self._permutations is None:
@@ -335,14 +336,10 @@ class VirtualCanonicalCountStore:
             selected = source_indices == index
             selected_rows = source_rows[selected]
             if int(selected.sum()) != source.eligible_rows:
-                raise IntegrityError(
-                    f"Virtual source row count differs for {source.source_id}."
-                )
+                raise IntegrityError(f"Virtual source row count differs for {source.source_id}.")
             sorted_source_rows = np.sort(selected_rows, kind="stable")
             if len(sorted_source_rows) > 1 and np.any(np.diff(sorted_source_rows) == 0):
-                raise IntegrityError(
-                    f"Virtual source rows are duplicated for {source.source_id}."
-                )
+                raise IntegrityError(f"Virtual source rows are duplicated for {source.source_id}.")
             if np.any(source_rows[selected] < 0) or np.any(source_rows[selected] >= source.rows):
                 raise IntegrityError(f"Virtual source rows exceed {source.source_id} bounds.")
             source_path = self.source_root / source.relative_uri

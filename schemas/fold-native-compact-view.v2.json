@@ -252,11 +252,17 @@
           "default": "smallest_prefix_with_p95_difference_le_margin",
           "title": "Selection Rule",
           "type": "string"
+        },
+        "validation_rows_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Validation Rows Hash",
+          "type": "string"
         }
       },
       "required": [
         "implementation_sha256",
         "fit_rows_hash",
+        "validation_rows_hash",
         "minimum_improvement_margin",
         "ordered_feature_table"
       ],
@@ -320,7 +326,7 @@
   "$id": "https://credo.local/schemas/fold-native-compact-view.v2.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Dev30 G00C training-only selection and materialization contract.",
+  "description": "Dev31 G00C training-only selection and materialization contract.",
   "properties": {
     "count_dtype": {
       "enum": [
@@ -414,6 +420,22 @@
       "title": "Schema Version",
       "type": "integer"
     },
+    "source_plane_amendment": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "source_plane_amendment_id": {
+      "minLength": 1,
+      "title": "Source Plane Amendment Id",
+      "type": "string"
+    },
+    "source_plane_amendment_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "source_plane_amendment_receipt_id": {
+      "minLength": 1,
+      "title": "Source Plane Amendment Receipt Id",
+      "type": "string"
+    },
     "training_donor_ids": {
       "items": {
         "type": "string"
@@ -426,6 +448,10 @@
     "fold_view_id",
     "parent_source_authority_id",
     "parent_virtual_store_id",
+    "source_plane_amendment_id",
+    "source_plane_amendment",
+    "source_plane_amendment_receipt_id",
+    "source_plane_amendment_receipt",
     "parent_eligible_row_ids_hash",
     "parent_guide_target_crosswalk_hash",
     "outer_split_id",

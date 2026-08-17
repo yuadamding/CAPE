@@ -15,14 +15,18 @@ from credo_count_sde_v4.contracts import (
     FoldNativeCompactViewContractV1,
     FoldNativeCompactViewContractV2,
     FoldRowRoleRecord,
+    G00DParityGateContract,
     G00DParityGateEvidence,
     G00SourceAuthorityV1,
     G00SourceAuthorityV2,
+    G00SourcePlaneV2Amendment,
+    G00SourcePlaneV2AmendmentReceipt,
     IntegratedLoaderQualificationContractV1,
     IntegratedLoaderQualificationContractV2,
     IntegratedLoaderQualificationReceiptV1,
     IntegratedLoaderQualificationReceiptV2,
     ProtectedSourceAccessSemantics,
+    SourceHashBinding,
     SourceNumericIntegrity,
     StrictModel,
     TrainingOnlyFeatureSelectionContract,
@@ -284,9 +288,9 @@ def test_dev29_v1_source_plane_remains_cross_validatable() -> None:
             **shared,
             "features": 18_130,
             "row_locator": _artifact("8", "row-locator.h5").model_dump(mode="json"),
-            "feature_permutations": _artifact(
-                "9", "feature-permutations.npz"
-            ).model_dump(mode="json"),
+            "feature_permutations": _artifact("9", "feature-permutations.npz").model_dump(
+                mode="json"
+            ),
         },
         "virtual_store_id",
     )
@@ -306,7 +310,14 @@ def _artifact(digit: str, uri: str) -> ArtifactRef:
     )
 
 
-def _dev30_source_plane() -> tuple[G00SourceAuthorityV2, VirtualCanonicalCountStoreManifestV2]:
+def _dev30_source_plane() -> tuple[
+    G00SourceAuthorityV2,
+    VirtualCanonicalCountStoreManifestV2,
+    G00SourcePlaneV2Amendment,
+    G00SourcePlaneV2AmendmentReceipt,
+    ArtifactRef,
+    ArtifactRef,
+]:
     access = ProtectedSourceAccessSemantics()
     source = VirtualCountSourceV2(
         source_id="D1_Rest",
@@ -331,11 +342,45 @@ def _dev30_source_plane() -> tuple[G00SourceAuthorityV2, VirtualCanonicalCountSt
     )
     crosswalk = _artifact("6", "GUIDE_TARGET_CROSSWALK.parquet")
     numeric = _artifact("7", "SOURCE_NUMERIC_AUDIT.parquet")
-    amendment = _artifact("a", "G00_SOURCE_PLANE_V2_AMENDMENT.json")
     derivation = _artifact("f", "SOURCE_PLANE_DERIVATION_RECEIPT.json")
+    locator = _artifact("8", "row-locator.h5")
+    amendment = _identified(
+        G00SourcePlaneV2Amendment,
+        {
+            "schema_version": 1,
+            "parent_g00a_v1_authority_id": "g00a-v1",
+            "parent_g00a_v1": _artifact("1", "G00A-v1.json").model_dump(mode="json"),
+            "parent_g00b_v1_virtual_store_id": "g00b-v1",
+            "parent_g00b_v1_manifest": _artifact("2", "G00B-v1.json").model_dump(mode="json"),
+            "immutable_source_hashes": [
+                SourceHashBinding(
+                    source_id=(source.source_id if index == 0 else f"source-{index}"),
+                    source_file_sha256=(
+                        source.source_file_sha256 if index == 0 else f"{index:x}" * 64
+                    ),
+                ).model_dump(mode="json")
+                for index in range(12)
+            ],
+            "v2_guide_target_crosswalk": crosswalk.model_dump(mode="json"),
+            "v2_numerical_audit": numeric.model_dump(mode="json"),
+            "v2_source_derivation_receipt": derivation.model_dump(mode="json"),
+            "v2_row_locator": locator.model_dump(mode="json"),
+            "builder_implementation_sha256": "3" * 64,
+            "environment_hash": "4" * 64,
+        },
+        "amendment_id",
+    )
+    amendment_artifact = ArtifactRef(
+        schema_id="test.g00-amendment",
+        schema_version=1,
+        sha256=hashlib.sha256(amendment.model_dump_json().encode()).hexdigest(),
+        size_bytes=len(amendment.model_dump_json()),
+        media_type="application/json",
+        relative_uri="G00_SOURCE_PLANE_V2_AMENDMENT.json",
+    )
     shared = {
-        "source_plane_amendment_id": "amendment-v1",
-        "source_plane_amendment": amendment.model_dump(mode="json"),
+        "source_plane_amendment_id": amendment.amendment_id,
+        "source_plane_amendment": amendment_artifact.model_dump(mode="json"),
         "canonical_feature_index_hash": "d" * 64,
         "guide_catalog_hash": "4" * 64,
         "target_catalog_hash": "5" * 64,
@@ -364,18 +409,59 @@ def _dev30_source_plane() -> tuple[G00SourceAuthorityV2, VirtualCanonicalCountSt
             "source_authority_id": authority.authority_id,
             **shared,
             "features": 18_130,
-            "row_locator": _artifact("8", "row-locator.h5").model_dump(mode="json"),
-            "feature_permutations": _artifact(
-                "9", "feature-permutations.npz"
-            ).model_dump(mode="json"),
+            "row_locator": locator.model_dump(mode="json"),
+            "feature_permutations": _artifact("9", "feature-permutations.npz").model_dump(
+                mode="json"
+            ),
         },
         "virtual_store_id",
     )
-    return authority, manifest
+    authority_artifact = ArtifactRef(
+        schema_id="test.g00a-v2",
+        schema_version=2,
+        sha256=hashlib.sha256(authority.model_dump_json().encode()).hexdigest(),
+        size_bytes=len(authority.model_dump_json()),
+        media_type="application/json",
+        relative_uri="G00A-v2.json",
+    )
+    manifest_artifact = ArtifactRef(
+        schema_id="test.g00b-v2",
+        schema_version=2,
+        sha256=hashlib.sha256(manifest.model_dump_json().encode()).hexdigest(),
+        size_bytes=len(manifest.model_dump_json()),
+        media_type="application/json",
+        relative_uri="G00B-v2.json",
+    )
+    receipt = _identified(
+        G00SourcePlaneV2AmendmentReceipt,
+        {
+            "schema_version": 1,
+            "amendment_id": amendment.amendment_id,
+            "derived_g00a_v2_authority_id": authority.authority_id,
+            "derived_g00a_v2": authority_artifact.model_dump(mode="json"),
+            "derived_g00b_v2_virtual_store_id": manifest.virtual_store_id,
+            "derived_g00b_v2": manifest_artifact.model_dump(mode="json"),
+            "parent_files_verified": True,
+            "all_source_hashes_verified": True,
+            "derivation_receipt_verified": True,
+            "v2_parent_equality_verified": True,
+            "status": "pass",
+        },
+        "receipt_id",
+    )
+    receipt_artifact = ArtifactRef(
+        schema_id="test.g00-amendment-receipt",
+        schema_version=1,
+        sha256=hashlib.sha256(receipt.model_dump_json().encode()).hexdigest(),
+        size_bytes=len(receipt.model_dump_json()),
+        media_type="application/json",
+        relative_uri="G00_SOURCE_PLANE_V2_AMENDMENT_RECEIPT.json",
+    )
+    return authority, manifest, amendment, receipt, amendment_artifact, receipt_artifact
 
 
 def test_dev30_source_plane_binds_access_numeric_crosswalk_and_parent(tmp_path: Path) -> None:
-    authority, manifest = _dev30_source_plane()
+    authority, manifest, _, _, _, _ = _dev30_source_plane()
     validate_g00_source_plane(authority, manifest)
     for filename, value in (("authority.json", authority), ("manifest.json", manifest)):
         path = tmp_path / filename
@@ -400,11 +486,22 @@ def test_dev30_source_plane_binds_access_numeric_crosswalk_and_parent(tmp_path: 
 
 
 def _dev30_fold_view(
-    *, authority_id: str = "authority", virtual_store_id: str = "virtual"
+    *,
+    authority_id: str = "authority",
+    virtual_store_id: str = "virtual",
+    amendment_id: str = "amendment",
+    amendment_artifact: ArtifactRef | None = None,
+    amendment_receipt_id: str = "amendment-receipt",
+    amendment_receipt_artifact: ArtifactRef | None = None,
 ) -> FoldNativeCompactViewContractV2:
+    amendment_artifact = amendment_artifact or _artifact("a", "amendment.json")
+    amendment_receipt_artifact = amendment_receipt_artifact or _artifact(
+        "b", "amendment-receipt.json"
+    )
     feature = TrainingOnlyFeatureSelectionContract(
         implementation_sha256="1" * 64,
         fit_rows_hash="2" * 64,
+        validation_rows_hash="0" * 64,
         minimum_improvement_margin=0.001,
         ordered_feature_table=_artifact("3", "ORDERED_FEATURES.parquet"),
     )
@@ -435,6 +532,10 @@ def _dev30_fold_view(
             "schema_version": 2,
             "parent_source_authority_id": authority_id,
             "parent_virtual_store_id": virtual_store_id,
+            "source_plane_amendment_id": amendment_id,
+            "source_plane_amendment": amendment_artifact.model_dump(mode="json"),
+            "source_plane_amendment_receipt_id": amendment_receipt_id,
+            "source_plane_amendment_receipt": amendment_receipt_artifact.model_dump(mode="json"),
             "parent_eligible_row_ids_hash": "e" * 64,
             "parent_guide_target_crosswalk_hash": "6" * 64,
             "outer_split_id": "lodo-D4",
@@ -485,16 +586,46 @@ def test_dev30_g00c_freezes_selection_roles_sampler_and_technical_feature() -> N
 
 
 def test_dev30_g00c_parent_binding_rejects_row_universe_drift() -> None:
-    authority, manifest = _dev30_source_plane()
-    fold = _dev30_fold_view(
-        authority_id=authority.authority_id, virtual_store_id=manifest.virtual_store_id
+    authority, manifest, amendment, receipt, amendment_artifact, receipt_artifact = (
+        _dev30_source_plane()
     )
-    validate_g00_fold_view_parent(fold, authority, manifest)
+    fold = _dev30_fold_view(
+        authority_id=authority.authority_id,
+        virtual_store_id=manifest.virtual_store_id,
+        amendment_id=amendment.amendment_id,
+        amendment_artifact=amendment_artifact,
+        amendment_receipt_id=receipt.receipt_id,
+        amendment_receipt_artifact=receipt_artifact,
+    )
+    validate_g00_fold_view_parent(
+        fold,
+        authority,
+        manifest,
+        amendment,
+        receipt,
+        amendment_artifact=amendment_artifact,
+        amendment_receipt_artifact=receipt_artifact,
+    )
     with pytest.raises(IntegrityError, match="eligible row universe"):
         validate_g00_fold_view_parent(
             fold.model_copy(update={"parent_eligible_row_ids_hash": "0" * 64}),
             authority,
             manifest,
+            amendment,
+            receipt,
+            amendment_artifact=amendment_artifact,
+            amendment_receipt_artifact=receipt_artifact,
+        )
+    failed_receipt = receipt.model_copy(update={"status": "fail", "parent_files_verified": False})
+    with pytest.raises(IntegrityError, match="passed amendment receipt"):
+        validate_g00_fold_view_parent(
+            fold,
+            authority,
+            manifest,
+            amendment,
+            failed_receipt,
+            amendment_artifact=amendment_artifact,
+            amendment_receipt_artifact=receipt_artifact,
         )
 
 
@@ -527,6 +658,19 @@ def _dev30_g00d() -> tuple[
             "maximum_open_file_handles": 128,
             "maximum_rss_slope_upper_bytes_per_second": 1000.0,
             "maximum_rss_excursion_fraction": 0.10,
+            "parity_gates": [
+                G00DParityGateContract(gate=gate, comparison_mode=mode).model_dump(mode="json")
+                for gate, mode in (
+                    ("row_ids", "exact_hash"),
+                    ("raw_counts", "exact_hash"),
+                    ("sample_weights", "exact_or_numerical"),
+                    ("thinning_rng", "exact_hash"),
+                    ("loss", "numerical_tolerance"),
+                    ("gradient", "numerical_tolerance"),
+                    ("parameter", "numerical_tolerance"),
+                    ("interrupted_resume", "exact_hash"),
+                )
+            ],
         },
         "qualification_contract_id",
     )
@@ -576,20 +720,21 @@ def _dev30_g00d() -> tuple[
             "parity_gates": [
                 G00DParityGateEvidence(
                     gate=gate,
+                    comparison_mode=mode,
                     reference_sha256="1" * 64,
                     observed_sha256="1" * 64,
                     maximum_absolute_error=5e-7,
                     maximum_relative_error=5e-6,
                 ).model_dump(mode="json")
-                for gate in (
-                    "row_ids",
-                    "raw_counts",
-                    "sample_weights",
-                    "thinning_rng",
-                    "loss",
-                    "gradient",
-                    "parameter",
-                    "interrupted_resume",
+                for gate, mode in (
+                    ("row_ids", "exact_hash"),
+                    ("raw_counts", "exact_hash"),
+                    ("sample_weights", "exact_or_numerical"),
+                    ("thinning_rng", "exact_hash"),
+                    ("loss", "numerical_tolerance"),
+                    ("gradient", "numerical_tolerance"),
+                    ("parameter", "numerical_tolerance"),
+                    ("interrupted_resume", "exact_hash"),
                 )
             ],
             "lru_bound_pass": True,

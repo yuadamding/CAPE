@@ -1,8 +1,45 @@
 {
+  "$defs": {
+    "G00DParityGateContract": {
+      "additionalProperties": false,
+      "description": "Frozen comparison semantics for one integrated-loader parity gate.",
+      "properties": {
+        "comparison_mode": {
+          "enum": [
+            "exact_hash",
+            "exact_or_numerical",
+            "numerical_tolerance"
+          ],
+          "title": "Comparison Mode",
+          "type": "string"
+        },
+        "gate": {
+          "enum": [
+            "row_ids",
+            "raw_counts",
+            "sample_weights",
+            "thinning_rng",
+            "loss",
+            "gradient",
+            "parameter",
+            "interrupted_resume"
+          ],
+          "title": "Gate",
+          "type": "string"
+        }
+      },
+      "required": [
+        "gate",
+        "comparison_mode"
+      ],
+      "title": "G00DParityGateContract",
+      "type": "object"
+    }
+  },
   "$id": "https://credo.local/schemas/integrated-loader-qualification-contract.v2.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Dev30 G00D benchmark, parity, and bounded-memory protocol.",
+  "description": "Dev31 G00D benchmark, parity, and bounded-memory protocol.",
   "properties": {
     "cache_policy": {
       "minLength": 1,
@@ -133,6 +170,13 @@
       "title": "Parity Absolute Tolerance",
       "type": "number"
     },
+    "parity_gates": {
+      "items": {
+        "$ref": "#/$defs/G00DParityGateContract"
+      },
+      "title": "Parity Gates",
+      "type": "array"
+    },
     "parity_relative_tolerance": {
       "default": 1e-05,
       "exclusiveMinimum": 0,
@@ -210,7 +254,8 @@
     "maximum_open_shards",
     "maximum_open_file_handles",
     "maximum_rss_slope_upper_bytes_per_second",
-    "maximum_rss_excursion_fraction"
+    "maximum_rss_excursion_fraction",
+    "parity_gates"
   ],
   "title": "IntegratedLoaderQualificationContractV2",
   "type": "object"

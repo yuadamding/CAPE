@@ -49,6 +49,11 @@
         "curve": {
           "$ref": "#/$defs/ArtifactRef"
         },
+        "fit_rows_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fit Rows Hash",
+          "type": "string"
+        },
         "ordered_features": {
           "$ref": "#/$defs/ArtifactRef"
         },
@@ -60,12 +65,19 @@
           "maximum": 4096,
           "title": "Selected Feature Count",
           "type": "integer"
+        },
+        "validation_rows_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Validation Rows Hash",
+          "type": "string"
         }
       },
       "required": [
         "curve",
         "paired_refit_draws",
         "ordered_features",
+        "fit_rows_hash",
+        "validation_rows_hash",
         "selected_feature_count"
       ],
       "title": "G00CFeatureSelectionResult",
@@ -86,6 +98,12 @@
           "title": "Selected Training Cells",
           "type": "integer"
         },
+        "selected_training_rows": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "training_scale_row_order": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
         "two_million_extension_opened": {
           "title": "Two Million Extension Opened",
           "type": "boolean"
@@ -94,6 +112,8 @@
       "required": [
         "curve",
         "paired_refit_draws",
+        "selected_training_rows",
+        "training_scale_row_order",
         "selected_training_cells",
         "two_million_extension_opened"
       ],
@@ -110,13 +130,29 @@
         "resume_test": {
           "$ref": "#/$defs/ArtifactRef"
         },
+        "resumed_draw_trace": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "resumed_state_trace": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
         "sampler_plan": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "uninterrupted_draw_trace": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "uninterrupted_state_trace": {
           "$ref": "#/$defs/ArtifactRef"
         }
       },
       "required": [
         "sampler_plan",
         "epoch_index",
+        "uninterrupted_draw_trace",
+        "resumed_draw_trace",
+        "uninterrupted_state_trace",
+        "resumed_state_trace",
         "resume_test"
       ],
       "title": "G00CSamplerEvidence",
@@ -145,9 +181,26 @@
       "title": "Compact Payload Feature Order Hash",
       "type": "string"
     },
+    "compact_payload_features": {
+      "exclusiveMinimum": 0,
+      "maximum": 4096,
+      "title": "Compact Payload Features",
+      "type": "integer"
+    },
     "compact_payload_row_ids_hash": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Compact Payload Row Ids Hash",
+      "type": "string"
+    },
+    "compact_payload_rows": {
+      "exclusiveMinimum": 0,
+      "title": "Compact Payload Rows",
+      "type": "integer"
+    },
+    "compact_payload_schema": {
+      "const": "g00c_compact_csr_hdf5_v1",
+      "default": "g00c_compact_csr_hdf5_v1",
+      "title": "Compact Payload Schema",
       "type": "string"
     },
     "count_dtype": {
@@ -217,6 +270,8 @@
     "compact_payload",
     "publication_manifest",
     "reload_receipt",
+    "compact_payload_rows",
+    "compact_payload_features",
     "compact_payload_row_ids_hash",
     "compact_payload_feature_order_hash",
     "compact_payload_counts_sha256",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ..contracts import (
+    ArtifactRef,
     FoldNativeCompactViewContractV2,
     G00CDecisionReceipt,
     G00CExecutionBundle,
@@ -79,13 +80,24 @@ def validate_g00_source_plane_amendment(
     parent_manifest: VirtualCanonicalCountStoreManifestV1,
     authority: G00SourceAuthorityV2,
     manifest: VirtualCanonicalCountStoreManifestV2,
+    *,
+    parent_authority_artifact: ArtifactRef,
+    parent_manifest_artifact: ArtifactRef,
+    amendment_artifact: ArtifactRef,
+    authority_artifact: ArtifactRef,
+    manifest_artifact: ArtifactRef,
 ) -> None:
     """Require the v2 authority to be an exact no-model amendment of Dev29 v1."""
 
+    validate_g00_source_plane(parent_authority, parent_manifest)
     if amendment.parent_g00a_v1_authority_id != parent_authority.authority_id:
         raise IntegrityError("Source-plane amendment binds a different G00A v1 parent.")
     if amendment.parent_g00b_v1_virtual_store_id != parent_manifest.virtual_store_id:
         raise IntegrityError("Source-plane amendment binds a different G00B v1 parent.")
+    if amendment.parent_g00a_v1 != parent_authority_artifact:
+        raise IntegrityError("Source-plane amendment binds different G00A v1 file bytes.")
+    if amendment.parent_g00b_v1_manifest != parent_manifest_artifact:
+        raise IntegrityError("Source-plane amendment binds different G00B v1 file bytes.")
     expected_sources = {
         source.source_id: source.source_file_sha256 for source in parent_authority.sources
     }
@@ -94,17 +106,55 @@ def validate_g00_source_plane_amendment(
     }
     if observed_sources != expected_sources:
         raise IntegrityError("Source-plane amendment changes immutable source identities.")
+    parent_source_ids = tuple(source.source_id for source in parent_authority.sources)
+    derived_source_ids = tuple(source.source_id for source in authority.sources)
+    if derived_source_ids != parent_source_ids:
+        raise IntegrityError("Derived v2 source catalog is missing, additional, or reordered.")
+    parent_sources = {source.source_id: source for source in parent_authority.sources}
+    for source in authority.sources:
+        observed = source.model_dump(mode="json", exclude={"numeric_integrity"})
+        expected = parent_sources[source.source_id].model_dump(mode="json")
+        if observed != expected:
+            raise IntegrityError(
+                f"Derived v2 source record changes accepted v1 fields for {source.source_id}."
+            )
+    for field in (
+        "canonical_feature_index_hash",
+        "guide_catalog_hash",
+        "target_catalog_hash",
+        "eligibility_rule",
+        "eligible_row_ids_hash",
+        "eligible_rows",
+        "eligible_nnz",
+    ):
+        if getattr(authority, field) != getattr(parent_authority, field):
+            raise IntegrityError(f"Derived v2 authority changes accepted v1 field {field}.")
     if (
         authority.source_plane_amendment_id != amendment.amendment_id
         or manifest.source_plane_amendment_id != amendment.amendment_id
-        or authority.source_plane_amendment != manifest.source_plane_amendment
+        or authority.source_plane_amendment != amendment_artifact
+        or manifest.source_plane_amendment != amendment_artifact
     ):
         raise IntegrityError("Derived v2 evidence does not bind the same amendment.")
+    artifact_wiring = (
+        (amendment.v2_guide_target_crosswalk, authority.guide_target_crosswalk),
+        (amendment.v2_guide_target_crosswalk, manifest.guide_target_crosswalk),
+        (amendment.v2_numerical_audit, authority.source_numeric_audit),
+        (amendment.v2_numerical_audit, manifest.source_numeric_audit),
+        (amendment.v2_source_derivation_receipt, authority.source_derivation_receipt),
+        (amendment.v2_source_derivation_receipt, manifest.source_derivation_receipt),
+        (amendment.v2_row_locator, manifest.row_locator),
+    )
+    if any(expected != observed for expected, observed in artifact_wiring):
+        raise IntegrityError("Source-plane amendment derived-artifact wiring differs.")
     validate_g00_source_plane(authority, manifest)
     if (
         receipt.amendment_id != amendment.amendment_id
         or receipt.derived_g00a_v2_authority_id != authority.authority_id
         or receipt.derived_g00b_v2_virtual_store_id != manifest.virtual_store_id
+        or receipt.derived_g00a_v2 != authority_artifact
+        or receipt.derived_g00b_v2 != manifest_artifact
+        or receipt.status != "pass"
     ):
         raise IntegrityError("Source-plane amendment receipt binds different derived evidence.")
 
@@ -113,10 +163,31 @@ def validate_g00_fold_view_parent(
     fold: FoldNativeCompactViewContractV2,
     authority: G00SourceAuthorityV2,
     manifest: VirtualCanonicalCountStoreManifestV2,
+    amendment: G00SourcePlaneV2Amendment,
+    amendment_receipt: G00SourcePlaneV2AmendmentReceipt,
+    *,
+    amendment_artifact: ArtifactRef,
+    amendment_receipt_artifact: ArtifactRef,
 ) -> None:
     """Require a G00C contract to inherit the exact qualified G00A/G00B universe."""
 
     validate_g00_source_plane(authority, manifest)
+    if (
+        amendment_receipt.status != "pass"
+        or amendment_receipt.amendment_id != amendment.amendment_id
+        or amendment_receipt.derived_g00a_v2_authority_id != authority.authority_id
+        or amendment_receipt.derived_g00b_v2_virtual_store_id != manifest.virtual_store_id
+    ):
+        raise IntegrityError("G00C requires a passed amendment receipt for its exact parents.")
+    if (
+        fold.source_plane_amendment_id != amendment.amendment_id
+        or fold.source_plane_amendment != amendment_artifact
+        or authority.source_plane_amendment != amendment_artifact
+        or manifest.source_plane_amendment != amendment_artifact
+        or fold.source_plane_amendment_receipt_id != amendment_receipt.receipt_id
+        or fold.source_plane_amendment_receipt != amendment_receipt_artifact
+    ):
+        raise IntegrityError("G00C amendment or passed-receipt binding differs.")
     if fold.parent_source_authority_id != authority.authority_id:
         raise IntegrityError("G00C binds a different G00A authority.")
     if fold.parent_virtual_store_id != manifest.virtual_store_id:
@@ -147,6 +218,8 @@ def validate_g00c_decision(
         raise IntegrityError("G00C decision binds a different fold contract.")
     if receipt.execution_bundle_id != bundle.bundle_id:
         raise IntegrityError("G00C decision binds a different execution bundle.")
+    if bundle.row_roles != contract.row_role_audit:
+        raise IntegrityError("G00C execution binds a different row-role audit artifact.")
     if bundle.maximum_observed_count != contract.maximum_observed_count:
         raise IntegrityError("G00C result maximum count differs from its contract.")
     if bundle.count_dtype != contract.count_dtype or bundle.index_dtype != contract.index_dtype:
@@ -219,14 +292,24 @@ def validate_integrated_loader_qualification(
     for observed, expected in exact_fields:
         if getattr(receipt, observed) != getattr(contract, expected):
             raise IntegrityError(f"G00D receipt {observed} differs from its contract.")
-    parity_fields = tuple(
-        gate.reference_sha256 == gate.observed_sha256
-        or (
+    expected_modes = {gate.gate: gate.comparison_mode for gate in contract.parity_gates}
+    parity_fields: list[bool] = []
+    for gate in receipt.parity_gates:
+        mode = expected_modes.get(gate.gate)
+        if mode != gate.comparison_mode:
+            raise IntegrityError(f"G00D {gate.gate} comparison mode differs from its contract.")
+        exact = gate.reference_sha256 == gate.observed_sha256
+        numerical = (
             gate.maximum_absolute_error <= contract.parity_absolute_tolerance
             and gate.maximum_relative_error <= contract.parity_relative_tolerance
         )
-        for gate in receipt.parity_gates
-    )
+        parity_fields.append(
+            exact
+            if mode == "exact_hash"
+            else numerical
+            if mode == "numerical_tolerance"
+            else exact or numerical
+        )
     numerical_parity = (
         receipt.maximum_parity_absolute_error <= contract.parity_absolute_tolerance
         and receipt.maximum_parity_relative_error <= contract.parity_relative_tolerance

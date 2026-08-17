@@ -14,7 +14,9 @@ from credo_count_sde_v4 import validate_contract
 from credo_count_sde_v4.canonical import canonical_json_bytes, contract_id, sha256_file
 from credo_count_sde_v4.contracts import (
     ArtifactRef,
+    G00SourcePlaneV2Amendment,
     ProtectedSourceAccessSemantics,
+    SourceHashBinding,
     SourceNumericIntegrity,
     SourcePlaneDerivationReceipt,
     SourcePlaneDerivationRecord,
@@ -182,6 +184,35 @@ def _rewrite_v2_manifest(
     return VirtualCanonicalCountStore(store.path, source_root=store.source_root)
 
 
+def _rewire_amendment(
+    store: VirtualCanonicalCountStore,
+    payload: dict[str, object],
+    *,
+    amendment_field: str,
+    manifest_field: str,
+) -> None:
+    amendment_path = store.path / store.manifest.source_plane_amendment.relative_uri
+    amendment_payload = G00SourcePlaneV2Amendment.model_validate_json(
+        amendment_path.read_text()
+    ).model_dump(mode="json")
+    amendment_payload[amendment_field] = payload[manifest_field]
+    amendment_payload["amendment_id"] = "pending"
+    normalized = G00SourcePlaneV2Amendment.model_construct(
+        **{
+            name: TypeAdapter(field.annotation).validate_python(amendment_payload[name])
+            for name, field in G00SourcePlaneV2Amendment.model_fields.items()
+            if name in amendment_payload
+        }
+    ).model_dump(mode="json")
+    amendment_payload["amendment_id"] = contract_id(normalized, id_field="amendment_id")
+    amendment = G00SourcePlaneV2Amendment.model_validate(amendment_payload)
+    amendment_path.write_text(amendment.model_dump_json() + "\n")
+    payload["source_plane_amendment_id"] = amendment.amendment_id
+    payload["source_plane_amendment"] = _artifact(
+        amendment_path, root=store.path, media_type="application/json"
+    ).model_dump(mode="json")
+
+
 def _upgrade_virtual_store_to_v2(store: VirtualCanonicalCountStore) -> VirtualCanonicalCountStore:
     crosswalk = store.path / "GUIDE_TARGET_CROSSWALK.parquet"
     pd.DataFrame(
@@ -208,13 +239,9 @@ def _upgrade_virtual_store_to_v2(store: VirtualCanonicalCountStore) -> VirtualCa
         ]
     ).to_parquet(numeric, index=False)
     sources = tuple(
-        VirtualCountSourceV2(
-            **source.model_dump(mode="python"), numeric_integrity=integrity
-        )
+        VirtualCountSourceV2(**source.model_dump(mode="python"), numeric_integrity=integrity)
         for source in store.manifest.sources
     )
-    amendment = store.path / "G00_SOURCE_PLANE_V2_AMENDMENT.json"
-    amendment.write_text('{"amendment_id":"synthetic-amendment"}\n')
     row_ids, source_indices, source_rows = store._locator()
     records = tuple(
         SourcePlaneDerivationRecord(
@@ -242,17 +269,71 @@ def _upgrade_virtual_store_to_v2(store: VirtualCanonicalCountStore) -> VirtualCa
             if name in derivation_payload
         }
     ).model_dump(mode="json")
-    derivation_payload["receipt_id"] = contract_id(
-        derivation_normalized, id_field="receipt_id"
-    )
+    derivation_payload["receipt_id"] = contract_id(derivation_normalized, id_field="receipt_id")
     derivation_receipt = SourcePlaneDerivationReceipt.model_validate(derivation_payload)
     derivation = store.path / "SOURCE_PLANE_DERIVATION_RECEIPT.json"
     derivation.write_text(derivation_receipt.model_dump_json() + "\n")
+    crosswalk_ref = _artifact(
+        crosswalk, root=store.path, media_type="application/vnd.apache.parquet"
+    )
+    numeric_ref = _artifact(numeric, root=store.path, media_type="application/vnd.apache.parquet")
+    derivation_ref = _artifact(derivation, root=store.path, media_type="application/json")
+    amendment_payload = {
+        "schema_version": 1,
+        "amendment_id": "pending",
+        "parent_g00a_v1_authority_id": store.manifest.source_authority_id,
+        "parent_g00a_v1": ArtifactRef(
+            schema_id="test.g00a-v1",
+            schema_version=1,
+            sha256="a" * 64,
+            size_bytes=1,
+            media_type="application/json",
+            relative_uri="parent-g00a-v1.json",
+        ).model_dump(mode="json"),
+        "parent_g00b_v1_virtual_store_id": store.manifest.virtual_store_id,
+        "parent_g00b_v1_manifest": ArtifactRef(
+            schema_id="test.g00b-v1",
+            schema_version=1,
+            sha256="b" * 64,
+            size_bytes=1,
+            media_type="application/json",
+            relative_uri="parent-g00b-v1.json",
+        ).model_dump(mode="json"),
+        "immutable_source_hashes": [
+            SourceHashBinding(
+                source_id=(source.source_id if index < len(sources) else f"extra-{index}"),
+                source_file_sha256=(
+                    source.source_file_sha256 if index < len(sources) else f"{index:x}" * 64
+                ),
+            ).model_dump(mode="json")
+            for index, source in (
+                (index, sources[index] if index < len(sources) else sources[0])
+                for index in range(12)
+            )
+        ],
+        "v2_guide_target_crosswalk": crosswalk_ref.model_dump(mode="json"),
+        "v2_numerical_audit": numeric_ref.model_dump(mode="json"),
+        "v2_source_derivation_receipt": derivation_ref.model_dump(mode="json"),
+        "v2_row_locator": store.manifest.row_locator.model_dump(mode="json"),
+        "builder_implementation_sha256": "c" * 64,
+        "environment_hash": "d" * 64,
+    }
+    amendment_normalized = G00SourcePlaneV2Amendment.model_construct(
+        **{
+            name: TypeAdapter(field.annotation).validate_python(amendment_payload[name])
+            for name, field in G00SourcePlaneV2Amendment.model_fields.items()
+            if name in amendment_payload
+        }
+    ).model_dump(mode="json")
+    amendment_payload["amendment_id"] = contract_id(amendment_normalized, id_field="amendment_id")
+    amendment_model = G00SourcePlaneV2Amendment.model_validate(amendment_payload)
+    amendment = store.path / "G00_SOURCE_PLANE_V2_AMENDMENT.json"
+    amendment.write_text(amendment_model.model_dump_json() + "\n")
     payload = {
         "schema_version": 2,
         "virtual_store_id": "pending",
         "source_authority_id": "authority-v2",
-        "source_plane_amendment_id": "synthetic-amendment",
+        "source_plane_amendment_id": amendment_model.amendment_id,
         "source_plane_amendment": _artifact(
             amendment, root=store.path, media_type="application/json"
         ).model_dump(mode="json"),
@@ -260,15 +341,9 @@ def _upgrade_virtual_store_to_v2(store: VirtualCanonicalCountStore) -> VirtualCa
         "guide_catalog_hash": store.manifest.guide_catalog_hash,
         "target_catalog_hash": store.manifest.target_catalog_hash,
         "guide_target_crosswalk_hash": sha256_file(crosswalk),
-        "guide_target_crosswalk": _artifact(
-            crosswalk, root=store.path, media_type="application/vnd.apache.parquet"
-        ).model_dump(mode="json"),
-        "source_numeric_audit": _artifact(
-            numeric, root=store.path, media_type="application/vnd.apache.parquet"
-        ).model_dump(mode="json"),
-        "source_derivation_receipt": _artifact(
-            derivation, root=store.path, media_type="application/json"
-        ).model_dump(mode="json"),
+        "guide_target_crosswalk": crosswalk_ref.model_dump(mode="json"),
+        "source_numeric_audit": numeric_ref.model_dump(mode="json"),
+        "source_derivation_receipt": derivation_ref.model_dump(mode="json"),
         "guide_count": 2,
         "target_control_count": 2,
         "eligibility_rule": "guide_group == targeting single sgRNA AND low_quality == false",
@@ -418,6 +493,35 @@ def test_dev30_virtual_store_verifies_crosswalk_and_numeric_authority(tmp_path: 
     assert validate_contract(store.path / "manifest.json")["schema_version"] == 2
 
 
+def test_dev31_virtual_store_rejects_malformed_or_misidentified_amendment(
+    tmp_path: Path,
+) -> None:
+    malformed = _upgrade_virtual_store_to_v2(_virtual_store(tmp_path / "malformed"))
+    amendment_path = malformed.path / malformed.manifest.source_plane_amendment.relative_uri
+    amendment_path.write_text("{}\n")
+    payload = malformed.manifest.model_dump(mode="json")
+    payload["source_plane_amendment"] = _artifact(
+        amendment_path, root=malformed.path, media_type="application/json"
+    ).model_dump(mode="json")
+    malformed = _rewrite_v2_manifest(malformed, payload)
+    with pytest.raises(Exception, match="Field required"):
+        malformed.verify(full=False)
+
+    misidentified = _upgrade_virtual_store_to_v2(_virtual_store(tmp_path / "misidentified"))
+    amendment_path = misidentified.path / misidentified.manifest.source_plane_amendment.relative_uri
+    amendment = G00SourcePlaneV2Amendment.model_validate_json(amendment_path.read_text())
+    amendment_path.write_text(
+        amendment.model_copy(update={"amendment_id": "wrong-amendment"}).model_dump_json() + "\n"
+    )
+    payload = misidentified.manifest.model_dump(mode="json")
+    payload["source_plane_amendment"] = _artifact(
+        amendment_path, root=misidentified.path, media_type="application/json"
+    ).model_dump(mode="json")
+    misidentified = _rewrite_v2_manifest(misidentified, payload)
+    with pytest.raises(Exception, match="amendment_id mismatch"):
+        misidentified.verify(full=False)
+
+
 def test_dev30_virtual_store_rejects_crosswalk_row_assignment_drift(tmp_path: Path) -> None:
     store = _upgrade_virtual_store_to_v2(_virtual_store(tmp_path))
     crosswalk = store.path / store.manifest.guide_target_crosswalk.relative_uri
@@ -428,18 +532,13 @@ def test_dev30_virtual_store_rejects_crosswalk_row_assignment_drift(tmp_path: Pa
     payload["guide_target_crosswalk"]["sha256"] = sha256_file(crosswalk)
     payload["guide_target_crosswalk"]["size_bytes"] = crosswalk.stat().st_size
     payload["guide_target_crosswalk_hash"] = sha256_file(crosswalk)
-    payload["virtual_store_id"] = "pending"
-    normalized = VirtualCanonicalCountStoreManifestV2.model_construct(
-        **{
-            name: TypeAdapter(field.annotation).validate_python(payload[name])
-            for name, field in VirtualCanonicalCountStoreManifestV2.model_fields.items()
-            if name in payload
-        }
-    ).model_dump(mode="json")
-    payload["virtual_store_id"] = contract_id(normalized, id_field="virtual_store_id")
-    manifest = VirtualCanonicalCountStoreManifestV2.model_validate(payload)
-    (store.path / "manifest.json").write_text(manifest.model_dump_json() + "\n")
-    changed = VirtualCanonicalCountStore(store.path, source_root=store.source_root)
+    _rewire_amendment(
+        store,
+        payload,
+        amendment_field="v2_guide_target_crosswalk",
+        manifest_field="guide_target_crosswalk",
+    )
+    changed = _rewrite_v2_manifest(store, payload)
     with pytest.raises(Exception, match="guide-target assignments"):
         changed.verify(full=False)
 
@@ -463,6 +562,12 @@ def test_dev30_virtual_store_recomputes_row_hash_counts_and_source_row_uniquenes
     payload["guide_target_crosswalk"]["sha256"] = sha256_file(crosswalk)
     payload["guide_target_crosswalk"]["size_bytes"] = crosswalk.stat().st_size
     payload["guide_target_crosswalk_hash"] = sha256_file(crosswalk)
+    _rewire_amendment(
+        store,
+        payload,
+        amendment_field="v2_guide_target_crosswalk",
+        manifest_field="guide_target_crosswalk",
+    )
     changed = _rewrite_v2_manifest(store, payload)
     with pytest.raises(IntegrityError, match="support counts"):
         changed.verify(full=False)
@@ -483,9 +588,7 @@ def test_dev30_virtual_store_rejects_unused_target_catalog_category(tmp_path: Pa
         del handle["target_ids"]
         handle.create_dataset(
             "target_ids",
-            data=np.asarray(
-                ["target-a", "target-b", "target-unused"], dtype=h5py.string_dtype()
-            ),
+            data=np.asarray(["target-a", "target-b", "target-unused"], dtype=h5py.string_dtype()),
         )
     payload = store.manifest.model_dump(mode="json")
     payload["target_catalog_hash"] = hashlib.sha256(
@@ -493,6 +596,12 @@ def test_dev30_virtual_store_rejects_unused_target_catalog_category(tmp_path: Pa
     ).hexdigest()
     payload["row_locator"]["sha256"] = sha256_file(locator)
     payload["row_locator"]["size_bytes"] = locator.stat().st_size
+    _rewire_amendment(
+        store,
+        payload,
+        amendment_field="v2_row_locator",
+        manifest_field="row_locator",
+    )
     changed = _rewrite_v2_manifest(store, payload)
     with pytest.raises(IntegrityError, match="target catalogs differ"):
         changed.verify(full=False)

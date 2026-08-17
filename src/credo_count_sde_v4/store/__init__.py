@@ -2,6 +2,7 @@
 
 from .csr import CountStore, SparseCountBatch, build_count_store
 from .g00c import validate_g00c_execution
+from .g00d import verify_integrated_loader_qualification
 from .qualification import (
     validate_g00_fold_view_parent,
     validate_g00_source_plane,
@@ -26,4 +27,5 @@ __all__ = [
     "validate_g00_source_plane",
     "validate_g00_source_plane_amendment",
     "validate_integrated_loader_qualification",
+    "verify_integrated_loader_qualification",
 ]

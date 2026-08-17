@@ -31,8 +31,9 @@ flowchart LR
 | Full duplicated raw CountStore | retained archival fallback | not required |
 
 No G00C or G00D status may be inferred from dev28 raw-layout probes or the
-contract-only Dev30-A amendment. The execution-ready authority is the
-[Dev30-A-r2 contract finalization](g00-dev30a-r2-contract-finalization.md).
+contract-only Dev30-A amendment. The superseded r2 draft remains historical;
+the active execution contract is the
+[Dev31 provenance finalization](g00-dev31-provenance-finalization.md).
 
 ## G00A: source authority
 

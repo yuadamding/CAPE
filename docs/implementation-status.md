@@ -77,8 +77,8 @@ software/synthetic qualification, not evidence about a cohort. See the
 [dev24 R1 amendment](t07s-reaction-metric-amendment.md) and authoritative
 [dev25 unified R0/R1 amendment](t07s-null-interval-amendment.md).
 
-Local acceptance completed with 210 CPU tests passing and one CUDA-only test
-skipped on the CPU validation host, with 85.31% branch-aware coverage. The exact
+Local acceptance completed with 214 CPU tests passing and one CUDA-only test
+skipped on the CPU validation host, with 85.22% branch-aware coverage. The exact
 test and coverage results are in
 `receipts/local-validation.json`. Ruff,
 mypy, generated-schema, documentation-link, wheel
@@ -132,6 +132,18 @@ only executed source-plane evidence; G00C, G00D, and downstream real-data
 components remain blocked. See the
 [Dev30-A-r2 finalization](g00-dev30a-r2-contract-finalization.md).
 
+External review conditionally rejected that r2 draft as an execution authority.
+Dev31 supersedes it by enforcing exact v1-to-v2 source-record projection,
+parent/derived file `ArtifactRef` wiring, parsed amendment verification, and a
+passed amendment-receipt parent chain for G00C. G00C verification now derives
+fit/validation roles, selected feature and cell prefixes, literal compact CSR
+counts, and uninterrupted/resumed sampler traces from their artifacts. G00D
+verification now derives all performance, parity, and memory summaries from
+the bound files and applies gate-specific exact versus numerical semantics.
+This remains contract-only work: Dev31 has not constructed the amendment or run
+G00C/G00D. See the
+[Dev31 provenance finalization](g00-dev31-provenance-finalization.md).
+
 Dev7 replaced the invalid reconstructed-SVD softmax with a checkpoint-owned
 multinomial count-composition decoder. Dev10 added a deterministic
 training-only validation holdout and minimum-validation-cross-entropy
@@ -178,7 +190,7 @@ conditional-interaction, and joint nulls, freezes fold and seed identities,
 and strengthens noninteraction comparators. That T03 code remains unqualified
 until T01, T02, and the prescribed pooled pilot pass.
 
-Deliberately not asserted complete in `4.0.0.dev30`:
+Deliberately not asserted complete in `4.0.0.dev31`:
 
 - stable CREDO entry-point discovery;
 - in-repository real-cohort adapters, biological thresholds, or biological claims;

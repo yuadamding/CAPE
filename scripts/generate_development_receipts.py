@@ -115,6 +115,9 @@ def main() -> None:
     gse314342_g00_dev30_r2_review = Path(
         "/home/yding1995/.codex/attachments/284492a6-f9f4-4550-b2ca-d4dbbf27efd1/pasted-text.txt"
     )
+    gse314342_g00_dev31_review = Path(
+        "/home/yding1995/.codex/attachments/cd0f8deb-9438-4af7-a3c9-b69d044977f5/pasted-text.txt"
+    )
     gse314342_g00_source_plane = gse314342_g00 / "G00_SOURCE_PLANE_DEV29"
     receipt = {
         "schema_version": 1,
@@ -264,6 +267,11 @@ def main() -> None:
         "gse314342_g00_dev30_r2_review_sha256": (
             sha256_file(gse314342_g00_dev30_r2_review)
             if gse314342_g00_dev30_r2_review.is_file()
+            else None
+        ),
+        "gse314342_g00_dev31_review_sha256": (
+            sha256_file(gse314342_g00_dev31_review)
+            if gse314342_g00_dev31_review.is_file()
             else None
         ),
         "gse314342_g00_dev29_builder_sha256": (
