@@ -2,7 +2,8 @@
 
 Last verified: 2026-08-17
 
-Status: implementation and adversarial-test boundary; extraction canary not run
+Status: implementation and adversarial-test boundary; extraction canary now
+passed separately under the [Dev33-B record](g00-dev33b-extraction-canary.md)
 
 Dev33 is additive. The accepted Dev32 contracts and B0-A2 artifacts remain
 immutable. New claim-bearing G00C work must use the v3 fold contract and v2
@@ -38,8 +39,9 @@ Committed schemas are `fold-native-compact-view.v3.json`,
 
 ## Stop rule
 
-This release does not read protected held-out stimulated expression, rank
+This Dev33-A release does not read protected held-out stimulated expression, rank
 features, choose a cell budget, materialize G00C, use a GPU, or produce a model
 or biological result. The next permissible action after independent review is
-the disposable 50,000-row/256-feature one-fold extraction canary. It cannot be
-promoted into the G00C parent.
+the disposable 50,000-row/256-feature one-fold extraction canary. That canary
+subsequently passed as Dev33-B engineering evidence, but it cannot be promoted
+into the G00C parent.

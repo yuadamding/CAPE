@@ -173,6 +173,14 @@ selection, compact materialization, G00D, GPU, model, or biological result was
 run in this release. See the
 [Dev33-A hardening record](g00-dev33-g00c-hardening.md).
 
+Dev33-B then executed the authorized fixed 50,000-training-row/256-feature
+CPU extraction canary on LODO fold 0 (D1 held out). The A3 attempt passed
+byte-identical writer restart, bounded source equality, exact 32-microbatch
+sampler replay, a 16-GiB RSS gate, and zero protected D1 stimulated reads.
+Its status is `pass_engineering_canary`, not a claim-bearing G00C pass; it may
+not parent G00D or G04. See the
+[Dev33-B extraction-canary record](g00-dev33b-extraction-canary.md).
+
 Dev7 replaced the invalid reconstructed-SVD softmax with a checkpoint-owned
 multinomial count-composition decoder. Dev10 added a deterministic
 training-only validation holdout and minimum-validation-cross-entropy

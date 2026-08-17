@@ -72,6 +72,12 @@ two-million-cell extension semantics, exact physical row ordering, streaming
 compact verification, and executable refit replay. No extraction canary or
 G00C workload is part of Dev33-A.
 
+The separately frozen
+[Dev33-B extraction canary](docs/g00-dev33b-extraction-canary.md) subsequently
+passed on LODO fold 0 with 58,192 rows and 256 primary features. It is
+non-promotable engineering evidence only; claim-bearing G00C, G00D, and G04
+remain blocked.
+
 ## Quick start
 
 ```bash
@@ -129,6 +135,7 @@ See [architecture](docs/architecture.md), [contracts](docs/contracts.md),
 [the Dev32 legacy-parent attestation boundary](docs/g00-dev32-legacy-parent-attestation.md),
 [the accepted Dev32 B0-A2 execution](docs/g00-dev32-b0-a2-source-plane-execution.md),
 [the Dev33-A G00C hardening boundary](docs/g00-dev33-g00c-hardening.md),
+[the Dev33-B G00C extraction canary](docs/g00-dev33b-extraction-canary.md),
 [component qualification](docs/component-qualification.md),
 [the detailed T01 record](docs/t01-representation-qualification.md),
 [the detailed T02A record](docs/t02a-raw-count-mass-noise.md),
