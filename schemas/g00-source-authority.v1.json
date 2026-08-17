@@ -1,0 +1,191 @@
+{
+  "$defs": {
+    "VirtualCountSource": {
+      "additionalProperties": false,
+      "description": "One immutable source matrix behind the metadata-only canonical plane.",
+      "properties": {
+        "canonical_permutation_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Canonical Permutation Hash",
+          "type": "string"
+        },
+        "checkpoint": {
+          "minLength": 1,
+          "title": "Checkpoint",
+          "type": "string"
+        },
+        "dataset_path": {
+          "default": "X",
+          "minLength": 1,
+          "title": "Dataset Path",
+          "type": "string"
+        },
+        "donor_id": {
+          "minLength": 1,
+          "title": "Donor Id",
+          "type": "string"
+        },
+        "eligible_nnz": {
+          "minimum": 0,
+          "title": "Eligible Nnz",
+          "type": "integer"
+        },
+        "eligible_rows": {
+          "exclusiveMinimum": 0,
+          "title": "Eligible Rows",
+          "type": "integer"
+        },
+        "features": {
+          "exclusiveMinimum": 0,
+          "title": "Features",
+          "type": "integer"
+        },
+        "nnz": {
+          "minimum": 0,
+          "title": "Nnz",
+          "type": "integer"
+        },
+        "physical_time_hours": {
+          "title": "Physical Time Hours",
+          "type": "number"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "rows": {
+          "exclusiveMinimum": 0,
+          "title": "Rows",
+          "type": "integer"
+        },
+        "source_feature_order_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Feature Order Hash",
+          "type": "string"
+        },
+        "source_file_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source File Sha256",
+          "type": "string"
+        },
+        "source_id": {
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "donor_id",
+        "checkpoint",
+        "physical_time_hours",
+        "relative_uri",
+        "source_file_sha256",
+        "rows",
+        "features",
+        "nnz",
+        "eligible_rows",
+        "eligible_nnz",
+        "source_feature_order_hash",
+        "canonical_permutation_hash"
+      ],
+      "title": "VirtualCountSource",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/g00-source-authority.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "G00A source/feature authority; it cannot expose model-facing outcomes.",
+  "properties": {
+    "authority_id": {
+      "title": "Authority Id",
+      "type": "string"
+    },
+    "canonical_feature_index_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Canonical Feature Index Hash",
+      "type": "string"
+    },
+    "canonical_row_id_rule": {
+      "const": "(sample_index << 32) | source_row_index",
+      "default": "(sample_index << 32) | source_row_index",
+      "title": "Canonical Row Id Rule",
+      "type": "string"
+    },
+    "eligibility_rule": {
+      "const": "guide_group == targeting single sgRNA AND low_quality == false",
+      "title": "Eligibility Rule",
+      "type": "string"
+    },
+    "eligible_nnz": {
+      "minimum": 0,
+      "title": "Eligible Nnz",
+      "type": "integer"
+    },
+    "eligible_row_ids_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Eligible Row Ids Hash",
+      "type": "string"
+    },
+    "eligible_rows": {
+      "exclusiveMinimum": 0,
+      "title": "Eligible Rows",
+      "type": "integer"
+    },
+    "full_source_hashes_verified": {
+      "const": true,
+      "default": true,
+      "title": "Full Source Hashes Verified",
+      "type": "boolean"
+    },
+    "guide_catalog_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Guide Catalog Hash",
+      "type": "string"
+    },
+    "model_facing_output": {
+      "const": false,
+      "default": false,
+      "title": "Model Facing Output",
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "source_reconciliation_pass": {
+      "const": true,
+      "default": true,
+      "title": "Source Reconciliation Pass",
+      "type": "boolean"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/VirtualCountSource"
+      },
+      "title": "Sources",
+      "type": "array"
+    },
+    "target_catalog_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Target Catalog Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "authority_id",
+    "sources",
+    "canonical_feature_index_hash",
+    "guide_catalog_hash",
+    "target_catalog_hash",
+    "eligibility_rule",
+    "eligible_row_ids_hash",
+    "eligible_rows",
+    "eligible_nnz"
+  ],
+  "title": "G00SourceAuthority",
+  "type": "object"
+}

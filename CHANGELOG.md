@@ -1,5 +1,26 @@
 # Changelog
 
+## 4.0.0.dev29 — 2026-08-16
+
+- split GSE314342 G00 into source authority, virtual canonical access,
+  fold-native compact materialization, and integrated loader qualification;
+- add a metadata-only virtual reader over immutable H5AD CSR sources, with
+  canonical feature reordering and exact duplicate/reordered row semantics;
+- add exact P2 append contracts and a recoverable
+  `BUILDING → FINALIZING → FINALIZED` shard publication transaction with fault
+  injection at every persistence boundary;
+- bound sharded-reader file handles with an LRU and expose locator, shard-index,
+  open-handle, and cache-memory telemetry;
+- bind checkpoint-conditioned nulls to explicit physical time rather than
+  lexicographic checkpoint order;
+- strengthen G14 with acyclic parent graphs, claim-specific robustness axes,
+  method-family compatibility, actual component receipt hashes, complete output
+  coverage, and fail-closed mechanism/external promotion rules;
+- preserve explicit read-only validation of immutable dev28 v1 checkpoint-null
+  and G14 contracts while requiring v2 for all newly constructed evidence;
+- retain dev28 as the negative direct-raw-streaming result; the approximately
+  765 GB duplicate raw store is no longer required for the training path.
+
 ## 4.0.0.dev28 — 2026-08-16
 
 - add immutable sharded CSR manifests, Merkle verification, exact reordered and

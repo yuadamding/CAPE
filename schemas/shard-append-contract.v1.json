@@ -1,0 +1,89 @@
+{
+  "$id": "https://credo.local/schemas/shard-append-contract.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Exact next P2 chunk identity required before any shard append.",
+  "properties": {
+    "build_plan_id": {
+      "minLength": 1,
+      "title": "Build Plan Id",
+      "type": "string"
+    },
+    "chunk_contract_id": {
+      "title": "Chunk Contract Id",
+      "type": "string"
+    },
+    "chunk_index": {
+      "minimum": 0,
+      "title": "Chunk Index",
+      "type": "integer"
+    },
+    "chunk_nnz": {
+      "minimum": 0,
+      "title": "Chunk Nnz",
+      "type": "integer"
+    },
+    "chunk_rows": {
+      "exclusiveMinimum": 0,
+      "title": "Chunk Rows",
+      "type": "integer"
+    },
+    "cumulative_row_identity_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Cumulative Row Identity Hash",
+      "type": "string"
+    },
+    "guide_run_id": {
+      "minLength": 1,
+      "title": "Guide Run Id",
+      "type": "string"
+    },
+    "row_ids_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Row Ids Hash",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "shard_index": {
+      "minimum": 0,
+      "title": "Shard Index",
+      "type": "integer"
+    },
+    "source_cursor_end": {
+      "exclusiveMinimum": 0,
+      "title": "Source Cursor End",
+      "type": "integer"
+    },
+    "source_cursor_start": {
+      "minimum": 0,
+      "title": "Source Cursor Start",
+      "type": "integer"
+    },
+    "source_id": {
+      "minLength": 1,
+      "title": "Source Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "chunk_contract_id",
+    "build_plan_id",
+    "shard_index",
+    "chunk_index",
+    "source_id",
+    "source_cursor_start",
+    "source_cursor_end",
+    "row_ids_hash",
+    "guide_run_id",
+    "chunk_rows",
+    "chunk_nnz",
+    "cumulative_row_identity_hash"
+  ],
+  "title": "ShardAppendContract",
+  "type": "object"
+}

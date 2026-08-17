@@ -88,6 +88,7 @@ def fit_checkpoint_frequency_null(
     training_checkpoints: np.ndarray,
     training_row_ids: np.ndarray,
     checkpoint_order: tuple[str, ...],
+    physical_time_hours: tuple[float, ...],
     pseudocount: float = 0.5,
 ) -> CheckpointMultinomialDecoder:
     """Fit the dimension-zero null from permitted outer-training rows only."""
@@ -105,9 +106,15 @@ def fit_checkpoint_frequency_null(
         raise ContractError("Checkpoint null requires nonnegative counts.")
     if not np.isfinite(matrix.data).all() or not np.isfinite(pseudocount) or pseudocount <= 0:
         raise ContractError("Checkpoint null counts and pseudocount must be finite and valid.")
-    checkpoints = tuple(sorted(set(checkpoint_order)))
-    if checkpoints != checkpoint_order or set(labels) != set(checkpoints):
-        raise ContractError("Checkpoint order must be sorted and cover training labels exactly.")
+    checkpoints = tuple(checkpoint_order)
+    if (
+        not checkpoints
+        or len(checkpoints) != len(set(checkpoints))
+        or set(labels) != set(checkpoints)
+    ):
+        raise ContractError("Checkpoint order must be unique and cover training labels exactly.")
+    if len(physical_time_hours) != len(checkpoints):
+        raise ContractError("Checkpoint order and physical times must align.")
     intercepts = np.empty((len(checkpoints), matrix.shape[1]), dtype=np.float64)
     for index, checkpoint in enumerate(checkpoints):
         positions = np.where(labels == checkpoint)[0]
@@ -118,12 +125,16 @@ def fit_checkpoint_frequency_null(
         probabilities = totals / totals.sum()
         intercepts[index] = np.log(probabilities)
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "decoder_contract_id": "pending",
         "equation": "softmax(checkpoint_intercept + latent_weights @ z)",
         "intercept_axis": "checkpoint",
         "dimension_zero_null": "checkpoint_global_frequency",
         "checkpoints": checkpoints,
+        "physical_time_hours": physical_time_hours,
+        "checkpoint_order_hash": contract_id(
+            {"checkpoints": checkpoints, "physical_time_hours": physical_time_hours}
+        ),
         "features": matrix.shape[1],
         "latent_dimension": 0,
         "pseudocount": pseudocount,

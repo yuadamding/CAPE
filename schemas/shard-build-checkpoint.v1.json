@@ -41,6 +41,77 @@
       ],
       "title": "ArtifactRef",
       "type": "object"
+    },
+    "CountStoreManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "const": "csr_hdf5",
+          "default": "csr_hdf5",
+          "title": "Backend",
+          "type": "string"
+        },
+        "content_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "feature_index_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Feature Index Hash",
+          "type": "string"
+        },
+        "features": {
+          "exclusiveMinimum": 0,
+          "title": "Features",
+          "type": "integer"
+        },
+        "nnz": {
+          "minimum": 0,
+          "title": "Nnz",
+          "type": "integer"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "row_ids_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Row Ids Hash",
+          "type": "string"
+        },
+        "rows": {
+          "exclusiveMinimum": 0,
+          "title": "Rows",
+          "type": "integer"
+        },
+        "schema_version": {
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "store_id": {
+          "title": "Store Id",
+          "type": "string"
+        },
+        "value_dtype": {
+          "title": "Value Dtype",
+          "type": "string"
+        }
+      },
+      "required": [
+        "store_id",
+        "rows",
+        "features",
+        "nnz",
+        "value_dtype",
+        "row_ids_hash",
+        "feature_index_hash",
+        "content_sha256",
+        "relative_uri"
+      ],
+      "title": "CountStoreManifest",
+      "type": "object"
     }
   },
   "$id": "https://credo.local/schemas/shard-build-checkpoint.v1.json",
@@ -85,6 +156,11 @@
       "title": "Active Shard Rows",
       "type": "integer"
     },
+    "append_plan_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Append Plan Hash",
+      "type": "string"
+    },
     "build_plan_id": {
       "title": "Build Plan Id",
       "type": "string"
@@ -103,10 +179,138 @@
       "title": "Completed Shard Hashes",
       "type": "array"
     },
+    "cumulative_row_identity_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Cumulative Row Identity Hash",
+      "type": "string"
+    },
+    "destination_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Destination Name"
+    },
+    "expected_chunk_index": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Chunk Index"
+    },
+    "expected_chunk_nnz": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Chunk Nnz"
+    },
+    "expected_guide_run_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Guide Run Id"
+    },
+    "expected_row_ids_hash": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Row Ids Hash"
+    },
+    "expected_source_cursor_end": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Source Cursor End"
+    },
+    "expected_source_cursor_start": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Source Cursor Start"
+    },
+    "finalizing_content_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Finalizing Content Sha256"
+    },
+    "finalizing_manifest": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CountStoreManifest"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "nonzero_count": {
       "minimum": 0,
       "title": "Nonzero Count",
       "type": "integer"
+    },
+    "phase": {
+      "default": "BUILDING",
+      "enum": [
+        "BUILDING",
+        "FINALIZING",
+        "FINALIZED"
+      ],
+      "title": "Phase",
+      "type": "string"
     },
     "rng_state": {
       "anyOf": [
@@ -157,10 +361,12 @@
   },
   "required": [
     "build_plan_id",
+    "append_plan_hash",
     "source_cursor",
     "completed_shard_hashes",
     "row_count",
-    "nonzero_count"
+    "nonzero_count",
+    "cumulative_row_identity_hash"
   ],
   "title": "ShardBuildCheckpoint",
   "type": "object"

@@ -1,0 +1,103 @@
+{
+  "$id": "https://credo.local/schemas/integrated-loader-qualification-receipt.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Observed G00D wait/utilization, parity, and memory result.",
+  "properties": {
+    "covered_compute_seconds": {
+      "minimum": 0,
+      "title": "Covered Compute Seconds",
+      "type": "number"
+    },
+    "data_wait_fraction": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Data Wait Fraction",
+      "type": "number"
+    },
+    "p95_batch_ready_seconds": {
+      "minimum": 0,
+      "title": "P95 Batch Ready Seconds",
+      "type": "number"
+    },
+    "peak_loader_rss_bytes": {
+      "minimum": 0,
+      "title": "Peak Loader Rss Bytes",
+      "type": "integer"
+    },
+    "peak_open_shards": {
+      "minimum": 0,
+      "title": "Peak Open Shards",
+      "type": "integer"
+    },
+    "qualification_contract_id": {
+      "title": "Qualification Contract Id",
+      "type": "string"
+    },
+    "receipt_id": {
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "row_count_order_errors": {
+      "minimum": 0,
+      "title": "Row Count Order Errors",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "steady_state_gpu_utilization": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Steady State Gpu Utilization",
+      "type": "number"
+    },
+    "training_metric_max_absolute_error": {
+      "minimum": 0,
+      "title": "Training Metric Max Absolute Error",
+      "type": "number"
+    },
+    "training_metric_max_relative_error": {
+      "minimum": 0,
+      "title": "Training Metric Max Relative Error",
+      "type": "number"
+    },
+    "training_metric_parity_pass": {
+      "title": "Training Metric Parity Pass",
+      "type": "boolean"
+    },
+    "unbounded_memory_growth_detected": {
+      "title": "Unbounded Memory Growth Detected",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "qualification_contract_id",
+    "data_wait_fraction",
+    "steady_state_gpu_utilization",
+    "p95_batch_ready_seconds",
+    "covered_compute_seconds",
+    "peak_loader_rss_bytes",
+    "peak_open_shards",
+    "row_count_order_errors",
+    "unbounded_memory_growth_detected",
+    "training_metric_max_absolute_error",
+    "training_metric_max_relative_error",
+    "training_metric_parity_pass",
+    "status"
+  ],
+  "title": "IntegratedLoaderQualificationReceipt",
+  "type": "object"
+}

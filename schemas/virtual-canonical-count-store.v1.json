@@ -1,0 +1,263 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    },
+    "VirtualCountSource": {
+      "additionalProperties": false,
+      "description": "One immutable source matrix behind the metadata-only canonical plane.",
+      "properties": {
+        "canonical_permutation_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Canonical Permutation Hash",
+          "type": "string"
+        },
+        "checkpoint": {
+          "minLength": 1,
+          "title": "Checkpoint",
+          "type": "string"
+        },
+        "dataset_path": {
+          "default": "X",
+          "minLength": 1,
+          "title": "Dataset Path",
+          "type": "string"
+        },
+        "donor_id": {
+          "minLength": 1,
+          "title": "Donor Id",
+          "type": "string"
+        },
+        "eligible_nnz": {
+          "minimum": 0,
+          "title": "Eligible Nnz",
+          "type": "integer"
+        },
+        "eligible_rows": {
+          "exclusiveMinimum": 0,
+          "title": "Eligible Rows",
+          "type": "integer"
+        },
+        "features": {
+          "exclusiveMinimum": 0,
+          "title": "Features",
+          "type": "integer"
+        },
+        "nnz": {
+          "minimum": 0,
+          "title": "Nnz",
+          "type": "integer"
+        },
+        "physical_time_hours": {
+          "title": "Physical Time Hours",
+          "type": "number"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "rows": {
+          "exclusiveMinimum": 0,
+          "title": "Rows",
+          "type": "integer"
+        },
+        "source_feature_order_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Feature Order Hash",
+          "type": "string"
+        },
+        "source_file_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source File Sha256",
+          "type": "string"
+        },
+        "source_id": {
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "donor_id",
+        "checkpoint",
+        "physical_time_hours",
+        "relative_uri",
+        "source_file_sha256",
+        "rows",
+        "features",
+        "nnz",
+        "eligible_rows",
+        "eligible_nnz",
+        "source_feature_order_hash",
+        "canonical_permutation_hash"
+      ],
+      "title": "VirtualCountSource",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/virtual-canonical-count-store.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "G00B metadata-only canonical access over immutable source matrices.",
+  "properties": {
+    "archival_shard_plan": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "backend": {
+      "const": "virtual_canonical_h5ad_csr_v1",
+      "default": "virtual_canonical_h5ad_csr_v1",
+      "title": "Backend",
+      "type": "string"
+    },
+    "canonical_feature_index_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Canonical Feature Index Hash",
+      "type": "string"
+    },
+    "direct_h100_training_backend": {
+      "const": false,
+      "default": false,
+      "title": "Direct H100 Training Backend",
+      "type": "boolean"
+    },
+    "eligibility_rule": {
+      "const": "guide_group == targeting single sgRNA AND low_quality == false",
+      "title": "Eligibility Rule",
+      "type": "string"
+    },
+    "eligible_rows": {
+      "exclusiveMinimum": 0,
+      "title": "Eligible Rows",
+      "type": "integer"
+    },
+    "feature_permutations": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "features": {
+      "exclusiveMinimum": 0,
+      "title": "Features",
+      "type": "integer"
+    },
+    "guide_catalog_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Guide Catalog Hash",
+      "type": "string"
+    },
+    "intended_use": {
+      "const": "sequential_statistics_and_fold_materialization",
+      "default": "sequential_statistics_and_fold_materialization",
+      "title": "Intended Use",
+      "type": "string"
+    },
+    "protected_outer_endpoints_read": {
+      "const": false,
+      "default": false,
+      "title": "Protected Outer Endpoints Read",
+      "type": "boolean"
+    },
+    "raw_counts_materialized": {
+      "const": false,
+      "default": false,
+      "title": "Raw Counts Materialized",
+      "type": "boolean"
+    },
+    "row_locator": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "row_locator_schema": {
+      "const": "canonical_row_source_row_guide_target_v1",
+      "default": "canonical_row_source_row_guide_target_v1",
+      "title": "Row Locator Schema",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "source_authority_id": {
+      "title": "Source Authority Id",
+      "type": "string"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/VirtualCountSource"
+      },
+      "title": "Sources",
+      "type": "array"
+    },
+    "target_catalog_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Target Catalog Hash",
+      "type": "string"
+    },
+    "virtual_store_id": {
+      "title": "Virtual Store Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "virtual_store_id",
+    "source_authority_id",
+    "canonical_feature_index_hash",
+    "guide_catalog_hash",
+    "target_catalog_hash",
+    "eligibility_rule",
+    "eligible_rows",
+    "features",
+    "row_locator",
+    "feature_permutations",
+    "sources"
+  ],
+  "title": "VirtualCanonicalCountStoreManifest",
+  "type": "object"
+}

@@ -1,0 +1,108 @@
+{
+  "$defs": {
+    "RobustnessAxis": {
+      "additionalProperties": false,
+      "properties": {
+        "axis_id": {
+          "minLength": 1,
+          "title": "Axis Id",
+          "type": "string"
+        },
+        "claim_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Claim Ids",
+          "type": "array"
+        },
+        "frozen_before_corresponding_outer_outcomes": {
+          "const": true,
+          "default": true,
+          "title": "Frozen Before Corresponding Outer Outcomes",
+          "type": "boolean"
+        },
+        "values": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Values",
+          "type": "array"
+        }
+      },
+      "required": [
+        "axis_id",
+        "values",
+        "claim_ids"
+      ],
+      "title": "RobustnessAxis",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/g14-robustness-plan.v2.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "axes": {
+      "items": {
+        "$ref": "#/$defs/RobustnessAxis"
+      },
+      "title": "Axes",
+      "type": "array"
+    },
+    "base_contract_hashes": {
+      "items": {
+        "pattern": "^[0-9a-f]{64}$",
+        "type": "string"
+      },
+      "title": "Base Contract Hashes",
+      "type": "array"
+    },
+    "model_fitting": {
+      "const": false,
+      "default": false,
+      "title": "Model Fitting",
+      "type": "boolean"
+    },
+    "model_selection": {
+      "const": false,
+      "default": false,
+      "title": "Model Selection",
+      "type": "boolean"
+    },
+    "plan_id": {
+      "title": "Plan Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "default": 2,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "sensitivities_select_reported_model": {
+      "const": false,
+      "default": false,
+      "title": "Sensitivities Select Reported Model",
+      "type": "boolean"
+    },
+    "target_discovery": {
+      "const": false,
+      "default": false,
+      "title": "Target Discovery",
+      "type": "boolean"
+    },
+    "threshold_adjustment": {
+      "const": false,
+      "default": false,
+      "title": "Threshold Adjustment",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "plan_id",
+    "axes",
+    "base_contract_hashes"
+  ],
+  "title": "G14RobustnessPlan",
+  "type": "object"
+}

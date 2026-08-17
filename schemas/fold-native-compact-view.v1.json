@@ -1,0 +1,155 @@
+{
+  "$id": "https://credo.local/schemas/fold-native-compact-view.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "G00C training-only feature/sample materialization for one outer fold.",
+  "properties": {
+    "count_dtype": {
+      "enum": [
+        "uint16",
+        "int32"
+      ],
+      "title": "Count Dtype",
+      "type": "string"
+    },
+    "count_maximum_audit_pass": {
+      "title": "Count Maximum Audit Pass",
+      "type": "boolean"
+    },
+    "fold_view_id": {
+      "title": "Fold View Id",
+      "type": "string"
+    },
+    "gradient_accumulation": {
+      "const": true,
+      "default": true,
+      "title": "Gradient Accumulation",
+      "type": "boolean"
+    },
+    "heldout_donor_id": {
+      "title": "Heldout Donor Id",
+      "type": "string"
+    },
+    "heldout_source_rows_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Heldout Source Rows Hash",
+      "type": "string"
+    },
+    "index_dtype": {
+      "enum": [
+        "uint16",
+        "int32"
+      ],
+      "title": "Index Dtype",
+      "type": "string"
+    },
+    "microbatch_cells": {
+      "minimum": 1,
+      "title": "Microbatch Cells",
+      "type": "integer"
+    },
+    "microbatches_per_update": {
+      "minimum": 1,
+      "title": "Microbatches Per Update",
+      "type": "integer"
+    },
+    "ordered_selected_feature_ids_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Ordered Selected Feature Ids Hash",
+      "type": "string"
+    },
+    "outer_split_id": {
+      "title": "Outer Split Id",
+      "type": "string"
+    },
+    "parent_source_authority_id": {
+      "title": "Parent Source Authority Id",
+      "type": "string"
+    },
+    "parent_virtual_store_id": {
+      "title": "Parent Virtual Store Id",
+      "type": "string"
+    },
+    "physical_layout": {
+      "const": "donor_checkpoint_target_guide_row",
+      "title": "Physical Layout",
+      "type": "string"
+    },
+    "protected_outer_endpoint_rows_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Protected Outer Endpoint Rows Hash",
+      "type": "string"
+    },
+    "protected_outer_endpoints_materialized": {
+      "const": false,
+      "default": false,
+      "title": "Protected Outer Endpoints Materialized",
+      "type": "boolean"
+    },
+    "sample_size_candidates": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Sample Size Candidates",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "selected_features": {
+      "exclusiveMinimum": 0,
+      "maximum": 4096,
+      "title": "Selected Features",
+      "type": "integer"
+    },
+    "selected_training_cells": {
+      "exclusiveMinimum": 0,
+      "title": "Selected Training Cells",
+      "type": "integer"
+    },
+    "training_donor_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Training Donor Ids",
+      "type": "array"
+    },
+    "training_only_feature_selection_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Training Only Feature Selection Hash",
+      "type": "string"
+    },
+    "training_rows_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Training Rows Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "fold_view_id",
+    "parent_source_authority_id",
+    "parent_virtual_store_id",
+    "outer_split_id",
+    "training_donor_ids",
+    "heldout_donor_id",
+    "training_only_feature_selection_hash",
+    "ordered_selected_feature_ids_hash",
+    "selected_features",
+    "sample_size_candidates",
+    "selected_training_cells",
+    "training_rows_hash",
+    "heldout_source_rows_hash",
+    "protected_outer_endpoint_rows_hash",
+    "count_dtype",
+    "index_dtype",
+    "count_maximum_audit_pass",
+    "physical_layout",
+    "microbatch_cells",
+    "microbatches_per_update"
+  ],
+  "title": "FoldNativeCompactViewContract",
+  "type": "object"
+}

@@ -1,0 +1,90 @@
+{
+  "$id": "https://credo.local/schemas/integrated-loader-qualification-contract.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "G00D end-to-end loader/compute qualification on one compact view.",
+  "properties": {
+    "fold_view_id": {
+      "title": "Fold View Id",
+      "type": "string"
+    },
+    "maximum_data_wait_fraction": {
+      "default": 0.1,
+      "maximum": 0.1,
+      "minimum": 0,
+      "title": "Maximum Data Wait Fraction",
+      "type": "number"
+    },
+    "maximum_loader_rss_bytes": {
+      "exclusiveMinimum": 0,
+      "title": "Maximum Loader Rss Bytes",
+      "type": "integer"
+    },
+    "maximum_open_shards": {
+      "minimum": 1,
+      "title": "Maximum Open Shards",
+      "type": "integer"
+    },
+    "minimum_steady_state_gpu_utilization": {
+      "default": 0.85,
+      "maximum": 1,
+      "minimum": 0.85,
+      "title": "Minimum Steady State Gpu Utilization",
+      "type": "number"
+    },
+    "prefetch_depth": {
+      "minimum": 1,
+      "title": "Prefetch Depth",
+      "type": "integer"
+    },
+    "qualification_contract_id": {
+      "title": "Qualification Contract Id",
+      "type": "string"
+    },
+    "raw_rows_per_second_gate": {
+      "const": false,
+      "default": false,
+      "title": "Raw Rows Per Second Gate",
+      "type": "boolean"
+    },
+    "require_bounded_loader_memory": {
+      "const": true,
+      "default": true,
+      "title": "Require Bounded Loader Memory",
+      "type": "boolean"
+    },
+    "require_zero_row_count_order_errors": {
+      "const": true,
+      "default": true,
+      "title": "Require Zero Row Count Order Errors",
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "training_metric_absolute_tolerance": {
+      "default": 1e-06,
+      "exclusiveMinimum": 0,
+      "title": "Training Metric Absolute Tolerance",
+      "type": "number"
+    },
+    "training_metric_relative_tolerance": {
+      "default": 1e-05,
+      "exclusiveMinimum": 0,
+      "title": "Training Metric Relative Tolerance",
+      "type": "number"
+    }
+  },
+  "required": [
+    "qualification_contract_id",
+    "fold_view_id",
+    "prefetch_depth",
+    "maximum_loader_rss_bytes",
+    "maximum_open_shards"
+  ],
+  "title": "IntegratedLoaderQualificationContract",
+  "type": "object"
+}

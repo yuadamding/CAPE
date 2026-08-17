@@ -16,7 +16,9 @@ from .compat.credo3 import verify_frozen_credo
 from .compile import compile_problem
 from .contracts import (
     CheckpointMultinomialDecoderContract,
+    CheckpointMultinomialDecoderContractV1,
     ClaimRegistry,
+    ClaimRegistryV1,
     CompiledRunContract,
     ComponentTestContract,
     ComponentTestReceipt,
@@ -24,10 +26,17 @@ from .contracts import (
     CountRepresentationBundle,
     CountStoreManifest,
     EvaluationBundleManifest,
+    FoldNativeCompactViewContract,
+    G00SourceAuthority,
     G14MultiplicityContract,
+    G14MultiplicityContractV1,
     G14RobustnessPlan,
+    G14RobustnessPlanV1,
     G14SealContract,
+    G14SealContractV1,
     InferenceBundleManifest,
+    IntegratedLoaderQualificationContract,
+    IntegratedLoaderQualificationReceipt,
     LifecycleState,
     ParticleEngineQualificationBundle,
     ParticleEngineTestReceipt,
@@ -55,6 +64,7 @@ from .contracts import (
     StateSelectionCalibration,
     StateSelectionCalibrationResults,
     VerifyLevel,
+    VirtualCanonicalCountStoreManifest,
 )
 from .data import build_pooled_finite_measures, verify_pooled_finite_measures
 from .errors import ContractError, IntegrityError
@@ -317,16 +327,36 @@ def validate_contract(path: Path) -> dict[str, Any]:
     else:
         if payload.get("backend") == "csr_hdf5_sharded":
             selected = ShardedCountStoreManifest
+        elif payload.get("backend") == "virtual_canonical_h5ad_csr_v1":
+            selected = VirtualCanonicalCountStoreManifest
+        elif "authority_id" in payload and "source_reconciliation_pass" in payload:
+            selected = G00SourceAuthority
+        elif "qualification_contract_id" in payload and "raw_rows_per_second_gate" in payload:
+            selected = IntegratedLoaderQualificationContract
+        elif "receipt_id" in payload and "data_wait_fraction" in payload:
+            selected = IntegratedLoaderQualificationReceipt
+        elif "fold_view_id" in payload:
+            selected = FoldNativeCompactViewContract
         elif "decoder_contract_id" in payload:
-            selected = CheckpointMultinomialDecoderContract
+            selected = (
+                CheckpointMultinomialDecoderContractV1
+                if payload.get("schema_version") == 1
+                else CheckpointMultinomialDecoderContract
+            )
         elif "registry_id" in payload and "records" in payload:
-            selected = ClaimRegistry
+            selected = ClaimRegistryV1 if payload.get("schema_version") == 1 else ClaimRegistry
         elif "plan_id" in payload and "axes" in payload:
-            selected = G14RobustnessPlan
+            selected = (
+                G14RobustnessPlanV1 if payload.get("schema_version") == 1 else G14RobustnessPlan
+            )
         elif "g14_contract_id" in payload:
-            selected = G14SealContract
+            selected = G14SealContractV1 if payload.get("schema_version") == 1 else G14SealContract
         elif "multiplicity_contract_id" in payload:
-            selected = G14MultiplicityContract
+            selected = (
+                G14MultiplicityContractV1
+                if payload.get("schema_version") == 1
+                else G14MultiplicityContract
+            )
         elif payload.get("method") in {
             "complete_denominator_dm_reaction_recovery_v1",
             "complete_denominator_dm_reaction_recovery_v2",

@@ -166,6 +166,23 @@ class CountStore:
 
         return self._handle is not None
 
+    @property
+    def row_index_cache_bytes(self) -> int:
+        """Exact NumPy bytes retained for row lookup and CSR offsets."""
+
+        if self._row_index_cache is None:
+            return 0
+        return sum(array.nbytes for array in self._row_index_cache)
+
+    @property
+    def hdf5_chunk_cache_bytes(self) -> int:
+        """Configured raw-data chunk-cache bytes for the persistent handle."""
+
+        if self._handle is None:
+            return 0
+        self._assert_process_owner()
+        return int(self._handle.id.get_access_plist().get_cache()[2])
+
     def open(self) -> CountStore:
         """Open one process-local reader handle and reuse its immutable row index."""
 

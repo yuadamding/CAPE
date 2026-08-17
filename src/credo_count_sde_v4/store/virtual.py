@@ -1,0 +1,225 @@
+"""Metadata-only canonical access over immutable source HDF5 CSR matrices."""
+
+from __future__ import annotations
+
+import hashlib
+from collections.abc import Iterator
+from pathlib import Path
+from typing import cast
+
+import h5py
+import numpy as np
+from scipy import sparse
+
+from ..canonical import canonical_json_bytes, sha256_file
+from ..contracts import VirtualCanonicalCountStoreManifest, VirtualCountSource
+from ..errors import ContractError, IntegrityError
+from .csr import SparseCountBatch
+
+
+def _permutation_hash(values: np.ndarray) -> str:
+    permutation = np.asarray(values, dtype="<i4")
+    return hashlib.sha256(permutation.tobytes(order="C")).hexdigest()
+
+
+def _csr_rows(path: Path, source: VirtualCountSource, rows: np.ndarray) -> sparse.csr_matrix:
+    requested = np.asarray(rows, dtype=np.int64)
+    if np.any(requested < 0) or np.any(requested >= source.rows):
+        raise KeyError(f"Source row is outside {source.source_id} bounds.")
+    unique_rows, inverse = np.unique(requested, return_inverse=True)
+    with h5py.File(path, "r") as handle:
+        group = handle[source.dataset_path]
+        indptr = group["indptr"]
+        data = group["data"]
+        indices = group["indices"]
+        blocks: list[sparse.csr_matrix] = []
+        run_breaks = np.where(np.diff(unique_rows) != 1)[0] + 1
+        for run in np.split(unique_rows, run_breaks):
+            first = int(run[0])
+            last = int(run[-1]) + 1
+            offsets = np.asarray(indptr[first : last + 1], dtype=np.int64)
+            start, end = int(offsets[0]), int(offsets[-1])
+            blocks.append(
+                sparse.csr_matrix(
+                    (
+                        data[start:end],
+                        indices[start:end],
+                        offsets - start,
+                    ),
+                    shape=(last - first, source.features),
+                )
+            )
+    unique_matrix = sparse.vstack(blocks, format="csr")
+    return cast(sparse.csr_matrix, unique_matrix[inverse].tocsr())
+
+
+class VirtualCanonicalCountStore:
+    """Forensic/sequential source plane; never the direct H100 training backend."""
+
+    def __init__(self, path: Path, *, source_root: Path) -> None:
+        if path.is_symlink() or not path.is_dir():
+            raise IntegrityError(f"Virtual canonical store is not a regular directory: {path}.")
+        manifest_path = path / "manifest.json"
+        if not manifest_path.is_file():
+            raise IntegrityError("Virtual canonical store lacks manifest.json.")
+        self.path = path
+        self.source_root = source_root
+        self.manifest = VirtualCanonicalCountStoreManifest.model_validate_json(
+            manifest_path.read_text()
+        )
+        self._locator_cache: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
+        self._permutations: tuple[np.ndarray, ...] | None = None
+
+    @property
+    def locator_cache_bytes(self) -> int:
+        if self._locator_cache is None:
+            return 0
+        return sum(array.nbytes for array in self._locator_cache)
+
+    def _locator(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        if self._locator_cache is None:
+            locator_path = self.path / self.manifest.row_locator.relative_uri
+            with h5py.File(locator_path, "r") as handle:
+                self._locator_cache = (
+                    np.asarray(handle["row_ids_sorted"][:], dtype=np.int64),
+                    np.asarray(handle["source_indices_sorted"][:], dtype=np.int16),
+                    np.asarray(handle["source_rows_sorted"][:], dtype=np.int64),
+                )
+        return self._locator_cache
+
+    def _locator_catalog_hashes(self) -> tuple[str, str]:
+        locator_path = self.path / self.manifest.row_locator.relative_uri
+        with h5py.File(locator_path, "r") as handle:
+            required = {
+                "guide_codes_sorted",
+                "target_codes_sorted",
+                "guide_ids",
+                "target_ids",
+            }
+            if not required <= set(handle):
+                raise IntegrityError("Virtual row locator lacks guide/target identity datasets.")
+            guide_ids = handle["guide_ids"].asstr()[:].tolist()
+            target_ids = handle["target_ids"].asstr()[:].tolist()
+            guide_codes = np.asarray(handle["guide_codes_sorted"][:], dtype=np.int32)
+            target_codes = np.asarray(handle["target_codes_sorted"][:], dtype=np.int32)
+            if (
+                len(guide_codes) != self.manifest.eligible_rows
+                or len(target_codes) != self.manifest.eligible_rows
+                or np.any(guide_codes < 0)
+                or np.any(guide_codes >= len(guide_ids))
+                or np.any(target_codes < 0)
+                or np.any(target_codes >= len(target_ids))
+            ):
+                raise IntegrityError("Virtual row locator guide/target codes are invalid.")
+        guide_hash = hashlib.sha256(
+            canonical_json_bytes(guide_ids)
+        ).hexdigest()
+        target_hash = hashlib.sha256(
+            canonical_json_bytes(target_ids)
+        ).hexdigest()
+        return guide_hash, target_hash
+
+    def _feature_permutations(self) -> tuple[np.ndarray, ...]:
+        if self._permutations is None:
+            path = self.path / self.manifest.feature_permutations.relative_uri
+            with np.load(path, allow_pickle=False) as archive:
+                values = tuple(
+                    np.asarray(archive[f"source_{index:06d}"], dtype=np.int32)
+                    for index in range(len(self.manifest.sources))
+                )
+            for source, permutation in zip(self.manifest.sources, values, strict=True):
+                if (
+                    len(permutation) != self.manifest.features
+                    or len(np.unique(permutation)) != len(permutation)
+                    or np.any(permutation < 0)
+                    or np.any(permutation >= source.features)
+                    or _permutation_hash(permutation) != source.canonical_permutation_hash
+                ):
+                    raise IntegrityError(f"Invalid canonical permutation for {source.source_id}.")
+            self._permutations = values
+        return self._permutations
+
+    def verify(self, *, full: bool = True) -> VirtualCanonicalCountStoreManifest:
+        locator_path = self.path / self.manifest.row_locator.relative_uri
+        permutation_path = self.path / self.manifest.feature_permutations.relative_uri
+        if (
+            sha256_file(locator_path) != self.manifest.row_locator.sha256
+            or sha256_file(permutation_path) != self.manifest.feature_permutations.sha256
+        ):
+            raise IntegrityError("Virtual canonical metadata artifact hash mismatch.")
+        row_ids, source_indices, source_rows = self._locator()
+        if (
+            len(row_ids) != self.manifest.eligible_rows
+            or len(source_indices) != len(row_ids)
+            or len(source_rows) != len(row_ids)
+            or np.any(np.diff(row_ids) <= 0)
+            or np.any(source_indices < 0)
+            or np.any(source_indices >= len(self.manifest.sources))
+        ):
+            raise IntegrityError("Virtual canonical row locator is invalid.")
+        for index, source in enumerate(self.manifest.sources):
+            selected = source_indices == index
+            if np.any(source_rows[selected] < 0) or np.any(source_rows[selected] >= source.rows):
+                raise IntegrityError(f"Virtual source rows exceed {source.source_id} bounds.")
+            source_path = self.source_root / source.relative_uri
+            if not source_path.is_file():
+                raise IntegrityError(f"Virtual source is missing: {source.source_id}.")
+            if full and sha256_file(source_path) != source.source_file_sha256:
+                raise IntegrityError(f"Virtual source hash mismatch: {source.source_id}.")
+        guide_hash, target_hash = self._locator_catalog_hashes()
+        if (
+            guide_hash != self.manifest.guide_catalog_hash
+            or target_hash != self.manifest.target_catalog_hash
+        ):
+            raise IntegrityError("Virtual row locator guide/target catalog hash mismatch.")
+        self._feature_permutations()
+        return self.manifest
+
+    def rows(self, row_ids: np.ndarray) -> SparseCountBatch:
+        requested = np.asarray(row_ids, dtype=np.int64)
+        if not len(requested):
+            return SparseCountBatch(
+                matrix=sparse.csr_matrix((0, self.manifest.features), dtype=np.int32),
+                row_ids=requested.copy(),
+                feature_index_hash=self.manifest.canonical_feature_index_hash,
+            )
+        sorted_ids, locator_sources, locator_rows = self._locator()
+        found = np.searchsorted(sorted_ids, requested)
+        valid = found < len(sorted_ids)
+        candidates = np.where(valid)[0]
+        valid[candidates] = sorted_ids[found[candidates]] == requested[candidates]
+        if not np.all(valid):
+            raise KeyError(f"Unknown virtual row IDs: {requested[~valid][:10].tolist()}.")
+        source_indices = locator_sources[found]
+        source_rows = locator_rows[found]
+        permutations = self._feature_permutations()
+        blocks: list[sparse.csr_matrix] = []
+        output_positions: list[np.ndarray] = []
+        for source_index in np.unique(source_indices):
+            positions = np.where(source_indices == source_index)[0]
+            source = self.manifest.sources[int(source_index)]
+            source_path = self.source_root / source.relative_uri
+            matrix = _csr_rows(source_path, source, source_rows[positions])
+            blocks.append(matrix[:, permutations[int(source_index)]].tocsr())
+            output_positions.append(positions)
+        stacked = sparse.vstack(blocks, format="csr")
+        block_order = np.concatenate(output_positions)
+        output = stacked[np.argsort(block_order, kind="stable")].tocsr()
+        if output.shape != (len(requested), self.manifest.features):
+            raise ContractError("Virtual canonical read returned an invalid shape.")
+        return SparseCountBatch(
+            matrix=output,
+            row_ids=requested.copy(),
+            feature_index_hash=self.manifest.canonical_feature_index_hash,
+        )
+
+    def iter_batches(
+        self, ordered_row_ids: np.ndarray, *, batch_size: int, cursor: int = 0
+    ) -> Iterator[tuple[int, SparseCountBatch]]:
+        if batch_size <= 0 or cursor < 0:
+            raise ValueError("batch_size must be positive and cursor nonnegative.")
+        ids = np.asarray(ordered_row_ids, dtype=np.int64)
+        while cursor < len(ids):
+            end = min(cursor + batch_size, len(ids))
+            yield end, self.rows(ids[cursor:end])
+            cursor = end

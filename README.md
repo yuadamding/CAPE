@@ -8,7 +8,7 @@ count_state → count_measure → count_context
 ```
 
 It is a sibling of, not a modification to, the frozen CREDO checkout. Version
-`4.0.0.dev28` is engineering software; it is not a biological result and cannot
+`4.0.0.dev29` is engineering software; it is not a biological result and cannot
 be relabeled as stable `4.0`.
 
 Implemented surfaces include strict hash-bound contracts, sparse count storage,
@@ -35,7 +35,7 @@ noise qualification or the passed synthetic T04/T07S numerical path. T00 has an
 explicit, immutable pooled finite-measure API and receipt. The T03 source ×
 target hardening is engineering code, not a qualified real-cohort result.
 
-Dev28 adds a content-addressed sharded CSR store, persistent process-local
+Dev28 added a content-addressed sharded CSR store, persistent process-local
 readers, and a bounded resumable shard writer whose typed checkpoint truncates
 uncommitted payload after interruption. It also freezes the checkpoint-only
 dimension-zero multinomial decoder required by G04 and evidence-only G14 claim,
@@ -44,6 +44,15 @@ verify exact reordered/duplicated reads and zero planned guide fragmentation,
 but fail the frozen H100 loader-throughput gate. The full approximately 765 GB
 CountStore was therefore not built, and no biological or outer-donor result is
 promoted.
+
+Dev29 replaces the impossible direct-raw-store H100 rate requirement with a
+two-tier data plane: immutable source authority and virtual canonical access
+feed fold-native compact views, which are qualified only by integrated wait,
+utilization, parity, and bounded-memory gates. It also closes the shard
+finalization crash window, binds appends to exact frozen chunk identities,
+bounds reader handles, restores physical checkpoint chronology, and hardens the
+G14 evidence graph. See the
+[G00 two-tier data-plane contract](docs/g00-two-tier-data-plane.md).
 
 ## Quick start
 
@@ -95,6 +104,7 @@ credo-v4 qualify-raw-noise \
 
 See [architecture](docs/architecture.md), [contracts](docs/contracts.md),
 [lifecycle](docs/lifecycle.md),
+[the G00 two-tier data-plane contract](docs/g00-two-tier-data-plane.md),
 [component qualification](docs/component-qualification.md),
 [the detailed T01 record](docs/t01-representation-qualification.md),
 [the detailed T02A record](docs/t02a-raw-count-mass-noise.md),

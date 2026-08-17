@@ -16,7 +16,7 @@ Implemented in this repository:
 - CLI/API, full content/reload verification, correction/context audit helpers;
 - CPU regression, leakage, corruption, fault, resume, compatibility, and wheel CI.
 
-Dev28 retains the component-qualified boundary introduced in dev18: the T00
+Dev29 retains the component-qualified boundary introduced in dev18: the T00
 pooled finite-measure contract, public API/CLI, strict channel-isolation
 contract, and focused invariants. The external pooled Renz adapter passed T00
 with 495 guides and 277,200 cells. T04 independently passed its fixed-truth
@@ -77,8 +77,8 @@ software/synthetic qualification, not evidence about a cohort. See the
 [dev24 R1 amendment](t07s-reaction-metric-amendment.md) and authoritative
 [dev25 unified R0/R1 amendment](t07s-null-interval-amendment.md).
 
-Local acceptance completed with 160 CPU tests passing and one CUDA-only test
-skipped on the CPU validation host, with 85.20% branch-aware coverage. The exact
+Local acceptance completed with 198 CPU tests passing and one CUDA-only test
+skipped on the CPU validation host, with 85.71% branch-aware coverage. The exact
 test and coverage results are in
 `receipts/local-validation.json`. Ruff,
 mypy, generated-schema, documentation-link, wheel
@@ -86,7 +86,7 @@ namespace/license, clean-wheel lifecycle, and frozen-CREDO preflight checks
 passed. The wheel is reproducible under a fixed `SOURCE_DATE_EPOCH`; normalized
 sdist publication is reproducible through `scripts/normalize_sdist.py`.
 
-Dev28 adds the G00/G04/G14 infrastructure required by the GSE314342 component
+Dev28 added the G00/G04/G14 infrastructure required by the GSE314342 component
 program: exact sharded CSR manifests and Merkle identities, persistent readers,
 a bounded interruption-reconciling writer, the checkpoint-conditioned
 dimension-zero multinomial null, and evidence-only claim, robustness,
@@ -94,6 +94,25 @@ multiplicity, and seal contracts. External G00 probes passed source, feature,
 capacity, and sparse-read correctness checks but failed the frozen H100
 throughput requirement by orders of magnitude. The full CountStore and every
 real-data downstream component remain blocked.
+
+Dev29 reclassifies that result correctly. G00A is the source/feature authority;
+G00B is a metadata-only virtual raw-count plane for sequential statistics and
+one-time extraction; G00C is a fold-native compact count view; G00D is an
+integrated loader/compute qualification. The direct 2.75-million-raw-row/s
+threshold is retired as a production gate because it implied approximately
+91 GB/s of decoded CSR traffic. The dev28 failure remains authoritative for
+direct raw streaming. Dev29 implements strict G00A–D contracts and the G00B
+reader. The external dev29 execution froze all 12 full source hashes and now
+passes G00A and G00B with authority `0bda9cf4…` and virtual store `cb452528…`;
+it reconciles
+21,996,842 eligible rows and 90,997,745,441 eligible nonzeros without copying
+the raw count matrix. It does not claim G00C or G00D execution. No
+outer-donor stimulated outcome is opened by package tests. See the
+[two-tier data-plane record](g00-two-tier-data-plane.md).
+
+Dev29 emits checkpoint-decoder and G14 schema v2 contracts. The public
+validator retains explicit read-only v1 models so the immutable dev28 evidence
+continues to validate; new construction and cross-contract sealing require v2.
 
 Dev7 replaced the invalid reconstructed-SVD softmax with a checkpoint-owned
 multinomial count-composition decoder. Dev10 added a deterministic
@@ -141,7 +160,7 @@ conditional-interaction, and joint nulls, freezes fold and seed identities,
 and strengthens noninteraction comparators. That T03 code remains unqualified
 until T01, T02, and the prescribed pooled pilot pass.
 
-Deliberately not asserted complete in `4.0.0.dev28`:
+Deliberately not asserted complete in `4.0.0.dev29`:
 
 - stable CREDO entry-point discovery;
 - in-repository real-cohort adapters, biological thresholds, or biological claims;
@@ -187,5 +206,5 @@ authority.
 
 Exact future use depends on the branch commit, `REPOSITORY.sha256`, the
 wheel/sdist bytes, generated schemas, and the local validation receipt. A clean
-dev28 commit and release receipt are necessary—but not sufficient—before any
+dev29 commit and release receipt are necessary—but not sufficient—before any
 pilot deployment or stable promotion.

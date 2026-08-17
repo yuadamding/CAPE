@@ -7,7 +7,8 @@ import json
 import os
 import shutil
 import uuid
-from collections.abc import Iterator
+from collections import OrderedDict
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import h5py
@@ -19,6 +20,7 @@ from ..contracts import (
     CountStoreManifest,
     CountStoreShard,
     FeatureKey,
+    ShardAppendContract,
     ShardBuildCheckpoint,
     ShardedCountStoreManifest,
 )
@@ -32,6 +34,14 @@ def _write_json_atomic(path: Path, payload: object) -> None:
     with temporary.open("rb") as handle:
         os.fsync(handle.fileno())
     os.replace(temporary, path)
+    descriptor = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _fsync_parent_directory(path: Path) -> None:
     descriptor = os.open(path.parent, os.O_RDONLY)
     try:
         os.fsync(descriptor)
@@ -77,6 +87,40 @@ def _active_offsets_hash(*, rows: int, nnz: int, chunks: int, last_offset: int) 
     )
 
 
+def _append_plan_hash(append_plan: tuple[ShardAppendContract, ...]) -> str:
+    return sha256_bytes(
+        canonical_json_bytes([contract.model_dump(mode="json") for contract in append_plan])
+    )
+
+
+def _cumulative_row_hash(previous: str, row_ids: np.ndarray) -> str:
+    values = np.asarray(row_ids, dtype="<i8")
+    return sha256_bytes(bytes.fromhex(previous) + values.tobytes(order="C"))
+
+
+def _expected_append_fields(
+    append_plan: tuple[ShardAppendContract, ...], index: int
+) -> dict[str, object]:
+    if index >= len(append_plan):
+        return {
+            "expected_chunk_index": None,
+            "expected_source_cursor_start": None,
+            "expected_source_cursor_end": None,
+            "expected_row_ids_hash": None,
+            "expected_guide_run_id": None,
+            "expected_chunk_nnz": None,
+        }
+    contract = append_plan[index]
+    return {
+        "expected_chunk_index": contract.chunk_index,
+        "expected_source_cursor_start": contract.source_cursor_start,
+        "expected_source_cursor_end": contract.source_cursor_end,
+        "expected_row_ids_hash": contract.row_ids_hash,
+        "expected_guide_run_id": contract.guide_run_id,
+        "expected_chunk_nnz": contract.chunk_nnz,
+    }
+
+
 class BoundedCSRShardWriter:
     """Restartable, process-local writer for one bounded physical CSR shard.
 
@@ -93,9 +137,11 @@ class BoundedCSRShardWriter:
         features: tuple[FeatureKey, ...],
         expected_rows: int,
         expected_nnz: int,
+        append_plan: tuple[ShardAppendContract, ...],
         build_plan_id: str | None = None,
         shard_index: int | None = None,
         source_id: str | None = None,
+        fault_injector: Callable[[str], None] | None = None,
     ) -> None:
         self.destination = destination
         self.partial = destination.with_name(f".{destination.name}.partial")
@@ -103,24 +149,73 @@ class BoundedCSRShardWriter:
         self.features = features
         self.expected_rows = expected_rows
         self.expected_nnz = expected_nnz
-        if destination.exists() or destination.is_symlink():
-            raise FileExistsError(destination)
-        if not self.partial.is_file() or not checkpoint_path.is_file():
-            raise IntegrityError("Bounded shard writer lacks its partial file or checkpoint.")
+        self.append_plan = append_plan
+        self.fault_injector = fault_injector
+        self._recovered_manifest: CountStoreManifest | None = None
+        if not append_plan:
+            raise ContractError("Bounded shard writer requires a nonempty exact append plan.")
+        if not checkpoint_path.is_file():
+            raise IntegrityError("Bounded shard writer lacks its typed checkpoint.")
         self.checkpoint = ShardBuildCheckpoint.model_validate_json(checkpoint_path.read_text())
-        if self.checkpoint.active_shard_index is None:
-            raise IntegrityError("Bounded shard writer checkpoint is already finalized.")
+        if self.checkpoint.append_plan_hash != _append_plan_hash(append_plan):
+            raise IntegrityError("Bounded shard writer append-plan identity changed.")
         if build_plan_id is not None and self.checkpoint.build_plan_id != build_plan_id:
             raise IntegrityError("Bounded shard writer build-plan identity changed.")
-        if shard_index is not None and self.checkpoint.active_shard_index != shard_index:
+        if (
+            shard_index is not None
+            and self.checkpoint.phase != "FINALIZED"
+            and self.checkpoint.active_shard_index != shard_index
+        ):
             raise IntegrityError("Bounded shard writer shard index changed.")
         if source_id is not None and self.checkpoint.source_id != source_id:
             raise IntegrityError("Bounded shard writer source identity changed.")
+        if any(contract.build_plan_id != self.checkpoint.build_plan_id for contract in append_plan):
+            raise IntegrityError("Append chunks do not bind the active build plan.")
+        if any(contract.source_id != self.checkpoint.source_id for contract in append_plan):
+            raise IntegrityError("Append chunks do not bind the active source.")
+        if (
+            any(
+                contract.shard_index != self.checkpoint.active_shard_index
+                for contract in append_plan
+            )
+            and self.checkpoint.phase != "FINALIZED"
+        ):
+            raise IntegrityError("Append chunks do not bind the active shard.")
+        if (
+            sum(contract.chunk_rows for contract in append_plan) != expected_rows
+            or sum(contract.chunk_nnz for contract in append_plan) != expected_nnz
+        ):
+            raise IntegrityError("Append-plan totals differ from frozen shard bounds.")
         if self.checkpoint.active_shard_rows > expected_rows:
             raise IntegrityError("Checkpoint rows exceed the frozen shard bound.")
         if self.checkpoint.active_shard_nonzeros > expected_nnz:
             raise IntegrityError("Checkpoint nonzeros exceed the frozen shard bound.")
         self._owner_pid = os.getpid()
+        self._handle: h5py.File | None = None
+        if self.checkpoint.phase == "FINALIZED":
+            self._recover_finalized_destination()
+            return
+        if self.checkpoint.phase == "FINALIZING":
+            if self.destination.exists() and self.partial.exists():
+                raise IntegrityError("Finalizing shard has both destination and partial payloads.")
+            if self.destination.exists():
+                self._recover_renamed_destination()
+                return
+            manifest = self._finalizing_manifest()
+            if not self.partial.is_file():
+                raise IntegrityError(
+                    "FINALIZING shard lacks both partial and destination payloads."
+                )
+            if sha256_file(self.partial) != manifest.content_sha256:
+                raise IntegrityError("FINALIZING partial differs from its frozen content hash.")
+            # Opening a fully finalized HDF5 payload in r+ mode can update file
+            # metadata even when no logical arrays change. Keep the frozen
+            # bytes closed until the atomic rename below.
+            return
+        elif self.destination.exists() or self.destination.is_symlink():
+            raise FileExistsError(destination)
+        if not self.partial.is_file():
+            raise IntegrityError("Bounded shard writer lacks its partial payload.")
         self._handle = h5py.File(self.partial, "r+")
         try:
             expected_shape = tuple(map(int, self._handle.attrs.get("expected_shape", ())))
@@ -144,17 +239,32 @@ class BoundedCSRShardWriter:
         features: tuple[FeatureKey, ...],
         expected_rows: int,
         expected_nnz: int,
+        append_plan: tuple[ShardAppendContract, ...],
         build_plan_id: str,
         shard_index: int,
         source_id: str,
+        fault_injector: Callable[[str], None] | None = None,
     ) -> BoundedCSRShardWriter:
         if destination.exists() or destination.is_symlink():
             raise FileExistsError(destination)
         partial = destination.with_name(f".{destination.name}.partial")
         if partial.exists() or checkpoint_path.exists():
             raise FileExistsError(partial if partial.exists() else checkpoint_path)
-        if expected_rows <= 0 or expected_nnz < 0 or shard_index < 0:
+        if expected_rows <= 0 or expected_nnz < 0 or shard_index < 0 or not append_plan:
             raise ValueError("Frozen shard rows/index must be positive and nonzeros nonnegative.")
+        if any(
+            contract.build_plan_id != build_plan_id
+            or contract.shard_index != shard_index
+            or contract.source_id != source_id
+            or contract.chunk_index != index
+            for index, contract in enumerate(append_plan)
+        ):
+            raise ContractError("Append-plan chunks must be ordered and bind plan/shard/source.")
+        if (
+            sum(contract.chunk_rows for contract in append_plan) != expected_rows
+            or sum(contract.chunk_nnz for contract in append_plan) != expected_nnz
+        ):
+            raise ContractError("Append-plan totals must equal frozen shard bounds.")
         destination.parent.mkdir(parents=True, exist_ok=True)
         with h5py.File(partial, "x", libver="latest") as handle:
             group = handle.create_group("X")
@@ -204,8 +314,11 @@ class BoundedCSRShardWriter:
             handle.flush()
         with partial.open("rb") as handle:
             os.fsync(handle.fileno())
+        expected = append_plan[0]
         checkpoint = ShardBuildCheckpoint(
             build_plan_id=build_plan_id,
+            phase="BUILDING",
+            append_plan_hash=_append_plan_hash(append_plan),
             source_cursor=0,
             completed_shard_hashes=(),
             temporary_shard_ids=(partial.name,),
@@ -217,6 +330,13 @@ class BoundedCSRShardWriter:
             committed_chunks=0,
             source_id=source_id,
             active_offsets_sha256=_active_offsets_hash(rows=0, nnz=0, chunks=0, last_offset=0),
+            cumulative_row_identity_hash=sha256_bytes(b""),
+            expected_chunk_index=expected.chunk_index,
+            expected_source_cursor_start=expected.source_cursor_start,
+            expected_source_cursor_end=expected.source_cursor_end,
+            expected_row_ids_hash=expected.row_ids_hash,
+            expected_guide_run_id=expected.guide_run_id,
+            expected_chunk_nnz=expected.chunk_nnz,
         )
         _write_json_atomic(checkpoint_path, checkpoint.model_dump(mode="json"))
         return cls(
@@ -225,17 +345,76 @@ class BoundedCSRShardWriter:
             features=features,
             expected_rows=expected_rows,
             expected_nnz=expected_nnz,
+            append_plan=append_plan,
             build_plan_id=build_plan_id,
             shard_index=shard_index,
             source_id=source_id,
+            fault_injector=fault_injector,
         )
 
     def _assert_owner(self) -> None:
         if self._owner_pid != os.getpid():
             raise IntegrityError("A bounded shard writer cannot cross a process boundary.")
 
+    def _boundary(self, name: str) -> None:
+        if self.fault_injector is not None:
+            self.fault_injector(name)
+
+    def _updated_checkpoint(self, update: dict[str, object]) -> ShardBuildCheckpoint:
+        payload = self.checkpoint.model_dump(mode="json")
+        payload.update(update)
+        return ShardBuildCheckpoint.model_validate(payload)
+
+    def _finalizing_manifest(self) -> CountStoreManifest:
+        manifest = self.checkpoint.finalizing_manifest
+        if manifest is None or self.checkpoint.finalizing_content_sha256 is None:
+            raise IntegrityError("Finalizing checkpoint lacks its immutable manifest.")
+        if manifest.content_sha256 != self.checkpoint.finalizing_content_sha256:
+            raise IntegrityError("Finalizing manifest and content identities disagree.")
+        if (
+            self.checkpoint.destination_name != self.destination.name
+            or manifest.relative_uri != self.destination.name
+        ):
+            raise IntegrityError("Finalizing checkpoint references a different destination.")
+        return manifest
+
+    def _recover_renamed_destination(self) -> None:
+        manifest = self._finalizing_manifest()
+        if sha256_file(self.destination) != manifest.content_sha256:
+            raise IntegrityError("Renamed shard differs from its FINALIZING content hash.")
+        CountStore(self.destination, manifest).verify(full=True)
+        # A restart after rename but before the original directory fsync must
+        # persist the directory entry before declaring the checkpoint final.
+        _fsync_parent_directory(self.destination)
+        self.checkpoint = self._updated_checkpoint(
+            {
+                "phase": "FINALIZED",
+                "completed_shard_hashes": (manifest.content_sha256,),
+                "temporary_shard_ids": (),
+                "active_shard_index": None,
+                "active_shard_rows": 0,
+                "active_shard_nonzeros": 0,
+                "active_offsets_sha256": None,
+            }
+        )
+        _write_json_atomic(self.checkpoint_path, self.checkpoint.model_dump(mode="json"))
+        self._recovered_manifest = manifest
+
+    def _recover_finalized_destination(self) -> None:
+        if self.partial.exists():
+            raise IntegrityError("FINALIZED shard unexpectedly retains a partial payload.")
+        if not self.destination.is_file():
+            raise IntegrityError("FINALIZED shard destination is missing.")
+        manifest = self._finalizing_manifest()
+        if sha256_file(self.destination) != manifest.content_sha256:
+            raise IntegrityError("FINALIZED shard differs from its immutable content hash.")
+        CountStore(self.destination, manifest).verify(full=True)
+        self._recovered_manifest = manifest
+
     def _reconcile(self) -> None:
         self._assert_owner()
+        if self._handle is None:
+            raise IntegrityError("A finalized shard has no writable payload to reconcile.")
         rows = self.checkpoint.active_shard_rows
         nnz = self.checkpoint.active_shard_nonzeros
         data = self._handle["X/data"]
@@ -264,6 +443,8 @@ class BoundedCSRShardWriter:
         self, matrix: sparse.spmatrix, *, row_ids: np.ndarray, source_cursor: int
     ) -> ShardBuildCheckpoint:
         self._assert_owner()
+        if self.checkpoint.phase != "BUILDING" or self._handle is None:
+            raise IntegrityError("Only a BUILDING shard may accept an append.")
         csr = sparse.csr_matrix(matrix)
         csr.sort_indices()
         ids = np.asarray(row_ids, dtype=np.int64)
@@ -281,8 +462,28 @@ class BoundedCSRShardWriter:
         nnz_after = nnz_before + csr.nnz
         if rows_after > self.expected_rows or nnz_after > self.expected_nnz:
             raise ContractError("Bounded shard append exceeds its frozen row/nonzero budget.")
-        if source_cursor <= self.checkpoint.source_cursor:
-            raise ContractError("Source cursor must advance monotonically at every append.")
+        if self.checkpoint.committed_chunks >= len(self.append_plan):
+            raise ContractError("Bounded shard append plan is already exhausted.")
+        contract = self.append_plan[self.checkpoint.committed_chunks]
+        observed_row_hash = _row_hash(ids)
+        observed_cumulative_hash = _cumulative_row_hash(
+            self.checkpoint.cumulative_row_identity_hash, ids
+        )
+        if (
+            contract.chunk_index != self.checkpoint.expected_chunk_index
+            or contract.source_cursor_start != self.checkpoint.source_cursor
+            or contract.source_cursor_start != self.checkpoint.expected_source_cursor_start
+            or contract.source_cursor_end != source_cursor
+            or contract.source_cursor_end != self.checkpoint.expected_source_cursor_end
+            or contract.row_ids_hash != observed_row_hash
+            or contract.row_ids_hash != self.checkpoint.expected_row_ids_hash
+            or contract.guide_run_id != self.checkpoint.expected_guide_run_id
+            or contract.chunk_rows != len(ids)
+            or contract.chunk_nnz != csr.nnz
+            or contract.chunk_nnz != self.checkpoint.expected_chunk_nnz
+            or contract.cumulative_row_identity_hash != observed_cumulative_hash
+        ):
+            raise ContractError("Shard append differs from the exact next P2 chunk contract.")
         data = self._handle["X/data"]
         indices = self._handle["X/indices"]
         indptr = self._handle["X/indptr"]
@@ -298,20 +499,22 @@ class BoundedCSRShardWriter:
         self._handle.flush()
         with self.partial.open("rb") as handle:
             os.fsync(handle.fileno())
-        checkpoint = self.checkpoint.model_copy(
-            update={
+        checkpoint = self._updated_checkpoint(
+            {
                 "source_cursor": source_cursor,
                 "row_count": rows_after,
                 "nonzero_count": nnz_after,
                 "active_shard_rows": rows_after,
                 "active_shard_nonzeros": nnz_after,
                 "committed_chunks": self.checkpoint.committed_chunks + 1,
+                "cumulative_row_identity_hash": observed_cumulative_hash,
                 "active_offsets_sha256": _active_offsets_hash(
                     rows=rows_after,
                     nnz=nnz_after,
                     chunks=self.checkpoint.committed_chunks + 1,
                     last_offset=nnz_after,
                 ),
+                **_expected_append_fields(self.append_plan, self.checkpoint.committed_chunks + 1),
             }
         )
         _write_json_atomic(self.checkpoint_path, checkpoint.model_dump(mode="json"))
@@ -320,56 +523,94 @@ class BoundedCSRShardWriter:
 
     def close(self) -> None:
         self._assert_owner()
-        if self._handle:
+        if self._handle is not None:
             self._handle.close()
+            self._handle = None
 
     def finalize(self) -> tuple[CountStoreManifest, ShardBuildCheckpoint]:
         self._assert_owner()
-        if self.checkpoint.active_shard_rows != self.expected_rows:
-            raise ContractError("Bounded shard row count does not match its frozen plan.")
-        if self.checkpoint.active_shard_nonzeros != self.expected_nnz:
-            raise ContractError("Bounded shard nonzero count does not match its frozen plan.")
-        ids = np.asarray(self._handle["row_ids"][:], dtype=np.int64)
-        order = np.argsort(ids, kind="stable")
-        sorted_ids = ids[order]
-        if len(sorted_ids) != len(np.unique(sorted_ids)):
-            raise IntegrityError("Bounded shard row IDs overlap across committed chunks.")
-        self._handle.create_dataset("row_ids_sorted", data=sorted_ids, compression="gzip")
-        self._handle.create_dataset(
-            "row_positions_sorted", data=order.astype(np.int64), compression="gzip"
-        )
-        self._handle.attrs["schema_id"] = "credo.count_store"
-        self._handle.attrs["shape"] = (self.expected_rows, len(self.features))
-        self._handle.flush()
-        self._handle.close()
-        with self.partial.open("rb") as handle:
-            os.fsync(handle.fileno())
-        content = sha256_file(self.partial)
-        payload = {
-            "schema_version": 1,
-            "store_id": "pending",
-            "backend": "csr_hdf5",
-            "rows": self.expected_rows,
-            "features": len(self.features),
-            "nnz": self.expected_nnz,
-            "value_dtype": "int32",
-            "row_ids_hash": _row_hash(ids),
-            "feature_index_hash": _feature_hash(self.features),
-            "content_sha256": content,
-            "relative_uri": self.destination.name,
-        }
-        payload["store_id"] = contract_id(payload, id_field="store_id")
-        manifest = CountStoreManifest.model_validate(payload)
-        CountStore(self.partial, manifest).verify(full=True)
+        if self._recovered_manifest is not None:
+            return self._recovered_manifest, self.checkpoint
+        if self.checkpoint.phase == "BUILDING":
+            if self.checkpoint.active_shard_rows != self.expected_rows:
+                raise ContractError("Bounded shard row count does not match its frozen plan.")
+            if self.checkpoint.active_shard_nonzeros != self.expected_nnz:
+                raise ContractError("Bounded shard nonzero count does not match its frozen plan.")
+            if self.checkpoint.committed_chunks != len(self.append_plan):
+                raise ContractError("Bounded shard has not consumed its complete P2 append plan.")
+            if self.checkpoint.expected_chunk_index is not None:
+                raise IntegrityError("Complete append plan still exposes a next chunk identity.")
+            if self._handle is None:
+                raise IntegrityError("BUILDING shard lacks its writable partial payload.")
+            ids = np.asarray(self._handle["row_ids"][:], dtype=np.int64)
+            order = np.argsort(ids, kind="stable")
+            sorted_ids = ids[order]
+            if len(sorted_ids) != len(np.unique(sorted_ids)):
+                raise IntegrityError("Bounded shard row IDs overlap across committed chunks.")
+            existing_sorted = "row_ids_sorted" in self._handle
+            existing_positions = "row_positions_sorted" in self._handle
+            if existing_sorted != existing_positions:
+                raise IntegrityError("Partial shard has an incomplete final row index.")
+            if existing_sorted:
+                if not np.array_equal(self._handle["row_ids_sorted"][:], sorted_ids) or not (
+                    np.array_equal(self._handle["row_positions_sorted"][:], order)
+                ):
+                    raise IntegrityError("Existing final row index differs from committed rows.")
+            else:
+                self._handle.create_dataset("row_ids_sorted", data=sorted_ids, compression="gzip")
+                self._handle.create_dataset(
+                    "row_positions_sorted", data=order.astype(np.int64), compression="gzip"
+                )
+            self._handle.attrs["schema_id"] = "credo.count_store"
+            self._handle.attrs["shape"] = (self.expected_rows, len(self.features))
+            self._handle.flush()
+            self.close()
+            with self.partial.open("rb") as handle:
+                os.fsync(handle.fileno())
+            content = sha256_file(self.partial)
+            payload = {
+                "schema_version": 1,
+                "store_id": "pending",
+                "backend": "csr_hdf5",
+                "rows": self.expected_rows,
+                "features": len(self.features),
+                "nnz": self.expected_nnz,
+                "value_dtype": "int32",
+                "row_ids_hash": _row_hash(ids),
+                "feature_index_hash": _feature_hash(self.features),
+                "content_sha256": content,
+                "relative_uri": self.destination.name,
+            }
+            payload["store_id"] = contract_id(payload, id_field="store_id")
+            manifest = CountStoreManifest.model_validate(payload)
+            self._boundary("after_manifest")
+            CountStore(self.partial, manifest).verify(full=True)
+            self._boundary("after_verify_partial")
+            self.checkpoint = self._updated_checkpoint(
+                {
+                    "phase": "FINALIZING",
+                    "finalizing_content_sha256": content,
+                    "finalizing_manifest": manifest,
+                    "destination_name": self.destination.name,
+                }
+            )
+            _write_json_atomic(self.checkpoint_path, self.checkpoint.model_dump(mode="json"))
+            self._boundary("after_finalizing_checkpoint")
+        else:
+            manifest = self._finalizing_manifest()
+            if self.destination.exists() or not self.partial.is_file():
+                raise IntegrityError("FINALIZING restart has an invalid payload/destination state.")
+            if sha256_file(self.partial) != manifest.content_sha256:
+                raise IntegrityError("FINALIZING partial differs from its frozen content hash.")
+            CountStore(self.partial, manifest).verify(full=True)
         os.replace(self.partial, self.destination)
-        descriptor = os.open(self.destination.parent, os.O_RDONLY)
-        try:
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
-        checkpoint = self.checkpoint.model_copy(
-            update={
-                "completed_shard_hashes": (content,),
+        self._boundary("after_rename")
+        _fsync_parent_directory(self.destination)
+        self._boundary("after_directory_fsync")
+        checkpoint = self._updated_checkpoint(
+            {
+                "phase": "FINALIZED",
+                "completed_shard_hashes": (manifest.content_sha256,),
                 "temporary_shard_ids": (),
                 "active_shard_index": None,
                 "active_shard_rows": 0,
@@ -379,13 +620,15 @@ class BoundedCSRShardWriter:
         )
         _write_json_atomic(self.checkpoint_path, checkpoint.model_dump(mode="json"))
         self.checkpoint = checkpoint
+        self._recovered_manifest = manifest
+        self._boundary("after_finalized_checkpoint")
         return manifest, checkpoint
 
     def __enter__(self) -> BoundedCSRShardWriter:
         return self
 
     def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
-        if self._handle:
+        if self._handle is not None:
             self.close()
 
 
@@ -587,7 +830,9 @@ class ShardedCountStoreBuilder:
 class ShardedCountStore:
     """Read-only facade over an immutable row-ordered CSR shard directory."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, *, max_open_shards: int = 8) -> None:
+        if max_open_shards <= 0:
+            raise ValueError("max_open_shards must be positive.")
         if path.is_symlink() or not path.is_dir():
             raise IntegrityError(f"Sharded count store is not a regular directory: {path}.")
         if not (path / "COMMITTED").is_file():
@@ -598,14 +843,46 @@ class ShardedCountStore:
         )
         if (path / "COMMITTED").read_text().strip() != self.manifest.store_id:
             raise IntegrityError("Sharded count-store commit marker mismatch.")
+        self.max_open_shards = max_open_shards
         self._locator_cache: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
-        self._shard_readers: dict[int, CountStore] = {}
+        self._shard_readers: OrderedDict[int, CountStore] = OrderedDict()
 
     @property
     def persistent_reader_count(self) -> int:
         """Number of process-local shard handles opened by prior reads."""
 
         return len(self._shard_readers)
+
+    @property
+    def locator_cache_bytes(self) -> int:
+        """Exact bytes retained by the global row locator in this process."""
+
+        if self._locator_cache is None:
+            return 0
+        return sum(array.nbytes for array in self._locator_cache)
+
+    @property
+    def shard_index_cache_bytes(self) -> int:
+        """Exact row-index bytes retained by currently cached shard readers."""
+
+        return sum(reader.row_index_cache_bytes for reader in self._shard_readers.values())
+
+    @property
+    def hdf5_chunk_cache_bytes(self) -> int:
+        """Configured HDF5 raw-data cache bytes across resident shard handles."""
+
+        return sum(reader.hdf5_chunk_cache_bytes for reader in self._shard_readers.values())
+
+    def memory_metrics(self) -> dict[str, int]:
+        """Return reproducible retained-index and handle telemetry."""
+
+        return {
+            "locator_cache_bytes": self.locator_cache_bytes,
+            "shard_index_cache_bytes": self.shard_index_cache_bytes,
+            "hdf5_chunk_cache_bytes": self.hdf5_chunk_cache_bytes,
+            "open_shard_readers": self.persistent_reader_count,
+            "maximum_open_shards": self.max_open_shards,
+        }
 
     def _reader(self, shard_index: int) -> CountStore:
         reader = self._shard_readers.get(shard_index)
@@ -616,6 +893,11 @@ class ShardedCountStore:
                 _count_manifest(shard, self.manifest.feature_index_hash),
             ).open()
             self._shard_readers[shard_index] = reader
+            while len(self._shard_readers) > self.max_open_shards:
+                _, evicted = self._shard_readers.popitem(last=False)
+                evicted.close()
+        else:
+            self._shard_readers.move_to_end(shard_index)
         return reader
 
     def close(self) -> None:
