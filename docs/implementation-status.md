@@ -77,8 +77,8 @@ software/synthetic qualification, not evidence about a cohort. See the
 [dev24 R1 amendment](t07s-reaction-metric-amendment.md) and authoritative
 [dev25 unified R0/R1 amendment](t07s-null-interval-amendment.md).
 
-Local acceptance completed with 224 CPU tests passing and one CUDA-only test
-skipped on the CPU validation host, with 85.19% branch-aware coverage. The exact
+Local acceptance completed with 234 CPU tests passing and one CUDA-only test
+skipped on the CPU validation host, with 85.01% branch-aware coverage. The exact
 test and coverage results are in
 `receipts/local-validation.json`. Ruff,
 mypy, generated-schema, documentation-link, wheel
@@ -155,6 +155,24 @@ publication. The wrapper builder never opens the twelve raw expression
 matrices. See the
 [Dev32 legacy-parent attestation boundary](g00-dev32-legacy-parent-attestation.md).
 
+External Dev32 B0-A2 then passed the complete 12-source byte/CSR scan and
+published accepted G00A-v2 `b12978ea…` and G00B-v2 `ee4dc94c…`. The exact
+eligible population is 21,996,842 rows and includes 24,972 targeting plus 984
+control guides. The raw source category named `targeting single sgRNA` is an
+assignment-class label for both groups; the crosswalk supplies targeting versus
+control identity. See the
+[B0-A2 execution record](g00-dev32-b0-a2-source-plane-execution.md).
+
+Dev33-A hardens the not-yet-run G00C boundary without touching those parents.
+It requires a base-grid `extension_required` stop when no sub-million candidate
+saturates, separate row-set and ordered-row hashes, exact physical block order,
+bounded streaming CSR comparison, and executable replay of full selected and
+reference refits plus a preregistered audit subset. New work uses fold-contract
+schema v3 and execution/decision schema v2. No canary, feature ranking, sample
+selection, compact materialization, G00D, GPU, model, or biological result was
+run in this release. See the
+[Dev33-A hardening record](g00-dev33-g00c-hardening.md).
+
 Dev7 replaced the invalid reconstructed-SVD softmax with a checkpoint-owned
 multinomial count-composition decoder. Dev10 added a deterministic
 training-only validation holdout and minimum-validation-cross-entropy
@@ -201,7 +219,7 @@ conditional-interaction, and joint nulls, freezes fold and seed identities,
 and strengthens noninteraction comparators. That T03 code remains unqualified
 until T01, T02, and the prescribed pooled pilot pass.
 
-Deliberately not asserted complete in `4.0.0.dev32`:
+Deliberately not asserted complete in `4.0.0.dev33`:
 
 - stable CREDO entry-point discovery;
 - in-repository real-cohort adapters, biological thresholds, or biological claims;

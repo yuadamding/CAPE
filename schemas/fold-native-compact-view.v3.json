@@ -1,0 +1,574 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    },
+    "CompactSamplerContract": {
+      "additionalProperties": false,
+      "description": "Exact weighted, resumable fold-native sampler semantics.",
+      "properties": {
+        "checkpoint_weighting": {
+          "const": "equal",
+          "default": "equal",
+          "title": "Checkpoint Weighting",
+          "type": "string"
+        },
+        "donor_weighting": {
+          "const": "equal",
+          "default": "equal",
+          "title": "Donor Weighting",
+          "type": "string"
+        },
+        "guide_weighting_within_target": {
+          "const": "equal",
+          "default": "equal",
+          "title": "Guide Weighting Within Target",
+          "type": "string"
+        },
+        "implementation_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Implementation Sha256",
+          "type": "string"
+        },
+        "macrobatch_cells": {
+          "const": 4096,
+          "default": 4096,
+          "title": "Macrobatch Cells",
+          "type": "integer"
+        },
+        "microbatch_cells": {
+          "const": 512,
+          "default": 512,
+          "title": "Microbatch Cells",
+          "type": "integer"
+        },
+        "microbatches_per_update": {
+          "const": 8,
+          "default": 8,
+          "title": "Microbatches Per Update",
+          "type": "integer"
+        },
+        "resume_cursor_initial_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Resume Cursor Initial Hash",
+          "type": "string"
+        },
+        "resume_cursor_schema": {
+          "minLength": 1,
+          "title": "Resume Cursor Schema",
+          "type": "string"
+        },
+        "rng_algorithm": {
+          "minLength": 1,
+          "title": "Rng Algorithm",
+          "type": "string"
+        },
+        "rng_seed": {
+          "minimum": 0,
+          "title": "Rng Seed",
+          "type": "integer"
+        },
+        "target_weighting": {
+          "const": "equal",
+          "default": "equal",
+          "title": "Target Weighting",
+          "type": "string"
+        },
+        "thinning_rule": {
+          "minLength": 1,
+          "title": "Thinning Rule",
+          "type": "string"
+        }
+      },
+      "required": [
+        "implementation_sha256",
+        "rng_algorithm",
+        "rng_seed",
+        "thinning_rule",
+        "resume_cursor_schema",
+        "resume_cursor_initial_hash"
+      ],
+      "title": "CompactSamplerContract",
+      "type": "object"
+    },
+    "FoldRowRoleRecord": {
+      "additionalProperties": false,
+      "description": "One frozen row role in a fold-native extraction.",
+      "properties": {
+        "role": {
+          "enum": [
+            "training_fit",
+            "training_validation",
+            "heldout_source_query",
+            "protected_heldout_stimulated"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "row_ids_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Row Ids Hash",
+          "type": "string"
+        },
+        "rows": {
+          "exclusiveMinimum": 0,
+          "title": "Rows",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "role",
+        "rows",
+        "row_ids_hash"
+      ],
+      "title": "FoldRowRoleRecord",
+      "type": "object"
+    },
+    "RefitReplayPolicyV1": {
+      "additionalProperties": false,
+      "description": "Pre-result replay sample and implementation for one paired-refit family.",
+      "properties": {
+        "exact_nll_replay_required": {
+          "const": true,
+          "default": true,
+          "title": "Exact Nll Replay Required",
+          "type": "boolean"
+        },
+        "implementation_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Implementation Sha256",
+          "type": "string"
+        },
+        "preregistered_audit_draw_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Preregistered Audit Draw Ids",
+          "type": "array"
+        },
+        "reference_candidate_all_draws": {
+          "const": true,
+          "default": true,
+          "title": "Reference Candidate All Draws",
+          "type": "boolean"
+        },
+        "selected_candidate_all_draws": {
+          "const": true,
+          "default": true,
+          "title": "Selected Candidate All Draws",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "implementation_sha256",
+        "preregistered_audit_draw_ids"
+      ],
+      "title": "RefitReplayPolicyV1",
+      "type": "object"
+    },
+    "TrainingOnlyFeatureSelectionContractV2": {
+      "additionalProperties": false,
+      "description": "Dev33 ranked-prefix contract with preregistered executable refit replay.",
+      "properties": {
+        "candidate_feature_counts": {
+          "default": [
+            256,
+            512,
+            1024,
+            2048,
+            4096
+          ],
+          "items": {
+            "type": "integer"
+          },
+          "title": "Candidate Feature Counts",
+          "type": "array"
+        },
+        "custom001_puror_in_primary_biological_metric": {
+          "const": false,
+          "default": false,
+          "title": "Custom001 Puror In Primary Biological Metric",
+          "type": "boolean"
+        },
+        "custom001_puror_role": {
+          "const": "technical_assay_feature",
+          "default": "technical_assay_feature",
+          "title": "Custom001 Puror Role",
+          "type": "string"
+        },
+        "custom001_puror_sidecar_required": {
+          "const": true,
+          "default": true,
+          "title": "Custom001 Puror Sidecar Required",
+          "type": "boolean"
+        },
+        "fit_rows_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fit Rows Hash",
+          "type": "string"
+        },
+        "implementation_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Implementation Sha256",
+          "type": "string"
+        },
+        "maximum_feature_count": {
+          "const": 4096,
+          "default": 4096,
+          "title": "Maximum Feature Count",
+          "type": "integer"
+        },
+        "method": {
+          "const": "training_only_ranked_prefix_v2",
+          "default": "training_only_ranked_prefix_v2",
+          "title": "Method",
+          "type": "string"
+        },
+        "minimum_improvement_margin": {
+          "minimum": 0,
+          "title": "Minimum Improvement Margin",
+          "type": "number"
+        },
+        "ordered_feature_table": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "paired_refit_draws": {
+          "const": 59,
+          "default": 59,
+          "title": "Paired Refit Draws",
+          "type": "integer"
+        },
+        "paired_statistic": {
+          "const": "p95_absolute_paired_nll_difference_to_4096",
+          "default": "p95_absolute_paired_nll_difference_to_4096",
+          "title": "Paired Statistic",
+          "type": "string"
+        },
+        "refit_replay": {
+          "$ref": "#/$defs/RefitReplayPolicyV1"
+        },
+        "selection_metric": {
+          "const": "training_validation_negative_log_likelihood",
+          "default": "training_validation_negative_log_likelihood",
+          "title": "Selection Metric",
+          "type": "string"
+        },
+        "selection_rule": {
+          "const": "smallest_prefix_with_p95_difference_le_margin",
+          "default": "smallest_prefix_with_p95_difference_le_margin",
+          "title": "Selection Rule",
+          "type": "string"
+        },
+        "validation_rows_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Validation Rows Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "implementation_sha256",
+        "fit_rows_hash",
+        "validation_rows_hash",
+        "minimum_improvement_margin",
+        "ordered_feature_table",
+        "refit_replay"
+      ],
+      "title": "TrainingOnlyFeatureSelectionContractV2",
+      "type": "object"
+    },
+    "TrainingOnlySampleSizeSelectionContractV2": {
+      "additionalProperties": false,
+      "description": "Dev33 two-stage saturation contract that cannot pass at the base maximum.",
+      "properties": {
+        "base_grid_extension_required_receipt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "candidate_cells": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Candidate Cells",
+          "type": "array"
+        },
+        "comparison": {
+          "const": "NLL_N_minus_NLL_Nmax",
+          "default": "NLL_N_minus_NLL_Nmax",
+          "title": "Comparison",
+          "type": "string"
+        },
+        "equivalence_epsilon": {
+          "exclusiveMinimum": 0,
+          "title": "Equivalence Epsilon",
+          "type": "number"
+        },
+        "equivalence_statistic": {
+          "const": "p95_absolute_paired_nll_difference",
+          "default": "p95_absolute_paired_nll_difference",
+          "title": "Equivalence Statistic",
+          "type": "string"
+        },
+        "grid_stage": {
+          "default": "base",
+          "enum": [
+            "base",
+            "extension"
+          ],
+          "title": "Grid Stage",
+          "type": "string"
+        },
+        "paired_refit_draws": {
+          "const": 59,
+          "default": 59,
+          "title": "Paired Refit Draws",
+          "type": "integer"
+        },
+        "refit_replay": {
+          "$ref": "#/$defs/RefitReplayPolicyV1"
+        },
+        "saturation_rule": {
+          "const": "submaximum_or_extension_required_v2",
+          "default": "submaximum_or_extension_required_v2",
+          "title": "Saturation Rule",
+          "type": "string"
+        },
+        "two_million_extension_triggered_by_no_saturation": {
+          "default": false,
+          "title": "Two Million Extension Triggered By No Saturation",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "equivalence_epsilon",
+        "candidate_cells",
+        "refit_replay"
+      ],
+      "title": "TrainingOnlySampleSizeSelectionContractV2",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/fold-native-compact-view.v3.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Dev33 fail-closed fold contract for ordered, bounded, replayed G00C evidence.",
+  "properties": {
+    "compact_verification_block_rows": {
+      "default": 8192,
+      "maximum": 65536,
+      "minimum": 1,
+      "title": "Compact Verification Block Rows",
+      "type": "integer"
+    },
+    "compact_verifier_implementation_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Compact Verifier Implementation Sha256",
+      "type": "string"
+    },
+    "count_dtype": {
+      "enum": [
+        "uint16",
+        "int32"
+      ],
+      "title": "Count Dtype",
+      "type": "string"
+    },
+    "feature_selection": {
+      "$ref": "#/$defs/TrainingOnlyFeatureSelectionContractV2"
+    },
+    "fold_view_id": {
+      "title": "Fold View Id",
+      "type": "string"
+    },
+    "heldout_donor_id": {
+      "title": "Heldout Donor Id",
+      "type": "string"
+    },
+    "index_dtype": {
+      "enum": [
+        "uint16",
+        "int32"
+      ],
+      "title": "Index Dtype",
+      "type": "string"
+    },
+    "maximum_observed_count": {
+      "minimum": 0,
+      "title": "Maximum Observed Count",
+      "type": "integer"
+    },
+    "maximum_source_handles": {
+      "minimum": 1,
+      "title": "Maximum Source Handles",
+      "type": "integer"
+    },
+    "maximum_verifier_rss_bytes": {
+      "exclusiveMinimum": 0,
+      "title": "Maximum Verifier Rss Bytes",
+      "type": "integer"
+    },
+    "outer_split_id": {
+      "title": "Outer Split Id",
+      "type": "string"
+    },
+    "parent_eligible_row_ids_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Parent Eligible Row Ids Hash",
+      "type": "string"
+    },
+    "parent_guide_target_crosswalk_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Parent Guide Target Crosswalk Hash",
+      "type": "string"
+    },
+    "parent_source_authority_id": {
+      "title": "Parent Source Authority Id",
+      "type": "string"
+    },
+    "parent_virtual_store_id": {
+      "title": "Parent Virtual Store Id",
+      "type": "string"
+    },
+    "physical_layout": {
+      "const": "donor_checkpoint_target_guide_row",
+      "title": "Physical Layout",
+      "type": "string"
+    },
+    "physical_order_fields": {
+      "const": "donor_id,physical_time_hours,checkpoint,target_id,guide_id,source_row,row_id",
+      "default": "donor_id,physical_time_hours,checkpoint,target_id,guide_id,source_row,row_id",
+      "title": "Physical Order Fields",
+      "type": "string"
+    },
+    "protected_outer_stimulated_expression_values_used": {
+      "const": false,
+      "default": false,
+      "title": "Protected Outer Stimulated Expression Values Used",
+      "type": "boolean"
+    },
+    "row_role_assignment_implementation_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Row Role Assignment Implementation Sha256",
+      "type": "string"
+    },
+    "row_role_audit": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "row_roles": {
+      "items": {
+        "$ref": "#/$defs/FoldRowRoleRecord"
+      },
+      "title": "Row Roles",
+      "type": "array"
+    },
+    "sample_size_selection": {
+      "$ref": "#/$defs/TrainingOnlySampleSizeSelectionContractV2"
+    },
+    "sampler": {
+      "$ref": "#/$defs/CompactSamplerContract"
+    },
+    "schema_version": {
+      "const": 3,
+      "default": 3,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "source_plane_amendment": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "source_plane_amendment_id": {
+      "minLength": 1,
+      "title": "Source Plane Amendment Id",
+      "type": "string"
+    },
+    "source_plane_amendment_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "source_plane_amendment_receipt_id": {
+      "minLength": 1,
+      "title": "Source Plane Amendment Receipt Id",
+      "type": "string"
+    },
+    "training_donor_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Training Donor Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "fold_view_id",
+    "parent_source_authority_id",
+    "parent_virtual_store_id",
+    "source_plane_amendment_id",
+    "source_plane_amendment",
+    "source_plane_amendment_receipt_id",
+    "source_plane_amendment_receipt",
+    "parent_eligible_row_ids_hash",
+    "parent_guide_target_crosswalk_hash",
+    "outer_split_id",
+    "training_donor_ids",
+    "heldout_donor_id",
+    "row_roles",
+    "row_role_audit",
+    "row_role_assignment_implementation_sha256",
+    "feature_selection",
+    "sample_size_selection",
+    "sampler",
+    "count_dtype",
+    "index_dtype",
+    "maximum_observed_count",
+    "physical_layout",
+    "compact_verifier_implementation_sha256",
+    "maximum_verifier_rss_bytes",
+    "maximum_source_handles"
+  ],
+  "title": "FoldNativeCompactViewContractV3",
+  "type": "object"
+}

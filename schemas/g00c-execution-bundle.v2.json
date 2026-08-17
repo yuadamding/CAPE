@@ -1,0 +1,312 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    },
+    "G00CFeatureSelectionResultV2": {
+      "additionalProperties": false,
+      "description": "Dev33 feature curve plus full refit provenance.",
+      "properties": {
+        "curve": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "fit_rows_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fit Rows Hash",
+          "type": "string"
+        },
+        "ordered_features": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "refit_records": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "selected_feature_count": {
+          "exclusiveMinimum": 0,
+          "maximum": 4096,
+          "title": "Selected Feature Count",
+          "type": "integer"
+        },
+        "validation_rows_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Validation Rows Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "curve",
+        "refit_records",
+        "ordered_features",
+        "fit_rows_hash",
+        "validation_rows_hash",
+        "selected_feature_count"
+      ],
+      "title": "G00CFeatureSelectionResultV2",
+      "type": "object"
+    },
+    "G00CSampleSizeSelectionResultV2": {
+      "additionalProperties": false,
+      "description": "Dev33 sample-size decision, including the mandatory extension stop state.",
+      "properties": {
+        "curve": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "refit_records": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "selected_training_cells": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selected Training Cells"
+        },
+        "selected_training_rows": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "selection_status": {
+          "enum": [
+            "selected",
+            "extension_required"
+          ],
+          "title": "Selection Status",
+          "type": "string"
+        },
+        "training_scale_row_order": {
+          "$ref": "#/$defs/ArtifactRef"
+        }
+      },
+      "required": [
+        "curve",
+        "refit_records",
+        "training_scale_row_order",
+        "selection_status"
+      ],
+      "title": "G00CSampleSizeSelectionResultV2",
+      "type": "object"
+    },
+    "G00CSamplerEvidence": {
+      "additionalProperties": false,
+      "description": "Compact deterministic row/weight/RNG/resume sequence evidence.",
+      "properties": {
+        "epoch_index": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "resume_test": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "resumed_draw_trace": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "resumed_state_trace": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "sampler_plan": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "uninterrupted_draw_trace": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "uninterrupted_state_trace": {
+          "$ref": "#/$defs/ArtifactRef"
+        }
+      },
+      "required": [
+        "sampler_plan",
+        "epoch_index",
+        "uninterrupted_draw_trace",
+        "resumed_draw_trace",
+        "uninterrupted_state_trace",
+        "resumed_state_trace",
+        "resume_test"
+      ],
+      "title": "G00CSamplerEvidence",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/g00c-execution-bundle.v2.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Dev33 non-model materialization evidence with unambiguous row identities.",
+  "properties": {
+    "bundle_id": {
+      "title": "Bundle Id",
+      "type": "string"
+    },
+    "compact_ordered_row_ids_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Compact Ordered Row Ids Sha256",
+      "type": "string"
+    },
+    "compact_payload": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "compact_payload_counts_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Compact Payload Counts Sha256",
+      "type": "string"
+    },
+    "compact_payload_feature_order_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Compact Payload Feature Order Hash",
+      "type": "string"
+    },
+    "compact_payload_features": {
+      "exclusiveMinimum": 0,
+      "maximum": 4096,
+      "title": "Compact Payload Features",
+      "type": "integer"
+    },
+    "compact_payload_rows": {
+      "exclusiveMinimum": 0,
+      "title": "Compact Payload Rows",
+      "type": "integer"
+    },
+    "compact_payload_schema": {
+      "const": "g00c_compact_csr_hdf5_v2",
+      "default": "g00c_compact_csr_hdf5_v2",
+      "title": "Compact Payload Schema",
+      "type": "string"
+    },
+    "compact_row_set_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Compact Row Set Sha256",
+      "type": "string"
+    },
+    "compact_verification_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "count_dtype": {
+      "enum": [
+        "uint16",
+        "int32"
+      ],
+      "title": "Count Dtype",
+      "type": "string"
+    },
+    "feature_selection": {
+      "$ref": "#/$defs/G00CFeatureSelectionResultV2"
+    },
+    "fold_view_id": {
+      "minLength": 1,
+      "title": "Fold View Id",
+      "type": "string"
+    },
+    "index_dtype": {
+      "enum": [
+        "uint16",
+        "int32"
+      ],
+      "title": "Index Dtype",
+      "type": "string"
+    },
+    "maximum_observed_count": {
+      "minimum": 0,
+      "title": "Maximum Observed Count",
+      "type": "integer"
+    },
+    "protected_rows_in_compact_payload": {
+      "const": 0,
+      "default": 0,
+      "title": "Protected Rows In Compact Payload",
+      "type": "integer"
+    },
+    "publication_manifest": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "reload_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "row_roles": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "sample_size_selection": {
+      "$ref": "#/$defs/G00CSampleSizeSelectionResultV2"
+    },
+    "sampler": {
+      "$ref": "#/$defs/G00CSamplerEvidence"
+    },
+    "schema_version": {
+      "const": 2,
+      "default": 2,
+      "title": "Schema Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "bundle_id",
+    "fold_view_id",
+    "row_roles",
+    "feature_selection",
+    "sample_size_selection",
+    "sampler",
+    "compact_payload",
+    "compact_verification_receipt",
+    "publication_manifest",
+    "reload_receipt",
+    "compact_payload_rows",
+    "compact_payload_features",
+    "compact_row_set_sha256",
+    "compact_ordered_row_ids_sha256",
+    "compact_payload_feature_order_hash",
+    "compact_payload_counts_sha256",
+    "maximum_observed_count",
+    "count_dtype",
+    "index_dtype"
+  ],
+  "title": "G00CExecutionBundleV2",
+  "type": "object"
+}

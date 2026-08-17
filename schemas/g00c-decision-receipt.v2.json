@@ -1,0 +1,99 @@
+{
+  "$id": "https://credo.local/schemas/g00c-decision-receipt.v2.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Dev33 G00C decision with replay, order, and streaming gates.",
+  "properties": {
+    "compact_counts_verified": {
+      "title": "Compact Counts Verified",
+      "type": "boolean"
+    },
+    "execution_bundle_id": {
+      "minLength": 1,
+      "title": "Execution Bundle Id",
+      "type": "string"
+    },
+    "feature_selection_verified": {
+      "title": "Feature Selection Verified",
+      "type": "boolean"
+    },
+    "fold_view_id": {
+      "minLength": 1,
+      "title": "Fold View Id",
+      "type": "string"
+    },
+    "full_reload_verified": {
+      "title": "Full Reload Verified",
+      "type": "boolean"
+    },
+    "immutable_publication_verified": {
+      "title": "Immutable Publication Verified",
+      "type": "boolean"
+    },
+    "physical_order_verified": {
+      "title": "Physical Order Verified",
+      "type": "boolean"
+    },
+    "protected_rows_absent": {
+      "title": "Protected Rows Absent",
+      "type": "boolean"
+    },
+    "receipt_id": {
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "refit_replay_verified": {
+      "title": "Refit Replay Verified",
+      "type": "boolean"
+    },
+    "row_roles_verified": {
+      "title": "Row Roles Verified",
+      "type": "boolean"
+    },
+    "sample_size_selection_verified": {
+      "title": "Sample Size Selection Verified",
+      "type": "boolean"
+    },
+    "sampler_sequence_verified": {
+      "title": "Sampler Sequence Verified",
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": 2,
+      "default": 2,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "fail"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "streaming_verification_verified": {
+      "title": "Streaming Verification Verified",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "fold_view_id",
+    "execution_bundle_id",
+    "row_roles_verified",
+    "feature_selection_verified",
+    "sample_size_selection_verified",
+    "refit_replay_verified",
+    "sampler_sequence_verified",
+    "physical_order_verified",
+    "streaming_verification_verified",
+    "compact_counts_verified",
+    "protected_rows_absent",
+    "immutable_publication_verified",
+    "full_reload_verified",
+    "status"
+  ],
+  "title": "G00CDecisionReceiptV2",
+  "type": "object"
+}

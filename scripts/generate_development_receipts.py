@@ -124,6 +124,11 @@ def main() -> None:
     gse314342_g00_dev32_legacy_review = Path(
         "/home/yding1995/.codex/attachments/73fc243c-804c-46fd-99d1-e1e573c0602d/pasted-text.txt"
     )
+    gse314342_g00_dev32_b0_review = Path(
+        "/home/yding1995/.codex/attachments/ea8694ad-2706-4fb1-9bde-c9d6956cc207/pasted-text.txt"
+    )
+    gse314342_g00_dev32_b0_provenance = root / "provenance/g00/dev32-b0-a2/PROVENANCE_INDEX.json"
+    gse314342_g00_dev33_hardening = root / "docs/g00-dev33-g00c-hardening.md"
     gse314342_g00_source_plane = gse314342_g00 / "G00_SOURCE_PLANE_DEV29"
     receipt = {
         "schema_version": 1,
@@ -288,6 +293,21 @@ def main() -> None:
         "gse314342_g00_dev32_legacy_review_sha256": (
             sha256_file(gse314342_g00_dev32_legacy_review)
             if gse314342_g00_dev32_legacy_review.is_file()
+            else None
+        ),
+        "gse314342_g00_dev32_b0_review_sha256": (
+            sha256_file(gse314342_g00_dev32_b0_review)
+            if gse314342_g00_dev32_b0_review.is_file()
+            else None
+        ),
+        "gse314342_g00_dev32_b0_provenance_sha256": (
+            sha256_file(gse314342_g00_dev32_b0_provenance)
+            if gse314342_g00_dev32_b0_provenance.is_file()
+            else None
+        ),
+        "gse314342_g00_dev33_hardening_sha256": (
+            sha256_file(gse314342_g00_dev33_hardening)
+            if gse314342_g00_dev33_hardening.is_file()
             else None
         ),
         "gse314342_g00_dev29_builder_sha256": (

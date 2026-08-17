@@ -1,0 +1,107 @@
+{
+  "$id": "https://credo.local/schemas/g00c-compact-verification-receipt.v2.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Observed bounded-memory, ordered, exact compact-payload verification.",
+  "properties": {
+    "compact_ordered_row_ids_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Compact Ordered Row Ids Sha256",
+      "type": "string"
+    },
+    "compact_payload_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Compact Payload Sha256",
+      "type": "string"
+    },
+    "compact_row_set_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Compact Row Set Sha256",
+      "type": "string"
+    },
+    "contiguous_physical_blocks": {
+      "exclusiveMinimum": 0,
+      "title": "Contiguous Physical Blocks",
+      "type": "integer"
+    },
+    "fold_view_id": {
+      "minLength": 1,
+      "title": "Fold View Id",
+      "type": "string"
+    },
+    "maximum_loaded_nonzeros": {
+      "minimum": 0,
+      "title": "Maximum Loaded Nonzeros",
+      "type": "integer"
+    },
+    "maximum_open_source_handles": {
+      "minimum": 1,
+      "title": "Maximum Open Source Handles",
+      "type": "integer"
+    },
+    "peak_process_rss_bytes": {
+      "exclusiveMinimum": 0,
+      "title": "Peak Process Rss Bytes",
+      "type": "integer"
+    },
+    "receipt_id": {
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "default": 2,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "status": {
+      "const": "pass",
+      "default": "pass",
+      "title": "Status",
+      "type": "string"
+    },
+    "total_count_sum": {
+      "minimum": 0,
+      "title": "Total Count Sum",
+      "type": "integer"
+    },
+    "total_nonzeros_checked": {
+      "minimum": 0,
+      "title": "Total Nonzeros Checked",
+      "type": "integer"
+    },
+    "total_rows_checked": {
+      "exclusiveMinimum": 0,
+      "title": "Total Rows Checked",
+      "type": "integer"
+    },
+    "verifier_block_rows": {
+      "minimum": 1,
+      "title": "Verifier Block Rows",
+      "type": "integer"
+    },
+    "verifier_implementation_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Verifier Implementation Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "fold_view_id",
+    "compact_payload_sha256",
+    "verifier_implementation_sha256",
+    "verifier_block_rows",
+    "maximum_loaded_nonzeros",
+    "total_rows_checked",
+    "total_nonzeros_checked",
+    "total_count_sum",
+    "peak_process_rss_bytes",
+    "maximum_open_source_handles",
+    "compact_row_set_sha256",
+    "compact_ordered_row_ids_sha256",
+    "contiguous_physical_blocks"
+  ],
+  "title": "G00CCompactVerificationReceiptV2",
+  "type": "object"
+}

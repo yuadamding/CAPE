@@ -8,7 +8,7 @@ count_state → count_measure → count_context
 ```
 
 It is a sibling of, not a modification to, the frozen CREDO checkout. Version
-`4.0.0.dev32` is engineering software; it is not a biological result and cannot
+`4.0.0.dev33` is engineering software; it is not a biological result and cannot
 be relabeled as stable `4.0`.
 
 Implemented surfaces include strict hash-bound contracts, sparse count storage,
@@ -65,6 +65,13 @@ Dev31 remains the frozen v2 provenance authority. Dev32 adds only the distinct
 required after B0 A1 correctly rejected Dev29's historical checksum-only
 publication.
 
+The external Dev32 B0-A2 execution subsequently passed and promoted G00A-v2
+and G00B-v2 as source-plane parents. Dev33-A adds only the separately versioned
+[G00C hardening boundary](docs/g00-dev33-g00c-hardening.md): fail-closed
+two-million-cell extension semantics, exact physical row ordering, streaming
+compact verification, and executable refit replay. No extraction canary or
+G00C workload is part of Dev33-A.
+
 ## Quick start
 
 ```bash
@@ -120,6 +127,8 @@ See [architecture](docs/architecture.md), [contracts](docs/contracts.md),
 [the superseded G00 Dev30-A-r2 draft](docs/g00-dev30a-r2-contract-finalization.md),
 [the active G00 Dev31 provenance finalization](docs/g00-dev31-provenance-finalization.md),
 [the Dev32 legacy-parent attestation boundary](docs/g00-dev32-legacy-parent-attestation.md),
+[the accepted Dev32 B0-A2 execution](docs/g00-dev32-b0-a2-source-plane-execution.md),
+[the Dev33-A G00C hardening boundary](docs/g00-dev33-g00c-hardening.md),
 [component qualification](docs/component-qualification.md),
 [the detailed T01 record](docs/t01-representation-qualification.md),
 [the detailed T02A record](docs/t02a-raw-count-mass-noise.md),

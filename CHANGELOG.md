@@ -1,5 +1,21 @@
 # Changelog
 
+## 4.0.0.dev33 — 2026-08-17
+
+- retain accepted Dev32 and its external B0-A2 source-plane parents unchanged;
+- make the base one-million-cell sample-size reference non-self-qualifying and
+  require a separately bound two-million-cell extension when no smaller size
+  saturates;
+- bind separate compact row-set and ordered-row identities and derive exact
+  donor/time/checkpoint/target/guide/source-row physical order from G00B;
+- replace global compact CSR loading with bounded block verification and bind
+  RSS, loaded-nonzero, source-handle, total-count, and block-run evidence;
+- require full refit provenance plus executable replay of every selected and
+  reference fit and a preregistered audit subset of other candidates; and
+- add adversarial tests and a lightweight B0-A2 provenance index without
+  running the G00C extraction canary, opening protected model outcomes, or
+  producing model or biological evidence.
+
 ## 4.0.0.dev32 — 2026-08-17
 
 - add a discriminated native-manifest-last versus legacy-checksum-attested

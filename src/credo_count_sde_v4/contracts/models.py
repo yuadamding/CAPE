@@ -1819,9 +1819,7 @@ class LegacyAttestationBuilder(StrictModel):
 class LegacyParentAttestationV1(StrictModel):
     """Non-retroactive wrapper around one accepted checksum-only parent."""
 
-    schema_id: Literal["credo.legacy_parent_attestation"] = (
-        "credo.legacy_parent_attestation"
-    )
+    schema_id: Literal["credo.legacy_parent_attestation"] = "credo.legacy_parent_attestation"
     schema_version: Literal[1] = 1
     attestation_id: str
     evidence_role: Literal["nonretroactive_legacy_checksum_parent_attestation"] = (
@@ -1920,9 +1918,7 @@ class NativeManifestLastBoundary(StrictModel):
 class LegacyChecksumAttestedBoundary(StrictModel):
     """Distinct parent type admitted only by one passed sibling wrapper."""
 
-    boundary_kind: Literal["legacy_checksum_attested_v1"] = (
-        "legacy_checksum_attested_v1"
-    )
+    boundary_kind: Literal["legacy_checksum_attested_v1"] = "legacy_checksum_attested_v1"
     parent_logical_name: str = Field(min_length=1)
     g00a_v1_authority_id: str = Field(min_length=1)
     g00b_v1_virtual_store_id: str = Field(min_length=1)
@@ -2424,6 +2420,226 @@ class G00CDecisionReceipt(StrictModel):
                 self.feature_selection_verified,
                 self.sample_size_selection_verified,
                 self.sampler_sequence_verified,
+                self.compact_counts_verified,
+                self.protected_rows_absent,
+                self.immutable_publication_verified,
+                self.full_reload_verified,
+            )
+        )
+        expected_status = "pass" if passed else "fail"
+        if self.status != expected_status:
+            raise ValueError(f"G00C decision status must be {expected_status}.")
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
+        return self
+
+
+class RefitReplayPolicyV1(StrictModel):
+    """Pre-result replay sample and implementation for one paired-refit family."""
+
+    implementation_sha256: Sha256
+    preregistered_audit_draw_ids: tuple[int, ...]
+    selected_candidate_all_draws: Literal[True] = True
+    reference_candidate_all_draws: Literal[True] = True
+    exact_nll_replay_required: Literal[True] = True
+
+    @model_validator(mode="after")
+    def validate_draws(self) -> RefitReplayPolicyV1:
+        if (
+            not self.preregistered_audit_draw_ids
+            or tuple(sorted(set(self.preregistered_audit_draw_ids)))
+            != self.preregistered_audit_draw_ids
+            or self.preregistered_audit_draw_ids[0] < 0
+            or self.preregistered_audit_draw_ids[-1] >= 59
+        ):
+            raise ValueError("Refit replay audit draws must be unique, sorted, and inside 0..58.")
+        return self
+
+
+class TrainingOnlyFeatureSelectionContractV2(TrainingOnlyFeatureSelectionContract):
+    """Dev33 ranked-prefix contract with preregistered executable refit replay."""
+
+    # Intentional schema-version discriminator narrowing for the additive contract.
+    method: Literal["training_only_ranked_prefix_v2"] = "training_only_ranked_prefix_v2"  # type: ignore[assignment]
+    refit_replay: RefitReplayPolicyV1
+
+
+class TrainingOnlySampleSizeSelectionContractV2(TrainingOnlySampleSizeSelectionContract):
+    """Dev33 two-stage saturation contract that cannot pass at the base maximum."""
+
+    # Intentional schema-version discriminator narrowing for the additive contract.
+    saturation_rule: Literal["submaximum_or_extension_required_v2"] = (
+        "submaximum_or_extension_required_v2"  # type: ignore[assignment]
+    )
+    grid_stage: Literal["base", "extension"] = "base"
+    base_grid_extension_required_receipt: ArtifactRef | None = None
+    refit_replay: RefitReplayPolicyV1
+
+    @model_validator(mode="after")
+    def validate_extension_parent(self) -> TrainingOnlySampleSizeSelectionContractV2:
+        if self.grid_stage == "base":
+            if self.candidate_cells != (50_000, 100_000, 250_000, 500_000, 1_000_000):
+                raise ValueError("The base sample-size stage must use the frozen base grid.")
+            if self.base_grid_extension_required_receipt is not None:
+                raise ValueError("The base stage cannot bind an extension-parent receipt.")
+        else:
+            if self.candidate_cells != (
+                50_000,
+                100_000,
+                250_000,
+                500_000,
+                1_000_000,
+                2_000_000,
+            ):
+                raise ValueError("The extension stage must add exactly two million cells.")
+            if self.base_grid_extension_required_receipt is None:
+                raise ValueError("The extension stage requires the passed base-grid stop receipt.")
+        return self
+
+
+class FoldNativeCompactViewContractV3(FoldNativeCompactViewContractV2):
+    """Dev33 fail-closed fold contract for ordered, bounded, replayed G00C evidence."""
+
+    # Intentional schema-version discriminator narrowing for the additive contract.
+    schema_version: Literal[3] = 3  # type: ignore[assignment]
+    feature_selection: TrainingOnlyFeatureSelectionContractV2
+    sample_size_selection: TrainingOnlySampleSizeSelectionContractV2
+    physical_order_fields: Literal[
+        "donor_id,physical_time_hours,checkpoint,target_id,guide_id,source_row,row_id"
+    ] = "donor_id,physical_time_hours,checkpoint,target_id,guide_id,source_row,row_id"
+    compact_verification_block_rows: int = Field(default=8192, ge=1, le=65_536)
+    compact_verifier_implementation_sha256: Sha256
+    maximum_verifier_rss_bytes: int = Field(gt=0)
+    maximum_source_handles: int = Field(ge=1)
+
+
+class G00CFeatureSelectionResultV2(StrictModel):
+    """Dev33 feature curve plus full refit provenance."""
+
+    curve: ArtifactRef
+    refit_records: ArtifactRef
+    ordered_features: ArtifactRef
+    fit_rows_hash: Sha256
+    validation_rows_hash: Sha256
+    selected_feature_count: int = Field(gt=0, le=4096)
+
+
+class G00CSampleSizeSelectionResultV2(StrictModel):
+    """Dev33 sample-size decision, including the mandatory extension stop state."""
+
+    curve: ArtifactRef
+    refit_records: ArtifactRef
+    selected_training_rows: ArtifactRef | None = None
+    training_scale_row_order: ArtifactRef
+    selection_status: Literal["selected", "extension_required"]
+    selected_training_cells: int | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def validate_selection_state(self) -> G00CSampleSizeSelectionResultV2:
+        if self.selection_status == "selected":
+            if self.selected_training_cells is None or self.selected_training_rows is None:
+                raise ValueError("A selected sample size requires its exact row artifact.")
+        elif self.selected_training_cells is not None or self.selected_training_rows is not None:
+            raise ValueError("An extension-required decision cannot select rows or a cell count.")
+        return self
+
+
+class G00CCompactVerificationReceiptV2(StrictModel):
+    """Observed bounded-memory, ordered, exact compact-payload verification."""
+
+    schema_version: Literal[2] = 2
+    receipt_id: str
+    fold_view_id: str = Field(min_length=1)
+    compact_payload_sha256: Sha256
+    verifier_implementation_sha256: Sha256
+    verifier_block_rows: int = Field(ge=1)
+    maximum_loaded_nonzeros: int = Field(ge=0)
+    total_rows_checked: int = Field(gt=0)
+    total_nonzeros_checked: int = Field(ge=0)
+    total_count_sum: int = Field(ge=0)
+    peak_process_rss_bytes: int = Field(gt=0)
+    maximum_open_source_handles: int = Field(ge=1)
+    compact_row_set_sha256: Sha256
+    compact_ordered_row_ids_sha256: Sha256
+    contiguous_physical_blocks: int = Field(gt=0)
+    status: Literal["pass"] = "pass"
+
+    @model_validator(mode="after")
+    def validate_receipt(self) -> G00CCompactVerificationReceiptV2:
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
+        return self
+
+
+class G00CExecutionBundleV2(StrictModel):
+    """Dev33 non-model materialization evidence with unambiguous row identities."""
+
+    schema_version: Literal[2] = 2
+    bundle_id: str
+    fold_view_id: str = Field(min_length=1)
+    row_roles: ArtifactRef
+    feature_selection: G00CFeatureSelectionResultV2
+    sample_size_selection: G00CSampleSizeSelectionResultV2
+    sampler: G00CSamplerEvidence
+    compact_payload: ArtifactRef
+    compact_verification_receipt: ArtifactRef
+    publication_manifest: ArtifactRef
+    reload_receipt: ArtifactRef
+    compact_payload_schema: Literal["g00c_compact_csr_hdf5_v2"] = "g00c_compact_csr_hdf5_v2"
+    compact_payload_rows: int = Field(gt=0)
+    compact_payload_features: int = Field(gt=0, le=4096)
+    compact_row_set_sha256: Sha256
+    compact_ordered_row_ids_sha256: Sha256
+    compact_payload_feature_order_hash: Sha256
+    compact_payload_counts_sha256: Sha256
+    protected_rows_in_compact_payload: Literal[0] = 0
+    maximum_observed_count: int = Field(ge=0)
+    count_dtype: Literal["uint16", "int32"]
+    index_dtype: Literal["uint16", "int32"]
+
+    @model_validator(mode="after")
+    def validate_bundle(self) -> G00CExecutionBundleV2:
+        if self.count_dtype == "uint16" and self.maximum_observed_count > 65_535:
+            raise ValueError("G00C uint16 payload exceeds the observed-count limit.")
+        expected = self.identity(id_field="bundle_id")
+        if self.bundle_id != expected:
+            raise ValueError(f"bundle_id mismatch: expected {expected}.")
+        return self
+
+
+class G00CDecisionReceiptV2(StrictModel):
+    """Dev33 G00C decision with replay, order, and streaming gates."""
+
+    schema_version: Literal[2] = 2
+    receipt_id: str
+    fold_view_id: str = Field(min_length=1)
+    execution_bundle_id: str = Field(min_length=1)
+    row_roles_verified: bool
+    feature_selection_verified: bool
+    sample_size_selection_verified: bool
+    refit_replay_verified: bool
+    sampler_sequence_verified: bool
+    physical_order_verified: bool
+    streaming_verification_verified: bool
+    compact_counts_verified: bool
+    protected_rows_absent: bool
+    immutable_publication_verified: bool
+    full_reload_verified: bool
+    status: Literal["pass", "fail"]
+
+    @model_validator(mode="after")
+    def validate_decision(self) -> G00CDecisionReceiptV2:
+        passed = all(
+            (
+                self.row_roles_verified,
+                self.feature_selection_verified,
+                self.sample_size_selection_verified,
+                self.refit_replay_verified,
+                self.sampler_sequence_verified,
+                self.physical_order_verified,
+                self.streaming_verification_verified,
                 self.compact_counts_verified,
                 self.protected_rows_absent,
                 self.immutable_publication_verified,
@@ -3038,7 +3254,7 @@ class CompiledRunContract(StrictModel):
     schema_version: int = 1
     compiled_run_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev32"] = "4.0.dev32"
+    recipe_version: Literal["4.0.dev33"] = "4.0.dev33"
     recipe_wheel_hash: Sha256
     frozen_credo_artifact_hash: Sha256
     environment_lock_hash: Sha256
@@ -3105,7 +3321,7 @@ class InferenceBundleManifest(StrictModel):
     compiled_run_id: str
     selected_checkpoint_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev32"] = "4.0.dev32"
+    recipe_version: Literal["4.0.dev33"] = "4.0.dev33"
     selected_family: Literal[
         "configured_checkpoint",
         "gene_decoder_selected",
