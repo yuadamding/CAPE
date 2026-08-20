@@ -77,8 +77,8 @@ software/synthetic qualification, not evidence about a cohort. See the
 [dev24 R1 amendment](t07s-reaction-metric-amendment.md) and authoritative
 [dev25 unified R0/R1 amendment](t07s-null-interval-amendment.md).
 
-Local acceptance completed with 234 CPU tests passing and one CUDA-only test
-skipped on the CPU validation host, with 85.01% branch-aware coverage. The exact
+Local acceptance completed with 270 CPU tests passing and one CUDA-only test
+skipped on the CPU validation host, with 85.03% branch-aware coverage. The exact
 test and coverage results are in
 `receipts/local-validation.json`. Ruff,
 mypy, generated-schema, documentation-link, wheel

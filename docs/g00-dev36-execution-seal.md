@@ -106,8 +106,17 @@ expression value.
 creates a deterministic regular-file-only archive, reopens every member,
 rechecks the inner SHA-256 manifest, reparses the authority, reruns metadata
 verification, and emits one outer SHA-256 plus an independent audit receipt.
-The concrete IDs and archive digest are recorded in the follow-up provenance
-commit after the release bytes are fixed.
+The concrete A2 authority ID is
+`980510caa4d7fbe79cc84213185558a140c3b35e7af7cb2eb5c13003c8d23872`.
+Its selection-freeze ID is
+`027d06acf1acab0ad87ea665b5c3b5c506610cc4f2e27da877056b86a0d1b43d`,
+its seed-schedule ID is
+`608b2e94acd8f211f4e4ea4875d3a9fd9fce41f62bcb1bb98822b32893c421f6`,
+and its archive SHA-256 is
+`08301397432d17cddc972b874e1c0a72dd38473534e6ee01a0607274cf146322`.
+The independent audit reports 31 regular-file members and
+`pass_independent_archive_audit`. The portable pointer is
+[`provenance/g00/dev36-d1-authority/PROVENANCE_INDEX.json`](../provenance/g00/dev36-d1-authority/PROVENANCE_INDEX.json).
 
 ## Test and release semantics
 
@@ -124,7 +133,7 @@ and incomplete materialization receipts.
 | Dev33-B and Dev34-A | Preserved |
 | Dev35 | Accepted expression-free predecessor; not rewritten |
 | Dev36 typed execution seal | Implemented |
-| D1 A2 metadata authority and immutable archive | Published in follow-up provenance commit |
+| D1 A2 metadata authority and immutable archive | Published and independently audited |
 | Expression access / G00C curve | Not run; requires separate reviewed authorization |
 | 2M extension | Blocked until a verified base `extension_required` stop |
 | G00D and later real-data components | Blocked |
