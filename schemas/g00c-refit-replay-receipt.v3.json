@@ -1,0 +1,174 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/g00c-refit-replay-receipt.v3.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Executable closed-form replay evidence, not a self-declared refit table.",
+  "properties": {
+    "candidate_kind": {
+      "enum": [
+        "feature_count",
+        "training_cells"
+      ],
+      "title": "Candidate Kind",
+      "type": "string"
+    },
+    "exact_nll_and_state_hash_equality": {
+      "const": true,
+      "default": true,
+      "title": "Exact Nll And State Hash Equality",
+      "type": "boolean"
+    },
+    "execution_authority_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Execution Authority Id",
+      "type": "string"
+    },
+    "modeled_feature_count": {
+      "enum": [
+        256,
+        512,
+        1024,
+        2048,
+        4096
+      ],
+      "title": "Modeled Feature Count",
+      "type": "integer"
+    },
+    "preregistered_audit_draw_ids": {
+      "default": [
+        0,
+        6,
+        12,
+        18,
+        24,
+        30,
+        36,
+        42,
+        48,
+        58
+      ],
+      "items": {
+        "type": "integer"
+      },
+      "title": "Preregistered Audit Draw Ids",
+      "type": "array"
+    },
+    "receipt_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "reference_candidate": {
+      "exclusiveMinimum": 0,
+      "title": "Reference Candidate",
+      "type": "integer"
+    },
+    "refit_records": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "replay_implementation_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Replay Implementation Sha256",
+      "type": "string"
+    },
+    "replayed_rows": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "schema_version": {
+      "const": 3,
+      "default": 3,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "seed_schedule_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Seed Schedule Id",
+      "type": "string"
+    },
+    "selected_and_reference_all_59_draws": {
+      "const": true,
+      "default": true,
+      "title": "Selected And Reference All 59 Draws",
+      "type": "boolean"
+    },
+    "selected_candidate": {
+      "exclusiveMinimum": 0,
+      "title": "Selected Candidate",
+      "type": "integer"
+    },
+    "selection_freeze_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Selection Freeze Id",
+      "type": "string"
+    },
+    "status": {
+      "const": "pass",
+      "default": "pass",
+      "title": "Status",
+      "type": "string"
+    },
+    "sufficient_statistics": {
+      "$ref": "#/$defs/ArtifactRef"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "execution_authority_id",
+    "selection_freeze_id",
+    "seed_schedule_id",
+    "candidate_kind",
+    "selected_candidate",
+    "reference_candidate",
+    "modeled_feature_count",
+    "refit_records",
+    "sufficient_statistics",
+    "replayed_rows",
+    "replay_implementation_sha256"
+  ],
+  "title": "G00CRefitReplayReceiptV3",
+  "type": "object"
+}

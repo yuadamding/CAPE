@@ -1,0 +1,175 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    },
+    "G00CPublicationArtifactV3": {
+      "additionalProperties": false,
+      "description": "One immutable payload in the status-dependent publication inventory.",
+      "properties": {
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "sha256",
+        "size_bytes"
+      ],
+      "title": "G00CPublicationArtifactV3",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/g00c-publication-manifest.v3.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Manifest-last exact publication inventory for one terminal status.",
+  "properties": {
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/G00CPublicationArtifactV3"
+      },
+      "title": "Artifacts",
+      "type": "array"
+    },
+    "committed": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "destination_preexisted": {
+      "const": false,
+      "default": false,
+      "title": "Destination Preexisted",
+      "type": "boolean"
+    },
+    "execution_authority_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Execution Authority Id",
+      "type": "string"
+    },
+    "feature_selection_result_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Feature Selection Result Id",
+      "type": "string"
+    },
+    "manifest_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Manifest Id",
+      "type": "string"
+    },
+    "manifest_written_last": {
+      "const": true,
+      "default": true,
+      "title": "Manifest Written Last",
+      "type": "boolean"
+    },
+    "no_clobber": {
+      "const": true,
+      "default": true,
+      "title": "No Clobber",
+      "type": "boolean"
+    },
+    "publication_event_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "publisher_implementation_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Publisher Implementation Sha256",
+      "type": "string"
+    },
+    "sample_size_selection_result_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sample Size Selection Result Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 3,
+      "default": 3,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "selection_freeze_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Selection Freeze Id",
+      "type": "string"
+    },
+    "sha256sums": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "terminal_status": {
+      "enum": [
+        "pass",
+        "extension_required",
+        "fail_no_saturation",
+        "failed_integrity"
+      ],
+      "title": "Terminal Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "manifest_id",
+    "execution_authority_id",
+    "selection_freeze_id",
+    "feature_selection_result_id",
+    "sample_size_selection_result_id",
+    "terminal_status",
+    "artifacts",
+    "sha256sums",
+    "committed",
+    "publication_event_receipt",
+    "publisher_implementation_sha256"
+  ],
+  "title": "G00CPublicationManifestV3",
+  "type": "object"
+}

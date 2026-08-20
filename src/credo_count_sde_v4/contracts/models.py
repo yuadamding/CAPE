@@ -3548,6 +3548,450 @@ class G00CDecisionReceiptV3(StrictModel):
         return self
 
 
+class G00CImplementationBindingV2(StrictModel):
+    """One role-labelled Dev36 executable whose bytes are part of authority."""
+
+    role: Literal[
+        "feature_ranking",
+        "residual_frequency",
+        "refit",
+        "sampler",
+        "support_auditor",
+        "monitor",
+        "materialization_verifier",
+        "refit_replay_verifier",
+        "publication_verifier",
+        "execution_verifier",
+        "decision_verifier",
+    ]
+    artifact: ArtifactRef
+
+
+class G00CImplementationAuthorityV2(StrictModel):
+    """Dev36 code/runtime authority with explicit seal implementations."""
+
+    schema_version: Literal[2] = 2
+    dev36_code_commit: GitCommit
+    wheel: ArtifactRef
+    normalized_sdist: ArtifactRef
+    implementation_tree_sha256: Sha256
+    environment_lock: ArtifactRef
+    environment_kind: Literal["exact_local_lock", "oci_container"]
+    execution_environment_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    implementations: tuple[G00CImplementationBindingV2, ...]
+
+    @model_validator(mode="after")
+    def validate_implementations(self) -> G00CImplementationAuthorityV2:
+        expected = (
+            "feature_ranking",
+            "residual_frequency",
+            "refit",
+            "sampler",
+            "support_auditor",
+            "monitor",
+            "materialization_verifier",
+            "refit_replay_verifier",
+            "publication_verifier",
+            "execution_verifier",
+            "decision_verifier",
+        )
+        if tuple(binding.role for binding in self.implementations) != expected:
+            raise ValueError("Dev36 implementation roles must equal the sealed ordered set.")
+        by_role = {binding.role: binding.artifact.sha256 for binding in self.implementations}
+        if by_role["materialization_verifier"] == by_role["execution_verifier"]:
+            raise ValueError(
+                "Dev36 materialization verification must be a distinct source artifact."
+            )
+        if by_role["sampler"] == by_role["execution_verifier"]:
+            raise ValueError("Dev36 sampler must be an independently bound implementation.")
+        return self
+
+
+class G00CD1ExecutionAuthorityFreezeV2(StrictModel):
+    """Concrete Dev36 metadata-only D1 authority with every seal implementation."""
+
+    schema_version: Literal[2] = 2
+    authority_id: Sha256
+    selection_freeze: ArtifactRef
+    selection_freeze_id: Sha256
+    outer_split_id: Literal["lodo-D1"] = "lodo-D1"
+    row_role_freeze: ArtifactRef
+    row_roles: tuple[FoldRowRoleRecord, ...]
+    nested_training_row_order: ArtifactRef
+    nested_training_row_order_hash: Sha256
+    feature_reference_rows: ArtifactRef
+    feature_reference_rows_hash: Sha256
+    feature_reference_rows_are_first_million: Literal[True] = True
+    sampler_row_hierarchy: ArtifactRef
+    sampler_hierarchy_rows: Literal[16_924_672] = 16_924_672
+    seed_schedule: ArtifactRef
+    seed_schedule_id: Sha256
+    common_support_prior: G00CCommonSupportPriorV2
+    base_support_audit_contract: ArtifactRef
+    implementation: G00CImplementationAuthorityV2
+    monitored_process_tree_ceiling_bytes: Literal[68719476736] = 68_719_476_736
+    monitored_process_tree_ceiling_semantics: Literal[
+        "claim_bearing_full_grid_process_tree_rss_ceiling"
+    ] = "claim_bearing_full_grid_process_tree_rss_ceiling"
+    fresh_attempt_id: str = Field(min_length=1)
+    publication_root_uri: str = Field(min_length=1)
+    authority_archive_required: Literal[True] = True
+    prior_attempt_artifact_reuse_permitted: Literal[False] = False
+    expression_values_accessed_during_freeze: Literal[False] = False
+    protected_heldout_expression_values_accessed_during_freeze: Literal[False] = False
+    status: Literal["finalized_preaccess_not_executed"] = "finalized_preaccess_not_executed"
+    expression_access_authorized_by_this_record: Literal[False] = False
+    biological_claims: Literal[False] = False
+
+    @field_validator("publication_root_uri")
+    @classmethod
+    def safe_dev36_publication_root(cls, value: str) -> str:
+        return validate_relative_uri(value)
+
+    @model_validator(mode="after")
+    def validate_authority(self) -> G00CD1ExecutionAuthorityFreezeV2:
+        expected_roles = (
+            "training_fit",
+            "training_validation",
+            "heldout_source_query",
+            "protected_heldout_stimulated",
+        )
+        if tuple(record.role for record in self.row_roles) != expected_roles:
+            raise ValueError("Dev36 D1 authority requires the four ordered row roles.")
+        training_rows = next(
+            record.rows for record in self.row_roles if record.role == "training_fit"
+        )
+        if training_rows != self.sampler_hierarchy_rows:
+            raise ValueError("Dev36 sampler hierarchy must cover every training-fit row.")
+        expected = self.identity(id_field="authority_id")
+        if self.authority_id != expected:
+            raise ValueError(f"authority_id mismatch: expected {expected}.")
+        return self
+
+
+class G00CSamplerPlanEntryV3(StrictModel):
+    """One exact hierarchical-sampler replay surface."""
+
+    candidate_kind: Literal["feature_count", "training_cells"]
+    candidate_value: int = Field(gt=0)
+    refit_draw_id: int = Field(ge=0, le=58)
+    macro_updates: int = Field(ge=1)
+
+
+class G00CSamplerPlanV3(StrictModel):
+    """Frozen micro/macro boundaries and six-stream sampler schedule."""
+
+    schema_version: Literal[3] = 3
+    plan_id: Sha256
+    execution_authority_id: Sha256
+    seed_schedule_id: Sha256
+    entries: tuple[G00CSamplerPlanEntryV3, ...]
+    microbatch_cells: Literal[512] = 512
+    microbatches_per_macro_update: Literal[8] = 8
+    macrobatch_cells: Literal[4096] = 4096
+    hierarchy: Literal["donor_checkpoint_then_target_then_guide_then_row_equal_v1"] = (
+        "donor_checkpoint_then_target_then_guide_then_row_equal_v1"
+    )
+    inverse_probability_weights: Literal["exact_raw_inverse_draw_probability"] = (
+        "exact_raw_inverse_draw_probability"
+    )
+    thinning: Literal["binomial_half_count_from_frozen_stream"] = (
+        "binomial_half_count_from_frozen_stream"
+    )
+    resume_after_macro_update: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def validate_plan(self) -> G00CSamplerPlanV3:
+        keys = [
+            (entry.candidate_kind, entry.candidate_value, entry.refit_draw_id)
+            for entry in self.entries
+        ]
+        if not keys or len(keys) != len(set(keys)):
+            raise ValueError("Dev36 sampler-plan entries must be nonempty and unique.")
+        if self.resume_after_macro_update >= min(entry.macro_updates for entry in self.entries):
+            raise ValueError("Dev36 sampler resume point must precede every terminal cursor.")
+        expected = self.identity(id_field="plan_id")
+        if self.plan_id != expected:
+            raise ValueError(f"plan_id mismatch: expected {expected}.")
+        return self
+
+
+class G00CSamplerEvidenceV3(StrictModel):
+    """Exact uninterrupted/resumed trace and state evidence for the frozen sampler."""
+
+    schema_version: Literal[3] = 3
+    evidence_id: Sha256
+    execution_authority_id: Sha256
+    sampler_plan: ArtifactRef
+    sampler_plan_id: Sha256
+    row_hierarchy: ArtifactRef
+    nested_training_row_order: ArtifactRef
+    uninterrupted_draw_trace: ArtifactRef
+    resumed_draw_trace: ArtifactRef
+    uninterrupted_state_trace: ArtifactRef
+    resumed_state_trace: ArtifactRef
+    implementation_sha256: Sha256
+    ordered_draws_identical: Literal[True] = True
+    rng_states_identical: Literal[True] = True
+    status: Literal["pass"] = "pass"
+
+    @model_validator(mode="after")
+    def validate_evidence(self) -> G00CSamplerEvidenceV3:
+        expected = self.identity(id_field="evidence_id")
+        if self.evidence_id != expected:
+            raise ValueError(f"evidence_id mismatch: expected {expected}.")
+        return self
+
+
+class G00CRefitReplayReceiptV3(StrictModel):
+    """Executable closed-form replay evidence, not a self-declared refit table."""
+
+    schema_version: Literal[3] = 3
+    receipt_id: Sha256
+    execution_authority_id: Sha256
+    selection_freeze_id: Sha256
+    seed_schedule_id: Sha256
+    candidate_kind: Literal["feature_count", "training_cells"]
+    selected_candidate: int = Field(gt=0)
+    reference_candidate: int = Field(gt=0)
+    modeled_feature_count: Literal[256, 512, 1024, 2048, 4096]
+    refit_records: ArtifactRef
+    sufficient_statistics: ArtifactRef
+    replayed_rows: ArtifactRef
+    replay_implementation_sha256: Sha256
+    preregistered_audit_draw_ids: tuple[int, ...] = (
+        0,
+        6,
+        12,
+        18,
+        24,
+        30,
+        36,
+        42,
+        48,
+        58,
+    )
+    selected_and_reference_all_59_draws: Literal[True] = True
+    exact_nll_and_state_hash_equality: Literal[True] = True
+    status: Literal["pass"] = "pass"
+
+    @model_validator(mode="after")
+    def validate_replay(self) -> G00CRefitReplayReceiptV3:
+        if self.preregistered_audit_draw_ids != (0, 6, 12, 18, 24, 30, 36, 42, 48, 58):
+            raise ValueError("Dev36 refit replay changed the preregistered audit draws.")
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
+        return self
+
+
+class G00CSupportAuditReceiptV3(StrictModel):
+    """Support metrics independently derived from a verified sampler trace."""
+
+    schema_version: Literal[3] = 3
+    receipt_id: Sha256
+    execution_authority_id: Sha256
+    support_contract: ArtifactRef
+    support_contract_id: Sha256
+    sampler_evidence: ArtifactRef
+    sampler_evidence_id: Sha256
+    derived_support_table: ArtifactRef
+    implementation_sha256: Sha256
+    status: Literal["pass"] = "pass"
+
+    @model_validator(mode="after")
+    def validate_support_receipt(self) -> G00CSupportAuditReceiptV3:
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
+        return self
+
+
+class G00CMaterializationReceiptV3(StrictModel):
+    """Complete direct source-byte verification of a selected compact view."""
+
+    schema_version: Literal[3] = 3
+    receipt_id: Sha256
+    execution_authority_id: Sha256
+    compact_payload: ArtifactRef
+    puro_r_sidecar: ArtifactRef
+    selected_features: ArtifactRef
+    selected_rows: ArtifactRef
+    physical_runs: ArtifactRef
+    selected_feature_count: int = Field(gt=0, le=4096)
+    compact_row_count: int = Field(gt=0)
+    puro_r_feature_id: Literal["CUSTOM001_PuroR"] = "CUSTOM001_PuroR"
+    puro_r_canonical_index: int = Field(ge=0)
+    compact_verification_block_rows: int = Field(ge=1, le=65536)
+    compact_data_dtype: Literal["uint16", "int32"]
+    compact_index_dtype: Literal["uint16", "int32"]
+    maximum_observed_count: int = Field(ge=0)
+    selected_row_set_sha256: Sha256
+    compact_ordered_row_ids_sha256: Sha256
+    protected_row_ids_sha256: Sha256
+    uninterrupted_compact_payload: ArtifactRef
+    resumed_compact_payload: ArtifactRef
+    uninterrupted_puro_r_sidecar: ArtifactRef
+    resumed_puro_r_sidecar: ArtifactRef
+    protected_access_receipt: ArtifactRef
+    reload_receipt: ArtifactRef
+    verifier_implementation_sha256: Sha256
+    bounded_source_equality: Literal[True] = True
+    primary_sidecar_separation_verified: Literal[True] = True
+    writer_restart_byte_identical: Literal[True] = True
+    physical_order_verified: Literal[True] = True
+    protected_expression_reads: Literal[0] = 0
+    immutable_publication_verified: Literal[True] = True
+    status: Literal["pass"] = "pass"
+
+    @model_validator(mode="after")
+    def validate_materialization(self) -> G00CMaterializationReceiptV3:
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
+        return self
+
+
+class G00CPublicationArtifactV3(StrictModel):
+    """One immutable payload in the status-dependent publication inventory."""
+
+    name: str = Field(min_length=1)
+    sha256: Sha256
+    size_bytes: int = Field(ge=0)
+
+    @field_validator("name")
+    @classmethod
+    def safe_publication_name(cls, value: str) -> str:
+        return validate_relative_uri(value)
+
+
+class G00CPublicationManifestV3(StrictModel):
+    """Manifest-last exact publication inventory for one terminal status."""
+
+    schema_version: Literal[3] = 3
+    manifest_id: Sha256
+    execution_authority_id: Sha256
+    selection_freeze_id: Sha256
+    feature_selection_result_id: Sha256
+    sample_size_selection_result_id: Sha256
+    terminal_status: Literal["pass", "extension_required", "fail_no_saturation", "failed_integrity"]
+    artifacts: tuple[G00CPublicationArtifactV3, ...]
+    sha256sums: ArtifactRef
+    committed: ArtifactRef
+    publication_event_receipt: ArtifactRef
+    publisher_implementation_sha256: Sha256
+    manifest_written_last: Literal[True] = True
+    destination_preexisted: Literal[False] = False
+    no_clobber: Literal[True] = True
+
+    @model_validator(mode="after")
+    def validate_publication_manifest(self) -> G00CPublicationManifestV3:
+        names = tuple(item.name for item in self.artifacts)
+        if names != tuple(sorted(names)) or len(names) != len(set(names)):
+            raise ValueError("Dev36 publication artifacts must be uniquely sorted by name.")
+        expected = self.identity(id_field="manifest_id")
+        if self.manifest_id != expected:
+            raise ValueError(f"manifest_id mismatch: expected {expected}.")
+        return self
+
+
+class G00CExecutionBundleV4(StrictModel):
+    """Dev36 sealed chain; every opaque Dev35 gate is replaced by typed evidence."""
+
+    schema_version: Literal[4] = 4
+    bundle_id: Sha256
+    execution_authority: ArtifactRef
+    execution_authority_id: Sha256
+    selection_freeze: ArtifactRef
+    selection_freeze_id: Sha256
+    seed_schedule: ArtifactRef
+    seed_schedule_id: Sha256
+    row_roles: ArtifactRef
+    feature_selection_result: ArtifactRef
+    feature_selection_result_id: Sha256
+    sample_size_selection_result: ArtifactRef
+    sample_size_selection_result_id: Sha256
+    common_support_receipt: ArtifactRef
+    feature_refit_replay_receipt: ArtifactRef
+    sample_refit_replay_receipt: ArtifactRef
+    sampler_evidence: ArtifactRef
+    base_support_audit_contract: ArtifactRef
+    base_support_audit_receipt: ArtifactRef
+    extension_freeze: ArtifactRef | None = None
+    extension_support_audit_contract: ArtifactRef | None = None
+    extension_support_audit_receipt: ArtifactRef | None = None
+    materialization_receipt: ArtifactRef | None = None
+    publication_manifest: ArtifactRef
+    failure_receipt: ArtifactRef | None = None
+    terminal_status: Literal["pass", "extension_required", "fail_no_saturation", "failed_integrity"]
+
+    @model_validator(mode="after")
+    def validate_bundle(self) -> G00CExecutionBundleV4:
+        if self.terminal_status == "pass":
+            if self.materialization_receipt is None or self.failure_receipt is not None:
+                raise ValueError("A Dev36 pass requires typed materialization and no failure.")
+        elif self.materialization_receipt is not None:
+            raise ValueError("A nonpass Dev36 bundle cannot bind materialization evidence.")
+        if self.terminal_status == "failed_integrity":
+            if self.failure_receipt is None:
+                raise ValueError("A Dev36 integrity failure requires its typed failure receipt.")
+        elif self.failure_receipt is not None:
+            raise ValueError("Only failed_integrity may bind a failure receipt.")
+        extension = (
+            self.extension_freeze,
+            self.extension_support_audit_contract,
+            self.extension_support_audit_receipt,
+        )
+        if self.terminal_status == "fail_no_saturation" and any(item is None for item in extension):
+            raise ValueError("Dev36 nonsaturation requires its complete extension chain.")
+        if self.extension_freeze is None and any(item is not None for item in extension[1:]):
+            raise ValueError("Dev36 extension evidence requires a frozen extension.")
+        expected = self.identity(id_field="bundle_id")
+        if self.bundle_id != expected:
+            raise ValueError(f"bundle_id mismatch: expected {expected}.")
+        return self
+
+
+class G00CDecisionReceiptV4(StrictModel):
+    """Artifact-derived Dev36 decision and sole successor G00D parent gate."""
+
+    schema_version: Literal[4] = 4
+    receipt_id: Sha256
+    execution_bundle_id: Sha256
+    execution_authority_id: Sha256
+    selection_freeze_id: Sha256
+    feature_selection_result_id: Sha256
+    sample_size_selection_result_id: Sha256
+    sampler_evidence_id: Sha256
+    feature_refit_replay_receipt_id: Sha256
+    sample_refit_replay_receipt_id: Sha256
+    support_audit_receipt_ids: tuple[Sha256, ...]
+    materialization_receipt_id: Sha256 | None = None
+    publication_manifest_id: Sha256
+    verified_artifact_sha256s: tuple[Sha256, ...]
+    terminal_status: Literal["pass", "extension_required", "fail_no_saturation", "failed_integrity"]
+    may_parent_g00d: bool
+    verification_completed: Literal[True] = True
+    biological_claims: Literal[False] = False
+
+    @model_validator(mode="after")
+    def validate_decision(self) -> G00CDecisionReceiptV4:
+        if not self.verified_artifact_sha256s or len(self.verified_artifact_sha256s) != len(
+            set(self.verified_artifact_sha256s)
+        ):
+            raise ValueError("Dev36 verified artifact hashes must be nonempty and unique.")
+        passed = self.terminal_status == "pass"
+        if (
+            self.may_parent_g00d != passed
+            or (self.materialization_receipt_id is not None) != passed
+        ):
+            raise ValueError("Only a sealed Dev36 pass may parent G00D.")
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
+        return self
+
+
 class G00DParityGateContract(StrictModel):
     """Frozen comparison semantics for one integrated-loader parity gate."""
 
@@ -4147,7 +4591,7 @@ class CompiledRunContract(StrictModel):
     schema_version: int = 1
     compiled_run_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev35"] = "4.0.dev35"
+    recipe_version: Literal["4.0.dev36"] = "4.0.dev36"
     recipe_wheel_hash: Sha256
     frozen_credo_artifact_hash: Sha256
     environment_lock_hash: Sha256
@@ -4214,7 +4658,7 @@ class InferenceBundleManifest(StrictModel):
     compiled_run_id: str
     selected_checkpoint_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev35"] = "4.0.dev35"
+    recipe_version: Literal["4.0.dev36"] = "4.0.dev36"
     selected_family: Literal[
         "configured_checkpoint",
         "gene_decoder_selected",

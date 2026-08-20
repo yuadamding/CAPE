@@ -25,7 +25,10 @@ DIRECT_DEPENDENCIES = ("h5py", "numpy", "pandas", "pyarrow", "pydantic", "PyYAML
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--tests-collected", type=int, required=True)
     parser.add_argument("--tests-passed", type=int, required=True)
+    parser.add_argument("--tests-skipped", type=int, required=True)
+    parser.add_argument("--tests-failed", type=int, required=True)
     parser.add_argument("--coverage-percent", type=float, required=True)
     parser.add_argument("--distribution-dir", type=Path)
     args = parser.parse_args()
@@ -254,6 +257,9 @@ def main() -> None:
             if gse314342_g00_dev34a_claim_contract.is_file()
             else None
         ),
+        "gse314342_g00_dev35_independent_review_sha256": review_hashes[
+            "gse314342_g00_dev35_independent_review_sha256"
+        ],
         "gse314342_g00_dev29_builder_sha256": (
             sha256_file(gse314342_g00 / "freeze_g00_source_plane_dev29.py")
             if (gse314342_g00 / "freeze_g00_source_plane_dev29.py").is_file()
@@ -274,7 +280,10 @@ def main() -> None:
             if (gse314342_g00_source_plane / "G00B_VIRTUAL_CANONICAL_STORE/manifest.json").is_file()
             else None
         ),
+        "tests_collected": args.tests_collected,
         "tests_passed": args.tests_passed,
+        "tests_skipped": args.tests_skipped,
+        "tests_failed": args.tests_failed,
         "coverage_percent": args.coverage_percent,
         "distributions": distributions,
         "stable_discovery_registered": False,

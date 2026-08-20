@@ -1,0 +1,126 @@
+{
+  "$defs": {
+    "G00CSamplerPlanEntryV3": {
+      "additionalProperties": false,
+      "description": "One exact hierarchical-sampler replay surface.",
+      "properties": {
+        "candidate_kind": {
+          "enum": [
+            "feature_count",
+            "training_cells"
+          ],
+          "title": "Candidate Kind",
+          "type": "string"
+        },
+        "candidate_value": {
+          "exclusiveMinimum": 0,
+          "title": "Candidate Value",
+          "type": "integer"
+        },
+        "macro_updates": {
+          "minimum": 1,
+          "title": "Macro Updates",
+          "type": "integer"
+        },
+        "refit_draw_id": {
+          "maximum": 58,
+          "minimum": 0,
+          "title": "Refit Draw Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "candidate_kind",
+        "candidate_value",
+        "refit_draw_id",
+        "macro_updates"
+      ],
+      "title": "G00CSamplerPlanEntryV3",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/g00c-sampler-plan.v3.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Frozen micro/macro boundaries and six-stream sampler schedule.",
+  "properties": {
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/G00CSamplerPlanEntryV3"
+      },
+      "title": "Entries",
+      "type": "array"
+    },
+    "execution_authority_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Execution Authority Id",
+      "type": "string"
+    },
+    "hierarchy": {
+      "const": "donor_checkpoint_then_target_then_guide_then_row_equal_v1",
+      "default": "donor_checkpoint_then_target_then_guide_then_row_equal_v1",
+      "title": "Hierarchy",
+      "type": "string"
+    },
+    "inverse_probability_weights": {
+      "const": "exact_raw_inverse_draw_probability",
+      "default": "exact_raw_inverse_draw_probability",
+      "title": "Inverse Probability Weights",
+      "type": "string"
+    },
+    "macrobatch_cells": {
+      "const": 4096,
+      "default": 4096,
+      "title": "Macrobatch Cells",
+      "type": "integer"
+    },
+    "microbatch_cells": {
+      "const": 512,
+      "default": 512,
+      "title": "Microbatch Cells",
+      "type": "integer"
+    },
+    "microbatches_per_macro_update": {
+      "const": 8,
+      "default": 8,
+      "title": "Microbatches Per Macro Update",
+      "type": "integer"
+    },
+    "plan_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Plan Id",
+      "type": "string"
+    },
+    "resume_after_macro_update": {
+      "minimum": 1,
+      "title": "Resume After Macro Update",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": 3,
+      "default": 3,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "seed_schedule_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Seed Schedule Id",
+      "type": "string"
+    },
+    "thinning": {
+      "const": "binomial_half_count_from_frozen_stream",
+      "default": "binomial_half_count_from_frozen_stream",
+      "title": "Thinning",
+      "type": "string"
+    }
+  },
+  "required": [
+    "plan_id",
+    "execution_authority_id",
+    "seed_schedule_id",
+    "entries",
+    "resume_after_macro_update"
+  ],
+  "title": "G00CSamplerPlanV3",
+  "type": "object"
+}

@@ -25,6 +25,12 @@ from .g00c_v3 import (
     verify_g00c_execution_v3,
     verify_g00c_extension_freeze_v1,
 )
+from .g00c_v4 import (
+    VerifiedG00CExecutionV4,
+    build_g00c_decision_receipt_v4,
+    verify_g00c_decision_v4,
+    verify_g00c_execution_v4,
+)
 from .g00d import verify_integrated_loader_qualification
 from .legacy_parent import (
     build_legacy_parent_attestation,
@@ -76,4 +82,8 @@ __all__ = [
     "verify_g00c_execution_v3",
     "verify_g00c_extension_freeze_v1",
     "weighted_multinomial_nll_per_count",
+    "VerifiedG00CExecutionV4",
+    "build_g00c_decision_receipt_v4",
+    "verify_g00c_decision_v4",
+    "verify_g00c_execution_v4",
 ]

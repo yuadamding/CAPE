@@ -200,6 +200,16 @@ gene on the shared 4,096-gene support. Portable review hashes and the exact
 tested CPU environment replace attachment-path and stale-lock provenance. See
 the [Dev35 execution-authority record](g00-dev35-execution-authority.md).
 
+Dev36 preserves that milestone while replacing every opaque or self-attested
+execution gate. It adds a distinct source-backed materialization verifier,
+typed hierarchical sampler replay, sampler-derived support, executable
+closed-form refit replay, exact status-dependent publication inventories, and
+a metadata-only D1 A2 authority plus independently audited immutable archive.
+The full-grid process-tree ceiling is explicitly 64 GiB. Dev36 still does not
+open expression, run the G00C curve, authorize G00D, or provide model or
+biological evidence. See the
+[Dev36 execution-seal record](g00-dev36-execution-seal.md).
+
 Dev7 replaced the invalid reconstructed-SVD softmax with a checkpoint-owned
 multinomial count-composition decoder. Dev10 added a deterministic
 training-only validation holdout and minimum-validation-cross-entropy
@@ -246,7 +256,7 @@ conditional-interaction, and joint nulls, freezes fold and seed identities,
 and strengthens noninteraction comparators. That T03 code remains unqualified
 until T01, T02, and the prescribed pooled pilot pass.
 
-Deliberately not asserted complete in `4.0.0.dev35`:
+Deliberately not asserted complete in `4.0.0.dev36`:
 
 - stable CREDO entry-point discovery;
 - in-repository real-cohort adapters, biological thresholds, or biological claims;

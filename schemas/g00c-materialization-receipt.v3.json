@@ -1,0 +1,240 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/g00c-materialization-receipt.v3.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Complete direct source-byte verification of a selected compact view.",
+  "properties": {
+    "bounded_source_equality": {
+      "const": true,
+      "default": true,
+      "title": "Bounded Source Equality",
+      "type": "boolean"
+    },
+    "compact_data_dtype": {
+      "enum": [
+        "uint16",
+        "int32"
+      ],
+      "title": "Compact Data Dtype",
+      "type": "string"
+    },
+    "compact_index_dtype": {
+      "enum": [
+        "uint16",
+        "int32"
+      ],
+      "title": "Compact Index Dtype",
+      "type": "string"
+    },
+    "compact_ordered_row_ids_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Compact Ordered Row Ids Sha256",
+      "type": "string"
+    },
+    "compact_payload": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "compact_row_count": {
+      "exclusiveMinimum": 0,
+      "title": "Compact Row Count",
+      "type": "integer"
+    },
+    "compact_verification_block_rows": {
+      "maximum": 65536,
+      "minimum": 1,
+      "title": "Compact Verification Block Rows",
+      "type": "integer"
+    },
+    "execution_authority_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Execution Authority Id",
+      "type": "string"
+    },
+    "immutable_publication_verified": {
+      "const": true,
+      "default": true,
+      "title": "Immutable Publication Verified",
+      "type": "boolean"
+    },
+    "maximum_observed_count": {
+      "minimum": 0,
+      "title": "Maximum Observed Count",
+      "type": "integer"
+    },
+    "physical_order_verified": {
+      "const": true,
+      "default": true,
+      "title": "Physical Order Verified",
+      "type": "boolean"
+    },
+    "physical_runs": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "primary_sidecar_separation_verified": {
+      "const": true,
+      "default": true,
+      "title": "Primary Sidecar Separation Verified",
+      "type": "boolean"
+    },
+    "protected_access_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "protected_expression_reads": {
+      "const": 0,
+      "default": 0,
+      "title": "Protected Expression Reads",
+      "type": "integer"
+    },
+    "protected_row_ids_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Protected Row Ids Sha256",
+      "type": "string"
+    },
+    "puro_r_canonical_index": {
+      "minimum": 0,
+      "title": "Puro R Canonical Index",
+      "type": "integer"
+    },
+    "puro_r_feature_id": {
+      "const": "CUSTOM001_PuroR",
+      "default": "CUSTOM001_PuroR",
+      "title": "Puro R Feature Id",
+      "type": "string"
+    },
+    "puro_r_sidecar": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "receipt_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "reload_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "resumed_compact_payload": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "resumed_puro_r_sidecar": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "schema_version": {
+      "const": 3,
+      "default": 3,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "selected_feature_count": {
+      "exclusiveMinimum": 0,
+      "maximum": 4096,
+      "title": "Selected Feature Count",
+      "type": "integer"
+    },
+    "selected_features": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "selected_row_set_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Selected Row Set Sha256",
+      "type": "string"
+    },
+    "selected_rows": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "status": {
+      "const": "pass",
+      "default": "pass",
+      "title": "Status",
+      "type": "string"
+    },
+    "uninterrupted_compact_payload": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "uninterrupted_puro_r_sidecar": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "verifier_implementation_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Verifier Implementation Sha256",
+      "type": "string"
+    },
+    "writer_restart_byte_identical": {
+      "const": true,
+      "default": true,
+      "title": "Writer Restart Byte Identical",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "execution_authority_id",
+    "compact_payload",
+    "puro_r_sidecar",
+    "selected_features",
+    "selected_rows",
+    "physical_runs",
+    "selected_feature_count",
+    "compact_row_count",
+    "puro_r_canonical_index",
+    "compact_verification_block_rows",
+    "compact_data_dtype",
+    "compact_index_dtype",
+    "maximum_observed_count",
+    "selected_row_set_sha256",
+    "compact_ordered_row_ids_sha256",
+    "protected_row_ids_sha256",
+    "uninterrupted_compact_payload",
+    "resumed_compact_payload",
+    "uninterrupted_puro_r_sidecar",
+    "resumed_puro_r_sidecar",
+    "protected_access_receipt",
+    "reload_receipt",
+    "verifier_implementation_sha256"
+  ],
+  "title": "G00CMaterializationReceiptV3",
+  "type": "object"
+}

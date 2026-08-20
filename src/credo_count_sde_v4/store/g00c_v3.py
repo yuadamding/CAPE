@@ -22,8 +22,10 @@ from ..contracts import (
     ArtifactRef,
     G00CCommonSupportMetricReceiptV1,
     G00CD1ExecutionAuthorityFreezeV1,
+    G00CD1ExecutionAuthorityFreezeV2,
     G00CDecisionReceiptV3,
     G00CExecutionBundleV3,
+    G00CExecutionBundleV4,
     G00CFeatureSelectionResultV3,
     G00CRefitSeedScheduleV1,
     G00CSampleSizeExtensionFreezeV1,
@@ -145,7 +147,10 @@ def _hash_int64(values: np.ndarray) -> str:
     return hashlib.sha256(np.asarray(values, dtype="<i8").tobytes(order="C")).hexdigest()
 
 
-def _implementation_hash(authority: G00CD1ExecutionAuthorityFreezeV1, role: str) -> str:
+def _implementation_hash(
+    authority: G00CD1ExecutionAuthorityFreezeV1 | G00CD1ExecutionAuthorityFreezeV2,
+    role: str,
+) -> str:
     matches = [
         binding.artifact.sha256
         for binding in authority.implementation.implementations
@@ -158,7 +163,7 @@ def _implementation_hash(authority: G00CD1ExecutionAuthorityFreezeV1, role: str)
 
 def verify_g00c_d1_freeze_v1(
     root: Path,
-    authority: G00CD1ExecutionAuthorityFreezeV1,
+    authority: G00CD1ExecutionAuthorityFreezeV1 | G00CD1ExecutionAuthorityFreezeV2,
 ) -> G00CSelectionFreezeContractV1:
     """Verify byte-level relations in the concrete metadata-only D1 freeze."""
 
@@ -256,6 +261,24 @@ def verify_g00c_d1_freeze_v1(
     )
     if base_support.stage != "base":
         raise IntegrityError("Dev35 D1 authority does not bind the base support contract.")
+    if isinstance(authority, G00CD1ExecutionAuthorityFreezeV2):
+        hierarchy = pd.read_parquet(_path(root, authority.sampler_row_hierarchy))
+        expected_columns = (
+            "row_id",
+            "source_index",
+            "target_code",
+            "guide_code",
+            "is_control",
+        )
+        training_fit = row_ids[role_names == "training_fit"]
+        if (
+            tuple(hierarchy.columns) != expected_columns
+            or len(hierarchy) != authority.sampler_hierarchy_rows
+            or hierarchy["row_id"].duplicated().any()
+            or _row_set_hash(hierarchy["row_id"].to_numpy(dtype=np.int64))
+            != _row_set_hash(training_fit)
+        ):
+            raise IntegrityError("Dev36 sampler hierarchy differs from training-fit authority.")
     return freeze
 
 
@@ -462,9 +485,10 @@ def _verify_feature_selection_v3(
     root: Path,
     *,
     freeze: G00CSelectionFreezeContractV1,
-    bundle: G00CExecutionBundleV3,
+    bundle: G00CExecutionBundleV3 | G00CExecutionBundleV4,
     result: G00CFeatureSelectionResultV3,
     schedule: G00CRefitSeedScheduleV1,
+    support_eligible_override: tuple[bool, ...] | None = None,
 ) -> tuple[tuple[str, ...], pd.DataFrame]:
     candidates = freeze.feature_ranking.candidate_feature_counts
     records, pivot = _load_refits_v3(
@@ -484,9 +508,15 @@ def _verify_feature_selection_v3(
     differences = np.abs(pivot.to_numpy(dtype=float) - reference[:, None])
     q95 = np.quantile(differences, 0.95, axis=0, method="linear")
     means = pivot.mean(axis=0).to_numpy(dtype=float)
-    support = _support_eligibility(
-        root, (bundle.base_support_audit,), kind="feature_count", candidates=candidates
-    )
+    support = support_eligible_override
+    if support is None:
+        if not isinstance(bundle, G00CExecutionBundleV3):
+            raise IntegrityError("Dev36 feature verification requires derived support.")
+        support = _support_eligibility(
+            root, (bundle.base_support_audit,), kind="feature_count", candidates=candidates
+        )
+    if len(support) != len(candidates):
+        raise IntegrityError("Dev36 feature support does not cover the frozen grid.")
     curve = pd.read_parquet(_path(root, result.curve))
     if (
         tuple(curve.columns) != FEATURE_CURVE_V3_COLUMNS
@@ -538,11 +568,12 @@ def _verify_sample_size_selection_v3(
     root: Path,
     *,
     freeze: G00CSelectionFreezeContractV1,
-    authority: G00CD1ExecutionAuthorityFreezeV1,
-    bundle: G00CExecutionBundleV3,
+    authority: G00CD1ExecutionAuthorityFreezeV1 | G00CD1ExecutionAuthorityFreezeV2,
+    bundle: G00CExecutionBundleV3 | G00CExecutionBundleV4,
     feature_result: G00CFeatureSelectionResultV3,
     result: G00CSampleSizeSelectionResultV3,
     schedule: G00CRefitSeedScheduleV1,
+    support_eligible_override: tuple[bool, ...] | None = None,
 ) -> np.ndarray | None:
     if (
         result.parent_feature_selection_result_sha256 != bundle.feature_selection_result.sha256
@@ -582,14 +613,20 @@ def _verify_sample_size_selection_v3(
     differences = np.abs(pivot.to_numpy(dtype=float) - reference[:, None])
     q95 = np.quantile(differences, 0.95, axis=0, method="linear")
     means = pivot.mean(axis=0).to_numpy(dtype=float)
-    support_artifacts: tuple[ArtifactRef, ...] = (bundle.base_support_audit,)
-    if result.grid_stage == "extension":
-        if bundle.extension_support_audit is None:
-            raise IntegrityError("Dev35 extension result lacks two-million support evidence.")
-        support_artifacts = (*support_artifacts, bundle.extension_support_audit)
-    support = _support_eligibility(
-        root, support_artifacts, kind="training_cells", candidates=candidates
-    )
+    support = support_eligible_override
+    if support is None:
+        if not isinstance(bundle, G00CExecutionBundleV3):
+            raise IntegrityError("Dev36 sample verification requires derived support.")
+        support_artifacts: tuple[ArtifactRef, ...] = (bundle.base_support_audit,)
+        if result.grid_stage == "extension":
+            if bundle.extension_support_audit is None:
+                raise IntegrityError("Dev35 extension result lacks two-million support evidence.")
+            support_artifacts = (*support_artifacts, bundle.extension_support_audit)
+        support = _support_eligibility(
+            root, support_artifacts, kind="training_cells", candidates=candidates
+        )
+    if len(support) != len(candidates):
+        raise IntegrityError("Dev36 sample support does not cover the frozen grid.")
     curve = pd.read_parquet(_path(root, result.curve))
     if (
         tuple(curve.columns) != SAMPLE_CURVE_V3_COLUMNS
