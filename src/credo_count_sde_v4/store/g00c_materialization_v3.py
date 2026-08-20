@@ -11,7 +11,11 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
-from ..contracts import G00CD1ExecutionAuthorityFreezeV2, G00CMaterializationReceiptV3
+from ..contracts import (
+    G00CD1ExecutionAuthorityFreezeV2,
+    G00CD1ExecutionAuthorityFreezeV3,
+    G00CMaterializationReceiptV3,
+)
 from ..errors import IntegrityError
 from .g00c_v2 import _expected_physical_order
 from .g00c_v3 import _path
@@ -47,7 +51,10 @@ def _implementation_hash(authority: G00CD1ExecutionAuthorityFreezeV2, role: str)
     return matches[0]
 
 
-def _role_rows(root: Path, authority: G00CD1ExecutionAuthorityFreezeV2) -> dict[str, np.ndarray]:
+def _role_rows(
+    root: Path,
+    authority: G00CD1ExecutionAuthorityFreezeV2 | G00CD1ExecutionAuthorityFreezeV3,
+) -> dict[str, np.ndarray]:
     table = pd.read_parquet(_path(root, authority.row_role_freeze))
     if tuple(table.columns) != ("row_id", "role") or table["row_id"].duplicated().any():
         raise IntegrityError("Dev36 materializer found malformed row-role authority.")

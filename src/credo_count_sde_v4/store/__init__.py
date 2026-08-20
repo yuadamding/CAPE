@@ -31,6 +31,13 @@ from .g00c_v4 import (
     verify_g00c_decision_v4,
     verify_g00c_execution_v4,
 )
+from .g00c_v5 import (
+    VerifiedG00CExecutionV5,
+    build_g00c_decision_receipt_v5,
+    verify_g00c_decision_v5,
+    verify_g00c_execution_v5,
+    verify_g00c_sealed_decision_v5,
+)
 from .g00d import verify_integrated_loader_qualification
 from .legacy_parent import (
     build_legacy_parent_attestation,
@@ -86,4 +93,9 @@ __all__ = [
     "build_g00c_decision_receipt_v4",
     "verify_g00c_decision_v4",
     "verify_g00c_execution_v4",
+    "VerifiedG00CExecutionV5",
+    "build_g00c_decision_receipt_v5",
+    "verify_g00c_decision_v5",
+    "verify_g00c_execution_v5",
+    "verify_g00c_sealed_decision_v5",
 ]

@@ -260,6 +260,9 @@ def main() -> None:
         "gse314342_g00_dev35_independent_review_sha256": review_hashes[
             "gse314342_g00_dev35_independent_review_sha256"
         ],
+        "gse314342_g00_dev36_independent_review_sha256": review_hashes[
+            "gse314342_g00_dev36_independent_review_sha256"
+        ],
         "gse314342_g00_dev29_builder_sha256": (
             sha256_file(gse314342_g00 / "freeze_g00_source_plane_dev29.py")
             if (gse314342_g00 / "freeze_g00_source_plane_dev29.py").is_file()

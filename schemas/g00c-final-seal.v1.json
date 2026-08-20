@@ -1,0 +1,128 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/g00c-final-seal.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Outer no-cycle seal binding bundle, inner publication, and final decision.",
+  "properties": {
+    "committed": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "execution_bundle": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "execution_bundle_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Execution Bundle Id",
+      "type": "string"
+    },
+    "final_decision": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "final_decision_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Final Decision Id",
+      "type": "string"
+    },
+    "inner_publication_manifest": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "inner_publication_manifest_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Inner Publication Manifest Id",
+      "type": "string"
+    },
+    "manifest_last": {
+      "const": true,
+      "default": true,
+      "title": "Manifest Last",
+      "type": "boolean"
+    },
+    "no_clobber": {
+      "const": true,
+      "default": true,
+      "title": "No Clobber",
+      "type": "boolean"
+    },
+    "outer_artifact_inventory": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "seal_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Seal Id",
+      "type": "string"
+    },
+    "sha256sums": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "status": {
+      "const": "sealed",
+      "default": "sealed",
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "seal_id",
+    "execution_bundle",
+    "execution_bundle_id",
+    "inner_publication_manifest",
+    "inner_publication_manifest_id",
+    "final_decision",
+    "final_decision_id",
+    "outer_artifact_inventory",
+    "sha256sums",
+    "committed"
+  ],
+  "title": "G00CFinalSealV1",
+  "type": "object"
+}

@@ -256,7 +256,16 @@ conditional-interaction, and joint nulls, freezes fold and seed identities,
 and strengthens noninteraction comparators. That T03 code remains unqualified
 until T01, T02, and the prescribed pooled pilot pass.
 
-Deliberately not asserted complete in `4.0.0.dev36`:
+Dev37 supersedes only the Dev36 verifier surface. It now constructs and fully
+verifies the accepted G00B store internally, recomputes the complete
+checkpoint-conditioned feature ranking, derives checkpoint-indexed refit
+statistics from source reads, freezes the sampler plan pre-access, verifies
+typed process/access/restart evidence, integrates the sealed V5 extension, and
+uses a decision-free inner publication plus outer final seal. The fresh D1
+authority remains metadata-only; G00C expression execution is still blocked.
+See the [Dev37 source-derived-seal record](g00-dev37-source-derived-seal.md).
+
+Deliberately not asserted complete in `4.0.0.dev37`:
 
 - stable CREDO entry-point discovery;
 - in-repository real-cohort adapters, biological thresholds, or biological claims;

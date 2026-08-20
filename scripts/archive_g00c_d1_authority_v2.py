@@ -1,17 +1,21 @@
-"""Create and independently re-audit one immutable Dev36 D1 authority archive."""
+"""Create and independently re-audit one immutable Dev36/Dev37 D1 authority archive."""
 
 from __future__ import annotations
 
 import argparse
 import gzip
 import io
+import json
 import os
 import tarfile
 import tempfile
 from pathlib import Path
 
 from credo_count_sde_v4.canonical import atomic_json, sha256_bytes, sha256_file
-from credo_count_sde_v4.contracts import G00CD1ExecutionAuthorityFreezeV2
+from credo_count_sde_v4.contracts import (
+    G00CD1ExecutionAuthorityFreezeV2,
+    G00CD1ExecutionAuthorityFreezeV3,
+)
 from credo_count_sde_v4.store.g00c_v3 import verify_g00c_d1_freeze_v1
 
 
@@ -34,6 +38,16 @@ def _manifest(root: Path) -> dict[str, str]:
         if path.is_symlink() or not path.is_file() or sha256_file(path) != digest:
             raise RuntimeError(f"The Dev36 authority file failed verification: {name}.")
     return observed
+
+
+def _authority(root: Path) -> G00CD1ExecutionAuthorityFreezeV2 | G00CD1ExecutionAuthorityFreezeV3:
+    path = root / "G00C_D1_EXECUTION_AUTHORITY.json"
+    version = int(json.loads(path.read_text()).get("schema_version", 0))
+    if version == 2:
+        return G00CD1ExecutionAuthorityFreezeV2.model_validate_json(path.read_text())
+    if version == 3:
+        return G00CD1ExecutionAuthorityFreezeV3.model_validate_json(path.read_text())
+    raise RuntimeError(f"Unsupported G00C D1 authority schema: {version}.")
 
 
 def _write_archive(root: Path, output: Path) -> None:
@@ -87,9 +101,7 @@ def _audit_archive(archive_path: Path, expected: dict[str, str]) -> dict[str, ob
         extracted = _manifest(temporary)
         if extracted != expected:
             raise RuntimeError("The extracted Dev36 archive manifest differs.")
-        authority = G00CD1ExecutionAuthorityFreezeV2.model_validate_json(
-            (temporary / "G00C_D1_EXECUTION_AUTHORITY.json").read_text()
-        )
+        authority = _authority(temporary)
         verify_g00c_d1_freeze_v1(temporary, authority)
         return {
             "archive_sha256": sha256_file(archive_path),
@@ -113,9 +125,7 @@ def main() -> None:
     if output.exists() or output.with_suffix(output.suffix + ".sha256").exists():
         raise RuntimeError("Refusing to replace a Dev36 authority archive or checksum.")
     expected = _manifest(root)
-    authority = G00CD1ExecutionAuthorityFreezeV2.model_validate_json(
-        (root / "G00C_D1_EXECUTION_AUTHORITY.json").read_text()
-    )
+    authority = _authority(root)
     verify_g00c_d1_freeze_v1(root, authority)
     output.parent.mkdir(parents=True, exist_ok=True)
     _write_archive(root, output)

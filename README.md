@@ -8,7 +8,7 @@ count_state → count_measure → count_context
 ```
 
 It is a sibling of, not a modification to, the frozen CREDO checkout. Version
-`4.0.0.dev36` is engineering software; it is not a biological result and cannot
+`4.0.0.dev37` is engineering software; it is not a biological result and cannot
 be relabeled as stable `4.0`.
 
 Implemented surfaces include strict hash-bound contracts, sparse count storage,
@@ -90,7 +90,10 @@ decision chain, a pre-access 2M extension freeze, stage-scoped support gates,
 the common 0.5-per-gene prior, portable review provenance, and an exact tested
 CPU environment authority. See the
 [Dev35 execution-authority record](docs/g00-dev35-execution-authority.md) and
-[Dev36 execution-seal hardening](docs/g00-dev36-execution-seal.md).
+[Dev36 execution-seal hardening](docs/g00-dev36-execution-seal.md). Dev37 closes
+the remaining source-substitution, supplied-statistics, publication-cycle,
+extension-parent, monitoring/access, and durable-restart defects. See the
+[Dev37 source-derived seal](docs/g00-dev37-source-derived-seal.md).
 G00C expression access and G00D remain blocked.
 
 ## Quick start
@@ -151,6 +154,10 @@ See [architecture](docs/architecture.md), [contracts](docs/contracts.md),
 [the accepted Dev32 B0-A2 execution](docs/g00-dev32-b0-a2-source-plane-execution.md),
 [the Dev33-A G00C hardening boundary](docs/g00-dev33-g00c-hardening.md),
 [the Dev33-B G00C extraction canary](docs/g00-dev33b-extraction-canary.md),
+[the Dev34-A claim contract](docs/g00-dev34a-claim-contract.md),
+[the Dev35 execution authority](docs/g00-dev35-execution-authority.md),
+[the Dev36 execution seal](docs/g00-dev36-execution-seal.md),
+[the Dev37 source-derived seal](docs/g00-dev37-source-derived-seal.md),
 [component qualification](docs/component-qualification.md),
 [the detailed T01 record](docs/t01-representation-qualification.md),
 [the detailed T02A record](docs/t02a-raw-count-mass-noise.md),

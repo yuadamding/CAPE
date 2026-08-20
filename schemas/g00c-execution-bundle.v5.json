@@ -1,0 +1,254 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/g00c-execution-bundle.v5.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Dev37 source-derived execution bundle, parent of a later outer decision seal.",
+  "properties": {
+    "base_support_audit_contract": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "base_support_audit_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "bundle_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Bundle Id",
+      "type": "string"
+    },
+    "common_support_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "execution_authority": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "execution_authority_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Execution Authority Id",
+      "type": "string"
+    },
+    "extension_freeze": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "extension_sampler_evidence": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "extension_sampler_restart_receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "extension_support_audit_contract": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "extension_support_audit_receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "failure_receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "feature_ranking_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "feature_refit_replay_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "feature_selection_result": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "feature_selection_result_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Feature Selection Result Id",
+      "type": "string"
+    },
+    "inner_publication_manifest": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "materialization_receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "monitor_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "row_roles": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "sample_refit_replay_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "sample_size_selection_result": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "sample_size_selection_result_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sample Size Selection Result Id",
+      "type": "string"
+    },
+    "sampler_evidence": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "sampler_restart_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "schema_version": {
+      "const": 5,
+      "default": 5,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "seed_schedule": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "seed_schedule_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Seed Schedule Id",
+      "type": "string"
+    },
+    "selection_freeze": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "selection_freeze_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Selection Freeze Id",
+      "type": "string"
+    },
+    "source_access_ledger_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "terminal_status": {
+      "enum": [
+        "pass",
+        "extension_required",
+        "fail_no_saturation",
+        "failed_integrity"
+      ],
+      "title": "Terminal Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "bundle_id",
+    "execution_authority",
+    "execution_authority_id",
+    "selection_freeze",
+    "selection_freeze_id",
+    "seed_schedule",
+    "seed_schedule_id",
+    "row_roles",
+    "feature_ranking_receipt",
+    "feature_selection_result",
+    "feature_selection_result_id",
+    "sample_size_selection_result",
+    "sample_size_selection_result_id",
+    "common_support_receipt",
+    "feature_refit_replay_receipt",
+    "sample_refit_replay_receipt",
+    "sampler_evidence",
+    "sampler_restart_receipt",
+    "source_access_ledger_receipt",
+    "monitor_receipt",
+    "base_support_audit_contract",
+    "base_support_audit_receipt",
+    "inner_publication_manifest",
+    "terminal_status"
+  ],
+  "title": "G00CExecutionBundleV5",
+  "type": "object"
+}

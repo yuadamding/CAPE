@@ -23,12 +23,17 @@ from ..contracts import (
     G00CCommonSupportMetricReceiptV1,
     G00CD1ExecutionAuthorityFreezeV1,
     G00CD1ExecutionAuthorityFreezeV2,
+    G00CD1ExecutionAuthorityFreezeV3,
     G00CDecisionReceiptV3,
     G00CExecutionBundleV3,
     G00CExecutionBundleV4,
+    G00CExecutionBundleV5,
     G00CFeatureSelectionResultV3,
+    G00CHierarchyDerivationReceiptV4,
     G00CRefitSeedScheduleV1,
+    G00CSamplerPlanV4,
     G00CSampleSizeExtensionFreezeV1,
+    G00CSampleSizeExtensionFreezeV2,
     G00CSampleSizeSelectionResultV3,
     G00CSelectionFreezeContractV1,
     G00CSupportAuditContractV2,
@@ -148,7 +153,11 @@ def _hash_int64(values: np.ndarray) -> str:
 
 
 def _implementation_hash(
-    authority: G00CD1ExecutionAuthorityFreezeV1 | G00CD1ExecutionAuthorityFreezeV2,
+    authority: (
+        G00CD1ExecutionAuthorityFreezeV1
+        | G00CD1ExecutionAuthorityFreezeV2
+        | G00CD1ExecutionAuthorityFreezeV3
+    ),
     role: str,
 ) -> str:
     matches = [
@@ -163,7 +172,11 @@ def _implementation_hash(
 
 def verify_g00c_d1_freeze_v1(
     root: Path,
-    authority: G00CD1ExecutionAuthorityFreezeV1 | G00CD1ExecutionAuthorityFreezeV2,
+    authority: (
+        G00CD1ExecutionAuthorityFreezeV1
+        | G00CD1ExecutionAuthorityFreezeV2
+        | G00CD1ExecutionAuthorityFreezeV3
+    ),
 ) -> G00CSelectionFreezeContractV1:
     """Verify byte-level relations in the concrete metadata-only D1 freeze."""
 
@@ -261,7 +274,7 @@ def verify_g00c_d1_freeze_v1(
     )
     if base_support.stage != "base":
         raise IntegrityError("Dev35 D1 authority does not bind the base support contract.")
-    if isinstance(authority, G00CD1ExecutionAuthorityFreezeV2):
+    if isinstance(authority, (G00CD1ExecutionAuthorityFreezeV2, G00CD1ExecutionAuthorityFreezeV3)):
         hierarchy = pd.read_parquet(_path(root, authority.sampler_row_hierarchy))
         expected_columns = (
             "row_id",
@@ -279,6 +292,52 @@ def verify_g00c_d1_freeze_v1(
             != _row_set_hash(training_fit)
         ):
             raise IntegrityError("Dev36 sampler hierarchy differs from training-fit authority.")
+        if isinstance(authority, G00CD1ExecutionAuthorityFreezeV3):
+            receipt = _read_model(
+                root,
+                authority.hierarchy_derivation_receipt,
+                G00CHierarchyDerivationReceiptV4,
+            )
+            column_hashes = (
+                _hash_int64(hierarchy["row_id"].to_numpy(dtype=np.int64)),
+                hashlib.sha256(
+                    np.asarray(hierarchy["source_index"], dtype="<i2").tobytes()
+                ).hexdigest(),
+                hashlib.sha256(
+                    np.asarray(hierarchy["target_code"], dtype="<i4").tobytes()
+                ).hexdigest(),
+                hashlib.sha256(
+                    np.asarray(hierarchy["guide_code"], dtype="<i4").tobytes()
+                ).hexdigest(),
+                hashlib.sha256(
+                    np.asarray(hierarchy["is_control"], dtype="|b1").tobytes()
+                ).hexdigest(),
+            )
+            if (
+                receipt.source_binding_id != authority.source_plane.binding_id
+                or receipt.hierarchy != authority.sampler_row_hierarchy
+                or receipt.row_count != authority.sampler_hierarchy_rows
+                or column_hashes
+                != (
+                    receipt.ordered_row_ids_sha256,
+                    receipt.source_index_sha256,
+                    receipt.target_code_sha256,
+                    receipt.guide_code_sha256,
+                    receipt.is_control_sha256,
+                )
+            ):
+                raise IntegrityError("Dev37 hierarchy receipt differs from frozen columns.")
+            _path(root, authority.source_plane.accepted_g00b_parent)
+            _path(root, authority.source_plane.canonical_feature_index)
+            plan = _read_model(root, authority.base_sampler_plan, G00CSamplerPlanV4)
+            if (
+                plan.plan_id != authority.base_sampler_plan_id
+                or plan.execution_authority_namespace != authority.selection_freeze_id
+                or plan.seed_schedule_id != authority.seed_schedule_id
+                or plan.grid_stage != "base"
+                or plan.expected_total_trace_rows != authority.base_sampler_expected_trace_rows
+            ):
+                raise IntegrityError("Dev37 sampler plan differs from pre-access authority.")
     return freeze
 
 
@@ -485,7 +544,7 @@ def _verify_feature_selection_v3(
     root: Path,
     *,
     freeze: G00CSelectionFreezeContractV1,
-    bundle: G00CExecutionBundleV3 | G00CExecutionBundleV4,
+    bundle: G00CExecutionBundleV3 | G00CExecutionBundleV4 | G00CExecutionBundleV5,
     result: G00CFeatureSelectionResultV3,
     schedule: G00CRefitSeedScheduleV1,
     support_eligible_override: tuple[bool, ...] | None = None,
@@ -568,8 +627,12 @@ def _verify_sample_size_selection_v3(
     root: Path,
     *,
     freeze: G00CSelectionFreezeContractV1,
-    authority: G00CD1ExecutionAuthorityFreezeV1 | G00CD1ExecutionAuthorityFreezeV2,
-    bundle: G00CExecutionBundleV3 | G00CExecutionBundleV4,
+    authority: (
+        G00CD1ExecutionAuthorityFreezeV1
+        | G00CD1ExecutionAuthorityFreezeV2
+        | G00CD1ExecutionAuthorityFreezeV3
+    ),
+    bundle: G00CExecutionBundleV3 | G00CExecutionBundleV4 | G00CExecutionBundleV5,
     feature_result: G00CFeatureSelectionResultV3,
     result: G00CSampleSizeSelectionResultV3,
     schedule: G00CRefitSeedScheduleV1,
@@ -653,16 +716,40 @@ def _verify_sample_size_selection_v3(
     if result.grid_stage == "extension":
         if bundle.extension_freeze is None:
             raise IntegrityError("Dev35 extension result lacks a pre-access extension authority.")
-        extension = _read_model(root, bundle.extension_freeze, G00CSampleSizeExtensionFreezeV1)
-        if result.base_grid_extension_required_receipt != extension.base_extension_required_receipt:
-            raise IntegrityError("Dev35 extension result binds another base stop receipt.")
-        verify_g00c_extension_freeze_v1(
-            root,
-            extension,
-            base_freeze=freeze,
-            base_feature_result=feature_result,
-            base_feature_artifact=bundle.feature_selection_result,
-        )
+        if isinstance(bundle, G00CExecutionBundleV5):
+            from .g00c_extension_v4 import verify_g00c_extension_freeze_v2
+
+            if not isinstance(authority, G00CD1ExecutionAuthorityFreezeV3):
+                raise IntegrityError("A Dev37 execution bundle requires a Dev37 authority.")
+
+            extension_v2 = _read_model(
+                root, bundle.extension_freeze, G00CSampleSizeExtensionFreezeV2
+            )
+            if (
+                result.base_grid_extension_required_receipt
+                != extension_v2.base_extension_required_receipt
+            ):
+                raise IntegrityError("Dev37 extension result binds another base stop receipt.")
+            verify_g00c_extension_freeze_v2(
+                root,
+                extension_v2,
+                authority=authority,
+                feature_result=feature_result,
+            )
+        else:
+            extension = _read_model(root, bundle.extension_freeze, G00CSampleSizeExtensionFreezeV1)
+            if (
+                result.base_grid_extension_required_receipt
+                != extension.base_extension_required_receipt
+            ):
+                raise IntegrityError("Dev35 extension result binds another base stop receipt.")
+            verify_g00c_extension_freeze_v1(
+                root,
+                extension,
+                base_freeze=freeze,
+                base_feature_result=feature_result,
+                base_feature_artifact=bundle.feature_selection_result,
+            )
     if expected_cells is None:
         return None
     if result.selected_training_rows is None:

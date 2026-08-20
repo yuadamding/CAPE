@@ -1,0 +1,188 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    },
+    "G00CSourceFileBindingV4": {
+      "additionalProperties": false,
+      "description": "One ordered immutable source in the accepted G00B plane.",
+      "properties": {
+        "checkpoint": {
+          "enum": [
+            "Rest",
+            "Stim8hr",
+            "Stim48hr"
+          ],
+          "title": "Checkpoint",
+          "type": "string"
+        },
+        "source_file_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source File Sha256",
+          "type": "string"
+        },
+        "source_id": {
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "checkpoint",
+        "source_file_sha256"
+      ],
+      "title": "G00CSourceFileBindingV4",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/g00c-source-plane-binding.v4.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Dev37 descriptor from which the verifier constructs the source store itself.",
+  "properties": {
+    "accepted_g00b_manifest_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Accepted G00B Manifest Sha256",
+      "type": "string"
+    },
+    "accepted_g00b_parent": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "binding_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Binding Id",
+      "type": "string"
+    },
+    "canonical_feature_index": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "canonical_feature_index_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Canonical Feature Index Hash",
+      "type": "string"
+    },
+    "feature_count": {
+      "exclusiveMinimum": 1,
+      "title": "Feature Count",
+      "type": "integer"
+    },
+    "feature_permutations_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Feature Permutations Sha256",
+      "type": "string"
+    },
+    "full_store_verification_required": {
+      "const": true,
+      "default": true,
+      "title": "Full Store Verification Required",
+      "type": "boolean"
+    },
+    "guide_target_crosswalk_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Guide Target Crosswalk Sha256",
+      "type": "string"
+    },
+    "puro_r_canonical_index": {
+      "minimum": 0,
+      "title": "Puro R Canonical Index",
+      "type": "integer"
+    },
+    "puro_r_feature_id": {
+      "const": "CUSTOM001_PuroR",
+      "default": "CUSTOM001_PuroR",
+      "title": "Puro R Feature Id",
+      "type": "string"
+    },
+    "row_locator_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Row Locator Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 4,
+      "default": 4,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "source_authority_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Authority Id",
+      "type": "string"
+    },
+    "source_files": {
+      "items": {
+        "$ref": "#/$defs/G00CSourceFileBindingV4"
+      },
+      "title": "Source Files",
+      "type": "array"
+    },
+    "virtual_store_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Virtual Store Id",
+      "type": "string"
+    },
+    "virtual_store_relative_uri": {
+      "minLength": 1,
+      "title": "Virtual Store Relative Uri",
+      "type": "string"
+    }
+  },
+  "required": [
+    "binding_id",
+    "accepted_g00b_parent",
+    "accepted_g00b_manifest_sha256",
+    "virtual_store_id",
+    "source_authority_id",
+    "virtual_store_relative_uri",
+    "canonical_feature_index",
+    "canonical_feature_index_hash",
+    "row_locator_sha256",
+    "feature_permutations_sha256",
+    "guide_target_crosswalk_sha256",
+    "source_files",
+    "feature_count",
+    "puro_r_canonical_index"
+  ],
+  "title": "G00CSourcePlaneBindingV4",
+  "type": "object"
+}

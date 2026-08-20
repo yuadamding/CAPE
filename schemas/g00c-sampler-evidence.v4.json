@@ -1,0 +1,142 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/g00c-sampler-evidence.v4.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Dev37 trace evidence tied to the pre-access plan and fresh-process restart.",
+  "properties": {
+    "evidence_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Evidence Id",
+      "type": "string"
+    },
+    "execution_authority_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Execution Authority Id",
+      "type": "string"
+    },
+    "implementation_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Implementation Sha256",
+      "type": "string"
+    },
+    "nested_training_row_order": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "ordered_draws_identical": {
+      "const": true,
+      "default": true,
+      "title": "Ordered Draws Identical",
+      "type": "boolean"
+    },
+    "restart_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "restart_receipt_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Restart Receipt Id",
+      "type": "string"
+    },
+    "resumed_draw_trace": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "resumed_state_trace": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "rng_states_identical": {
+      "const": true,
+      "default": true,
+      "title": "Rng States Identical",
+      "type": "boolean"
+    },
+    "row_hierarchy": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "sampler_plan": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "sampler_plan_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sampler Plan Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 4,
+      "default": 4,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "status": {
+      "const": "pass",
+      "default": "pass",
+      "title": "Status",
+      "type": "string"
+    },
+    "uninterrupted_draw_trace": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "uninterrupted_state_trace": {
+      "$ref": "#/$defs/ArtifactRef"
+    }
+  },
+  "required": [
+    "evidence_id",
+    "execution_authority_id",
+    "sampler_plan",
+    "sampler_plan_id",
+    "row_hierarchy",
+    "nested_training_row_order",
+    "uninterrupted_draw_trace",
+    "resumed_draw_trace",
+    "uninterrupted_state_trace",
+    "resumed_state_trace",
+    "restart_receipt",
+    "restart_receipt_id",
+    "implementation_sha256"
+  ],
+  "title": "G00CSamplerEvidenceV4",
+  "type": "object"
+}
