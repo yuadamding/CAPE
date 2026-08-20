@@ -1,5 +1,23 @@
 # Changelog
 
+## 4.0.0.dev37 — 2026-08-20
+
+- construct and fully verify the accepted G00B V2 source plane inside the
+  claim-bearing verifier, including exact source hashes and feature identity;
+- recompute source-derived checkpoint-conditioned feature rankings and
+  checkpoint-indexed refit statistics tied to frozen sampler/thinning evidence;
+- freeze the complete sampler plan before access and independently derive every
+  hierarchy column from accepted metadata;
+- bind process-tree monitoring, complete role-labelled source access, and
+  distinct fresh-process restart evidence as executable terminal gates;
+- replace the circular publication design with a semantic inner publication
+  and independently derived outer decision/seal;
+- parent the single permitted two-million-cell extension to a sealed V5 base
+  stop; and
+- finalize metadata-only D1 authority A3 and its deterministic 38-member
+  archive without opening expression values, executing G00C, using a GPU,
+  training a model, or making a biological claim.
+
 ## 4.0.0.dev34 — 2026-08-20
 
 - close Dev33-B as a finalized, non-promotable engineering canary and forbid

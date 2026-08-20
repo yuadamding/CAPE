@@ -77,8 +77,8 @@ software/synthetic qualification, not evidence about a cohort. See the
 [dev24 R1 amendment](t07s-reaction-metric-amendment.md) and authoritative
 [dev25 unified R0/R1 amendment](t07s-null-interval-amendment.md).
 
-Local acceptance completed with 270 CPU tests passing and one CUDA-only test
-skipped on the CPU validation host, with 85.03% branch-aware coverage. The exact
+Local acceptance completed with 291 CPU tests passing and one CUDA-only test
+skipped on the CPU validation host, with 85.00% branch-aware coverage. The exact
 test and coverage results are in
 `receipts/local-validation.json`. Ruff,
 mypy, generated-schema, documentation-link, wheel
@@ -262,7 +262,8 @@ checkpoint-conditioned feature ranking, derives checkpoint-indexed refit
 statistics from source reads, freezes the sampler plan pre-access, verifies
 typed process/access/restart evidence, integrates the sealed V5 extension, and
 uses a decision-free inner publication plus outer final seal. The fresh D1
-authority remains metadata-only; G00C expression execution is still blocked.
+authority is finalized as A3 (`5ee82382…`) and independently archived as
+`2f3085c9…`. It remains metadata-only; G00C expression execution is still blocked.
 See the [Dev37 source-derived-seal record](g00-dev37-source-derived-seal.md).
 
 Deliberately not asserted complete in `4.0.0.dev37`:

@@ -1,9 +1,9 @@
 # Dev37 G00C source-derived execution seal
 
-Last verified: 2026-08-20. Status: implemented expression-free hardening;
-fresh D1 authority release pending the final release build. Authority: strict
-Dev37 contracts, executable verifiers, generated schemas, focused real-store
-tests, and the eventual metadata-only D1 authority/archive.
+Last verified: 2026-08-20. Status: finalized expression-free hardening and
+metadata-only D1 authority. Authority: strict Dev37 contracts, executable
+verifiers, generated schemas, focused real-store tests, and the concrete A3
+authority/archive recorded under `provenance/g00/dev37-d1-authority/`.
 
 ## Decision boundary
 
@@ -167,14 +167,52 @@ features, and a physical PuroR sidecar. They verify:
 
 The test uses no monkeypatch, `SimpleNamespace`, cohort data, or GPU.
 
+## Concrete A3 release
+
+The first integration freeze stopped before publication because the Dev37
+freezer replaced the bootstrap implementation directory without preserving its
+two non-code semantic parents. Commit
+`d82f5f8b3587cd1c2bd1ccaaaf40c463824d5807` preserves
+`refit-model-config.json` and `common-support-prior.json`, while still replacing
+the executable verifier files. The unpublished failed attempt left no authority
+directory and accessed no expression source.
+
+The corrected release was rebuilt twice with a fixed `SOURCE_DATE_EPOCH`; its
+wheels and normalized sdists were byte-identical. Clean validation produced
+291 passing tests, one intentional CUDA skip, zero failures, and 85.00% total
+coverage. Ruff, mypy over 75 source files, generated-schema checks,
+documentation-link checks, and wheel ZIP integrity passed.
+
+The finalized metadata-only release is:
+
+| Field | Value |
+| --- | --- |
+| Attempt | `G00C_D1_AUTHORITY_DEV37_A3` |
+| Authority ID | `5ee82382643ed872d1a6ff191d07d2c7cc0c5793cc005e09db3466a059e49755` |
+| Code commit | `d82f5f8b3587cd1c2bd1ccaaaf40c463824d5807` |
+| Implementation tree | `6e0d2a566fc6c8e7aea1539f5ac8b09b0be90f8a0aa2270e5967a75269f19a0d` |
+| Wheel SHA-256 | `3b9e24e014b145a3c7460354f29f660043bccd66a9fb8b8c6c51b5927e4d8924` |
+| Normalized sdist SHA-256 | `66200da7c1eaccbc1570e214c994dd88464166fec413ea12064c4485557bb111` |
+| Source binding ID | `40ef5a2789494a58015b5d67b1f9f025335c7718931249821f494eadf065ef07` |
+| Pre-access sampler-plan ID | `003ac92ddc251fe3ef410a439a1dff460510efb98f800184056004204ef51ad4` |
+| Planned trace rows | 19,333,120 |
+| Hierarchy rows | 16,924,672 |
+| Archive SHA-256 | `2f3085c9af3eebc6b5f567b163272011a79f54d1046c344d57cc216f6e5cf062` |
+| Archive audit | `pass_independent_archive_audit`, 38 members |
+
+The A3 source-access receipt states `raw_source_files_opened=false` and
+`expression_values_accessed=false`. It binds all 12 source-file hashes and the
+18,130-feature index, including `CUSTOM001_PuroR` at canonical index 18,129,
+without reading a count matrix. It authorizes no G00C execution by itself.
+
 ## Current status
 
 | Surface | Status |
 | --- | --- |
 | Frozen CREDO and accepted Dev33–Dev36 milestones | Preserved |
-| Dev37 contracts and source-derived verifiers | Implemented locally |
+| Dev37 contracts and source-derived verifiers | Finalized at `d82f5f8…` |
 | Real synthetic V2 store rehearsal | Passed |
-| Fresh Dev37 D1 metadata authority | Pending final build/archive step |
+| Fresh Dev37 D1 metadata authority | Finalized as A3; archive re-audit passed |
 | Cohort expression access / G00C curve | Blocked |
 | 2M extension | Blocked pending a sealed base stop |
 | G00D/G04/G07/G08 | Blocked |

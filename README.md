@@ -94,7 +94,8 @@ CPU environment authority. See the
 the remaining source-substitution, supplied-statistics, publication-cycle,
 extension-parent, monitoring/access, and durable-restart defects. See the
 [Dev37 source-derived seal](docs/g00-dev37-source-derived-seal.md).
-G00C expression access and G00D remain blocked.
+Its metadata-only A3 authority and deterministic archive are finalized; G00C
+expression access and G00D remain blocked.
 
 ## Quick start
 
