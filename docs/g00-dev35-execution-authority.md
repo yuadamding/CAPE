@@ -89,6 +89,18 @@ manifest as a non-promotable prerequisite, the Dev35 release commit/wheel/
 normalized sdist/source tree, all seven role-labelled implementation files,
 and `locks/tested-environment.v1.json`.
 
+The concrete A1 authority is finalized at the workspace-relative publication
+`../credo_v4_gse314342_g00_20260816/G00C_D1_AUTHORITY_DEV35_A1`. Its authority
+ID is `dbfa9b0b7fe65f636c07ab920c55826ac961d6385a847b5ec77367c6b03228a5`;
+the selection-freeze ID is
+`26ab03780bb5846c80e39f452162f35e0e983b5af74df83bd38e5b7fd05bec98`;
+and the seed-schedule ID is
+`51ac2ad1140303734e7ee45aacd4c46c9174444ec75849934d29741a2f554c4c`.
+The compact committed pointer under
+`provenance/g00/dev35-d1-authority/PROVENANCE_INDEX.json` binds those IDs,
+release hashes, row counts, the external manifest, and the no-expression
+access receipt.
+
 ## Environment and provenance
 
 The tested-environment record includes the Python build, OS and CPU identity,
@@ -107,7 +119,7 @@ user-specific attachment path.
 | Dev33-B canary | Closed, non-promotable |
 | Dev34-A contract milestone | Preserved unchanged |
 | Dev35 contracts/verifiers | Implemented and CPU-tested |
-| Concrete D1 metadata freeze | Required before any expression access |
+| Concrete D1 metadata freeze | Finalized and independently reverified; no expression read |
 | G00C feature/cell execution | Not run |
 | 2M extension | Not authorized unless base stops correctly |
 | G00D and downstream real-data components | Blocked |

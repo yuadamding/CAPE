@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "status": "finalized_preaccess_not_executed",
+  "attempt_id": "G00C_D1_AUTHORITY_DEV35_A1",
+  "workspace_relative_uri": "../credo_v4_gse314342_g00_20260816/G00C_D1_AUTHORITY_DEV35_A1",
+  "code_commit": "bb21d0785568461ccddf642aa86ae0b16ccb829d",
+  "package_version": "4.0.0.dev35",
+  "implementation_tree_sha256": "9a084bede5ff6f15891765c9e9a7caa01ce2a10865d5903152d87dfed27d05bf",
+  "wheel_sha256": "fb2a282ea61fb55175582790f4ecfe5930935e5c4d4b033d6ee3b06e1a4ec53a",
+  "normalized_sdist_sha256": "14aab7040bfb81b6991d427272bbec9001592db20c2715e97ae484fc758a3d69",
+  "authority_id": "dbfa9b0b7fe65f636c07ab920c55826ac961d6385a847b5ec77367c6b03228a5",
+  "authority_sha256": "9d12c5ed6f9b795e429fbe916ef8f940fc84abbdc21ede27af4d1e64acda02ad",
+  "selection_freeze_id": "26ab03780bb5846c80e39f452162f35e0e983b5af74df83bd38e5b7fd05bec98",
+  "selection_freeze_sha256": "70cc68636da5467cde7cff15251a8422c3a323f7d3c393f0101480c43105cfe3",
+  "seed_schedule_id": "51ac2ad1140303734e7ee45aacd4c46c9174444ec75849934d29741a2f554c4c",
+  "seed_schedule_sha256": "fc8edc415d11e4d8ac9f91874999b345a566a75a70c8f80ae933b474f649bee6",
+  "source_access_receipt_sha256": "02b9e0ace2a3e9c7fcde7c080c874498f9e0889869fa9f6500cc3eed4858517c",
+  "external_provenance_index_sha256": "793a76dc00dc5643b99e733fe7f4c8f9cd8021af098c92bbf9a92606e479c8bf",
+  "external_sha256_manifest_sha256": "4e32f33e383653bab801107e6d4be23a5082100096d17ce3cae01ffe9ac96a4e",
+  "row_roles": {
+    "training_fit": 16924672,
+    "training_validation": 65536,
+    "heldout_source_query": 1752037,
+    "protected_heldout_stimulated": 3254597
+  },
+  "expression_access": false,
+  "g00c_execution": "not_run",
+  "g00d": "blocked",
+  "gpu_or_training": false,
+  "biological_claims": false
+}
