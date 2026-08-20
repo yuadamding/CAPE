@@ -178,6 +178,12 @@ def freeze(args: argparse.Namespace) -> None:
                     dev35._copy(source, temporary / relative)
             implementation_dir = temporary / "implementations"
             implementation_dir.mkdir(parents=True, exist_ok=True)
+            # These semantic configuration bytes remain parents of the Dev34
+            # selection freeze. Dev37 replaces executable verifier code, but
+            # must preserve the exact non-code parents from the bootstrap
+            # authority so the complete freeze can be independently reopened.
+            for name in ("refit-model-config.json", "common-support-prior.json"):
+                dev35._copy(bootstrap / "implementations" / name, implementation_dir / name)
             monitor_path = implementation_dir / "monitor.py"
             dev35._copy(args.monitor_implementation.resolve(), monitor_path)
             implementation_paths = {
