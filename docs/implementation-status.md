@@ -181,6 +181,16 @@ Its status is `pass_engineering_canary`, not a claim-bearing G00C pass; it may
 not parent G00D or G04. See the
 [Dev33-B extraction-canary record](g00-dev33b-extraction-canary.md).
 
+Dev34-A closes the canary and freezes the next claim-bearing G00C contract. It
+expands all 59 paired-refit seed streams before result access, makes the feature
+selection result a cryptographic parent of cell-budget selection, evaluates
+every feature prefix on the same 4,096-feature weighted-count denominator, and
+adds terminal `fail_no_saturation` when the 2M reference alone qualifies. The
+fixed feature and cell margins are both `1e-4` nats per weighted validation
+count. No cohort expression, G00C execution, G00D, GPU, model, or biological
+result is part of Dev34-A. See the
+[Dev34-A claim-contract record](g00-dev34a-claim-contract.md).
+
 Dev7 replaced the invalid reconstructed-SVD softmax with a checkpoint-owned
 multinomial count-composition decoder. Dev10 added a deterministic
 training-only validation holdout and minimum-validation-cross-entropy
@@ -227,7 +237,7 @@ conditional-interaction, and joint nulls, freezes fold and seed identities,
 and strengthens noninteraction comparators. That T03 code remains unqualified
 until T01, T02, and the prescribed pooled pilot pass.
 
-Deliberately not asserted complete in `4.0.0.dev33`:
+Deliberately not asserted complete in `4.0.0.dev34`:
 
 - stable CREDO entry-point discovery;
 - in-repository real-cohort adapters, biological thresholds, or biological claims;

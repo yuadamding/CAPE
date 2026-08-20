@@ -1,5 +1,22 @@
 # Changelog
 
+## 4.0.0.dev34 — 2026-08-20
+
+- close Dev33-B as a finalized, non-promotable engineering canary and forbid
+  reuse of its feature, row, sampler, or compact-payload artifacts;
+- add a fully expanded, hash-derived 59-draw seed schedule with six independent
+  streams and exact selected/reference/audit replay requirements;
+- freeze feature-then-cell selection so the cell-budget result must bind the
+  selected feature-result identity, feature count, and ordered-feature hash;
+- score every feature prefix on the same 4,096-feature validation support by
+  expanding omitted mass with frozen checkpoint-specific training frequencies;
+- fix both equivalence margins at `1e-4` nats per weighted validation count;
+- add the terminal `fail_no_saturation` state when only the two-million-cell
+  extension reference qualifies, explicitly forbidding a third extension; and
+- add status-dependent publication surfaces and adversarial contract tests
+  without reading cohort expression, running G00C/G00D, using a GPU, or making
+  a model or biological claim.
+
 ## 4.0.0.dev33 — 2026-08-17
 
 - retain accepted Dev32 and its external B0-A2 source-plane parents unchanged;

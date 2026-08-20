@@ -16,6 +16,7 @@ from ..canonical import contract_id, validate_relative_uri
 from ..errors import ContractError
 
 Sha256 = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+GitCommit = Annotated[str, Field(pattern=r"^[0-9a-f]{40}$")]
 
 
 class StrictModel(BaseModel):
@@ -2655,6 +2656,542 @@ class G00CDecisionReceiptV2(StrictModel):
         return self
 
 
+class G00CParentBindingV1(StrictModel):
+    """One immutable B0-A2 parent used by the Dev34 G00C selection freeze."""
+
+    role: Literal[
+        "g00a_v2",
+        "g00b_v2",
+        "source_plane_amendment",
+        "source_plane_amendment_receipt",
+        "source_plane_decision_receipt",
+        "b0_a2_execution_amendment",
+    ]
+    identity_field: str = Field(min_length=1)
+    identity_value: str = Field(min_length=1)
+    artifact: ArtifactRef
+
+
+class G00CCanaryPrerequisiteV1(StrictModel):
+    """Finalized Dev33-B prerequisite that is forbidden as a claim parent."""
+
+    dev33_code_commit: GitCommit
+    dev33_wheel_sha256: Sha256
+    canary_contract_id: Sha256
+    execution_record_commit: GitCommit
+    independent_verification_id: Sha256
+    final_audit_id: Sha256
+    authority_archive_uri: str = Field(min_length=1)
+    authority_archive_sha256: Sha256
+    evidence_role: Literal["engineering_canary"] = "engineering_canary"
+    prerequisite_satisfied: Literal[True] = True
+    promotion_eligible: Literal[False] = False
+    parent_eligible: Literal[False] = False
+    feature_artifact_reuse_permitted: Literal[False] = False
+    row_artifact_reuse_permitted: Literal[False] = False
+    sampler_artifact_reuse_permitted: Literal[False] = False
+    compact_payload_reuse_permitted: Literal[False] = False
+
+
+class G00CRefitSeedRecordV1(StrictModel):
+    """Expanded deterministic seed streams for one paired refit draw."""
+
+    draw_id: int = Field(ge=0, le=58)
+    initialization: int = Field(ge=0, le=2**64 - 1)
+    training_sampler: int = Field(ge=0, le=2**64 - 1)
+    thinning: int = Field(ge=0, le=2**64 - 1)
+    validation_evaluation: int = Field(ge=0, le=2**64 - 1)
+    stochastic_optimizer_or_augmentation: int = Field(ge=0, le=2**64 - 1)
+    restart_interruption_point: int = Field(ge=0, le=2**64 - 1)
+
+
+class G00CRefitSeedScheduleV1(StrictModel):
+    """Hash-bound, pre-result seed schedule shared by every paired candidate."""
+
+    schema_version: Literal[1] = 1
+    schedule_id: str
+    derivation: Literal["sha256_namespace_fold_stage_draw_stream_uint64_be_v1"] = (
+        "sha256_namespace_fold_stage_draw_stream_uint64_be_v1"
+    )
+    derivation_namespace_id: Sha256
+    fold_id: Literal["lodo-D1"] = "lodo-D1"
+    stage: Literal["g00c_feature_and_cell_selection"] = "g00c_feature_and_cell_selection"
+    records: tuple[G00CRefitSeedRecordV1, ...]
+    paired_across_candidates: Literal[True] = True
+    selected_candidate_replay_draw_ids: tuple[int, ...] = tuple(range(59))
+    reference_candidate_replay_draw_ids: tuple[int, ...] = tuple(range(59))
+    other_candidate_replay_draw_ids: tuple[int, ...] = (
+        0,
+        6,
+        12,
+        18,
+        24,
+        30,
+        36,
+        42,
+        48,
+        58,
+    )
+
+    @model_validator(mode="after")
+    def validate_schedule(self) -> G00CRefitSeedScheduleV1:
+        if tuple(record.draw_id for record in self.records) != tuple(range(59)):
+            raise ValueError("Dev34 seed schedule requires ordered draw IDs 0..58.")
+        values = [
+            seed
+            for record in self.records
+            for seed in (
+                record.initialization,
+                record.training_sampler,
+                record.thinning,
+                record.validation_evaluation,
+                record.stochastic_optimizer_or_augmentation,
+                record.restart_interruption_point,
+            )
+        ]
+        if len(values) != len(set(values)):
+            raise ValueError("Dev34 expanded seed streams must not collide.")
+        if self.selected_candidate_replay_draw_ids != tuple(range(59)):
+            raise ValueError("Dev34 must replay all selected-candidate draws.")
+        if self.reference_candidate_replay_draw_ids != tuple(range(59)):
+            raise ValueError("Dev34 must replay all reference-candidate draws.")
+        if self.other_candidate_replay_draw_ids != (0, 6, 12, 18, 24, 30, 36, 42, 48, 58):
+            raise ValueError("Dev34 nonselected replay draws differ from the frozen subset.")
+        expected = self.identity(id_field="schedule_id")
+        if self.schedule_id != expected:
+            raise ValueError(f"schedule_id mismatch: expected {expected}.")
+        return self
+
+
+class G00CFeatureRankingFreezeV1(StrictModel):
+    """Training-only 4,096-feature ranking at the frozen one-million-row scale."""
+
+    method: Literal["checkpoint_conditioned_poisson_deviance_v1"] = (
+        "checkpoint_conditioned_poisson_deviance_v1"
+    )
+    library_size_offset: Literal["log_total_primary_umi"] = "log_total_primary_umi"
+    checkpoint_effect: Literal["fixed_intercept_per_checkpoint"] = "fixed_intercept_per_checkpoint"
+    score: Literal["summed_poisson_deviance_from_checkpoint_null"] = (
+        "summed_poisson_deviance_from_checkpoint_null"
+    )
+    tie_breaks: tuple[Literal["total_umi_desc", "detection_count_desc", "feature_id_utf8_asc"], ...]
+    fit_reference_cells: Literal[1_000_000] = 1_000_000
+    fit_reference_rows_hash: Sha256
+    validation_rows_hash: Sha256
+    candidate_feature_counts: tuple[int, ...] = (256, 512, 1024, 2048, 4096)
+    reference_feature_count: Literal[4096] = 4096
+    custom001_puror_is_sidecar: Literal[True] = True
+    custom001_puror_in_primary_metric: Literal[False] = False
+
+    @model_validator(mode="after")
+    def validate_ranking(self) -> G00CFeatureRankingFreezeV1:
+        if self.candidate_feature_counts != (256, 512, 1024, 2048, 4096):
+            raise ValueError("Dev34 feature candidates must equal the frozen prefix grid.")
+        if self.tie_breaks != (
+            "total_umi_desc",
+            "detection_count_desc",
+            "feature_id_utf8_asc",
+        ):
+            raise ValueError("Dev34 feature ranking requires the complete frozen tie-break order.")
+        return self
+
+
+class G00CCommonSupportFeatureMetricV1(StrictModel):
+    """Common 4,096-feature scoring surface for every prefix candidate."""
+
+    reference_feature_count: Literal[4096] = 4096
+    candidate_feature_counts: tuple[int, ...] = (256, 512, 1024, 2048, 4096)
+    candidate_distribution: Literal["prefix_plus_residual_category_v1"] = (
+        "prefix_plus_residual_category_v1"
+    )
+    omitted_mass_expansion: Literal[
+        "frozen_checkpoint_specific_training_only_frequency_vector_v1"
+    ] = "frozen_checkpoint_specific_training_only_frequency_vector_v1"
+    checkpoint_ids: tuple[Literal["Rest", "Stim8hr", "Stim48hr"], ...] = (
+        "Rest",
+        "Stim8hr",
+        "Stim48hr",
+    )
+    residual_frequency_artifact: ArtifactRef
+    residual_frequency_fit_rows_hash: Sha256
+    validation_support: Literal["same_frozen_4096_features_for_every_candidate"] = (
+        "same_frozen_4096_features_for_every_candidate"
+    )
+    validation_count_total: Literal["identical_across_feature_candidates"] = (
+        "identical_across_feature_candidates"
+    )
+    metric_unit: Literal["nats_per_weighted_validation_count"] = (
+        "nats_per_weighted_validation_count"
+    )
+    inverse_probability_weights_paired: Literal[True] = True
+    custom001_puror_excluded: Literal[True] = True
+    comparison: Literal["q95_absolute_paired_nll_difference_to_4096"] = (
+        "q95_absolute_paired_nll_difference_to_4096"
+    )
+    feature_equivalence_epsilon: Literal[0.0001] = 0.0001
+    selection_rule: Literal["smallest_qualifying_prefix_v1"] = "smallest_qualifying_prefix_v1"
+
+    @model_validator(mode="after")
+    def validate_metric(self) -> G00CCommonSupportFeatureMetricV1:
+        if self.candidate_feature_counts != (256, 512, 1024, 2048, 4096):
+            raise ValueError("Dev34 common-support candidates must equal the frozen prefix grid.")
+        if self.checkpoint_ids != ("Rest", "Stim8hr", "Stim48hr"):
+            raise ValueError("Dev34 common-support checkpoints must follow physical chronology.")
+        return self
+
+
+class G00CSerialSelectionFreezeV1(StrictModel):
+    """Feature selection must become an immutable parent of cell selection."""
+
+    serial_dependency: Literal["feature_then_cell_budget_v1"] = "feature_then_cell_budget_v1"
+    frozen_nested_training_row_order_hash: Sha256
+    feature_selection_reference_rows_hash: Sha256
+    feature_selection_training_cells: Literal[1_000_000] = 1_000_000
+    feature_selection_uses_first_rows_of_frozen_nested_order: Literal[True] = True
+    feature_result_frozen_before_cell_curve_access: Literal[True] = True
+    ranking_recomputed_per_cell_candidate: Literal[False] = False
+    feature_width_changed_per_cell_candidate: Literal[False] = False
+    sample_result_binds_parent_feature_selection_result_sha256: Literal[True] = True
+    sample_result_binds_selected_feature_count: Literal[True] = True
+    sample_result_binds_selected_feature_order_sha256: Literal[True] = True
+    smaller_cell_budget_interpretation: Literal[
+        "model_fit_budget_conditional_on_one_million_cell_feature_selection"
+    ] = "model_fit_budget_conditional_on_one_million_cell_feature_selection"
+
+
+class G00CSelectionMarginFreezeV1(StrictModel):
+    """Fixed, pre-result feature and cell equivalence margins."""
+
+    metric_unit: Literal["nats_per_weighted_validation_count"] = (
+        "nats_per_weighted_validation_count"
+    )
+    feature_equivalence_epsilon: Literal[0.0001] = 0.0001
+    cell_equivalence_epsilon: Literal[0.0001] = 0.0001
+    candidate_curve_values_accessed: Literal[False] = False
+    cohort_expression_values_accessed: Literal[False] = False
+    heldout_stimulated_expression_values_accessed: Literal[False] = False
+
+
+class G00CRefitFreezeV1(StrictModel):
+    """Exact paired-refit identity shared by feature and cell selection."""
+
+    seed_schedule_id: Sha256
+    seed_schedule_artifact: ArtifactRef
+    count_thinning_method: Literal["paired_binomial_half_count_v1"] = (
+        "paired_binomial_half_count_v1"
+    )
+    model_family: Literal["checkpoint_conditioned_multinomial_intercept_v1"] = (
+        "checkpoint_conditioned_multinomial_intercept_v1"
+    )
+    initial_state: Literal["closed_form_zero_state"] = "closed_form_zero_state"
+    optimizer: Literal["closed_form_no_optimizer"] = "closed_form_no_optimizer"
+    maximum_updates: Literal[0] = 0
+    pseudocount: float = Field(default=0.5, gt=0.0)
+    model_config_hash: Sha256
+    replay_implementation_sha256: Sha256
+    exact_replay_required: Literal[True] = True
+
+
+class G00CFeatureSelectionResultV3(StrictModel):
+    """Common-support feature result that can parent sample-size selection."""
+
+    schema_version: Literal[3] = 3
+    result_id: str
+    curve: ArtifactRef
+    refit_records: ArtifactRef
+    ordered_features: ArtifactRef
+    common_support_metric_receipt: ArtifactRef
+    fit_rows_hash: Sha256
+    validation_rows_hash: Sha256
+    selected_feature_count: Literal[256, 512, 1024, 2048, 4096]
+    selected_feature_order_sha256: Sha256
+    metric_unit: Literal["nats_per_weighted_validation_count"] = (
+        "nats_per_weighted_validation_count"
+    )
+    validation_count_total_identical_across_candidates: Literal[True] = True
+    selected_at_reference: bool
+
+    @model_validator(mode="after")
+    def validate_feature_result(self) -> G00CFeatureSelectionResultV3:
+        if self.selected_at_reference != (self.selected_feature_count == 4096):
+            raise ValueError("selected_at_reference disagrees with selected feature count.")
+        expected = self.identity(id_field="result_id")
+        if self.result_id != expected:
+            raise ValueError(f"result_id mismatch: expected {expected}.")
+        return self
+
+
+class G00CSampleSizeSelectionResultV3(StrictModel):
+    """Serially bound sample result with a terminal no-saturation state."""
+
+    schema_version: Literal[3] = 3
+    result_id: str
+    grid_stage: Literal["base", "extension"]
+    curve: ArtifactRef
+    refit_records: ArtifactRef
+    training_scale_row_order: ArtifactRef
+    parent_feature_selection_result_sha256: Sha256
+    selected_feature_count: Literal[256, 512, 1024, 2048, 4096]
+    selected_feature_order_sha256: Sha256
+    serial_dependency: Literal["feature_then_cell_budget_v1"] = "feature_then_cell_budget_v1"
+    base_grid_extension_required_receipt: ArtifactRef | None = None
+    selection_status: Literal["selected", "extension_required", "fail_no_saturation"]
+    selected_training_rows: ArtifactRef | None = None
+    selected_training_cells: int | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def validate_sample_result(self) -> G00CSampleSizeSelectionResultV3:
+        if self.grid_stage == "base":
+            if self.base_grid_extension_required_receipt is not None:
+                raise ValueError("The base sample-size result cannot bind an extension parent.")
+            if self.selection_status == "fail_no_saturation":
+                raise ValueError("Base-grid nonsaturation must emit extension_required.")
+            if self.selection_status == "selected" and self.selected_training_cells not in (
+                50_000,
+                100_000,
+                250_000,
+                500_000,
+            ):
+                raise ValueError("A base selection must be a frozen sub-million candidate.")
+        else:
+            if self.base_grid_extension_required_receipt is None:
+                raise ValueError("The extension result requires the base stop receipt.")
+            if self.selection_status == "extension_required":
+                raise ValueError("A third sample-size extension is forbidden.")
+            if self.selection_status == "selected" and self.selected_training_cells not in (
+                50_000,
+                100_000,
+                250_000,
+                500_000,
+                1_000_000,
+            ):
+                raise ValueError("The extension reference alone is fail_no_saturation.")
+        if self.selection_status == "selected":
+            if self.selected_training_cells is None or self.selected_training_rows is None:
+                raise ValueError("A selected sample size requires its exact row artifact.")
+        elif self.selected_training_cells is not None or self.selected_training_rows is not None:
+            raise ValueError("A nonselected sample-size result cannot publish selected rows.")
+        expected = self.identity(id_field="result_id")
+        if self.result_id != expected:
+            raise ValueError(f"result_id mismatch: expected {expected}.")
+        return self
+
+
+class G00CSupportAuditFreezeV1(StrictModel):
+    """Mandatory support diagnostics for every candidate row budget."""
+
+    dimensions: tuple[
+        Literal[
+            "donor_checkpoint",
+            "target",
+            "guide",
+            "control_vs_targeting",
+            "sampler_stratum",
+        ],
+        ...,
+    ]
+    candidate_cell_counts: tuple[int, ...] = (
+        50_000,
+        100_000,
+        250_000,
+        500_000,
+        1_000_000,
+        2_000_000,
+    )
+    report_zero_support_strata: Literal[True] = True
+    reject_declared_zero_support_strata: Literal[True] = True
+    silent_weight_renormalization_permitted: Literal[False] = False
+    report_minimum_and_maximum_cells_per_stratum: Literal[True] = True
+    report_weight_distribution: Literal[True] = True
+    report_weighted_effective_sample_size: Literal[True] = True
+    report_maximum_to_median_weight_ratio: Literal[True] = True
+
+    @model_validator(mode="after")
+    def validate_support(self) -> G00CSupportAuditFreezeV1:
+        expected = (
+            "donor_checkpoint",
+            "target",
+            "guide",
+            "control_vs_targeting",
+            "sampler_stratum",
+        )
+        if self.dimensions != expected:
+            raise ValueError("Dev34 support audit dimensions must equal the frozen ordered set.")
+        return self
+
+
+class G00CMonitorFreezeV1(StrictModel):
+    """Process-tree monitor completeness and bounded-memory contract."""
+
+    implementation_sha256: Sha256
+    polling_interval_milliseconds: int = Field(ge=10, le=1000)
+    maximum_unreadable_samples: int = Field(ge=0)
+    maximum_unreadable_fraction: float = Field(ge=0.0, le=0.01)
+    maximum_consecutive_unreadable_samples: int = Field(ge=0, le=10)
+    maximum_temporal_gap_milliseconds: int = Field(ge=10, le=5000)
+    process_tree_coverage_required: Literal[True] = True
+    child_process_aggregation_required: Literal[True] = True
+    expression_access_start_covered: Literal[True] = True
+    expression_access_end_covered: Literal[True] = True
+    maximum_process_tree_rss_bytes: int = Field(gt=0)
+
+
+class G00CPublicationFreezeV1(StrictModel):
+    """Fresh-workspace publication and status-dependent evidence surface."""
+
+    fresh_workspace_required: Literal[True] = True
+    candidate_workspace_rename_permitted: Literal[False] = False
+    canary_payload_reuse_permitted: Literal[False] = False
+    canary_selection_artifact_reuse_permitted: Literal[False] = False
+    selected_view_rebuilt_from_g00b: Literal[True] = True
+    manifest_last: Literal[True] = True
+    no_clobber: Literal[True] = True
+    always_required_artifacts: tuple[str, ...]
+    pass_only_required_artifacts: tuple[str, ...]
+    extension_required_artifacts: tuple[str, ...]
+    fail_no_saturation_required_artifacts: tuple[str, ...]
+    selected_artifacts_forbidden_on_nonpass: Literal[True] = True
+    terminal_statuses: tuple[
+        Literal["pass", "extension_required", "fail_no_saturation", "failed_integrity"], ...
+    ] = ("pass", "extension_required", "fail_no_saturation", "failed_integrity")
+    stop_before_g00d: Literal[True] = True
+
+    @model_validator(mode="after")
+    def validate_publication(self) -> G00CPublicationFreezeV1:
+        always = {
+            "G00C_REFIT_SEED_SCHEDULE.json",
+            "ROW_HASHES.json",
+            "FEATURE_SELECTION_CURVE.parquet",
+            "CELL_SELECTION_CURVE.parquet",
+            "REFIT_PROVENANCE.parquet",
+            "REPLAY_AUDIT.json",
+            "SUPPORT_AUDIT.parquet",
+            "SAMPLER_RESTART.json",
+            "DECISION_RECEIPT.json",
+            "artifacts.json",
+            "COMMITTED",
+            "SHA256SUMS",
+        }
+        passed = {
+            "SELECTED_FEATURES.parquet",
+            "SELECTED_ROWS.parquet",
+            "compact.h5",
+            "puroR-sidecar.h5",
+            "PHYSICAL_RUNS.parquet",
+            "COMPACT_VERIFICATION.json",
+            "WRITER_RESTART.json",
+        }
+        extension = {"BASE_GRID_STOP_RECEIPT.json"}
+        nonsaturation = {"BASE_GRID_STOP_RECEIPT.json", "EXTENSION_RESULT.json"}
+        observed = (
+            self.always_required_artifacts,
+            self.pass_only_required_artifacts,
+            self.extension_required_artifacts,
+            self.fail_no_saturation_required_artifacts,
+        )
+        expected = (always, passed, extension, nonsaturation)
+        if any(
+            set(items) != required or len(items) != len(required)
+            for items, required in zip(observed, expected, strict=True)
+        ):
+            raise ValueError("Dev34 publication artifacts differ from the frozen status surfaces.")
+        return self
+
+
+class G00CSelectionFreezeContractV1(StrictModel):
+    """Dev34-A no-expression contract for one promotion-eligible G00C fold."""
+
+    schema_version: Literal[1] = 1
+    freeze_id: str
+    parent_bindings: tuple[G00CParentBindingV1, ...]
+    dev33_canary: G00CCanaryPrerequisiteV1
+    outer_split_id: Literal["lodo-D1"] = "lodo-D1"
+    training_donor_ids: tuple[Literal["D2", "D3", "D4"], ...] = ("D2", "D3", "D4")
+    heldout_donor_id: Literal["D1"] = "D1"
+    parent_eligible_rows: Literal[21_996_842] = 21_996_842
+    row_roles: tuple[FoldRowRoleRecord, ...]
+    row_role_freeze: ArtifactRef
+    training_scale_row_order_hash: Sha256
+    seed_schedule: G00CRefitSeedScheduleV1
+    seed_schedule_artifact: ArtifactRef
+    feature_ranking: G00CFeatureRankingFreezeV1
+    common_support_metric: G00CCommonSupportFeatureMetricV1
+    serial_selection: G00CSerialSelectionFreezeV1
+    selection_margins: G00CSelectionMarginFreezeV1
+    refits: G00CRefitFreezeV1
+    base_cell_grid: tuple[int, ...] = (50_000, 100_000, 250_000, 500_000, 1_000_000)
+    extension_additional_cell_grid: tuple[int, ...] = (2_000_000,)
+    extension_requires_new_contract: Literal[True] = True
+    third_extension_permitted: Literal[False] = False
+    support_audit: G00CSupportAuditFreezeV1
+    monitor: G00CMonitorFreezeV1
+    publication: G00CPublicationFreezeV1
+    protected_heldout_stimulated_expression_values_accessed_during_freeze: Literal[False] = False
+    any_cohort_expression_values_accessed_during_freeze: Literal[False] = False
+    execution_backend: Literal["cpu_only"] = "cpu_only"
+    g00c_status: Literal["contract_frozen_not_run"] = "contract_frozen_not_run"
+    g00d_status: Literal["blocked"] = "blocked"
+    g04_g07_g08_status: Literal["blocked"] = "blocked"
+    biological_claims: Literal[False] = False
+
+    @model_validator(mode="after")
+    def validate_freeze(self) -> G00CSelectionFreezeContractV1:
+        expected_roles = (
+            "g00a_v2",
+            "g00b_v2",
+            "source_plane_amendment",
+            "source_plane_amendment_receipt",
+            "source_plane_decision_receipt",
+            "b0_a2_execution_amendment",
+        )
+        if tuple(binding.role for binding in self.parent_bindings) != expected_roles:
+            raise ValueError("Dev34 requires the six ordered B0-A2 parent bindings.")
+        if self.training_donor_ids != ("D2", "D3", "D4"):
+            raise ValueError("Dev34 fold 0 requires ordered training donors D2, D3, D4.")
+        roles = tuple(record.role for record in self.row_roles)
+        expected_row_roles = (
+            "training_fit",
+            "training_validation",
+            "heldout_source_query",
+            "protected_heldout_stimulated",
+        )
+        if (
+            roles != expected_row_roles
+            or sum(record.rows for record in self.row_roles) != self.parent_eligible_rows
+        ):
+            raise ValueError("Dev34 row roles must be ordered, complete, and reconcile to G00B.")
+        if self.base_cell_grid != (50_000, 100_000, 250_000, 500_000, 1_000_000):
+            raise ValueError("Dev34 base cell grid differs from the frozen grid.")
+        if self.extension_additional_cell_grid != (2_000_000,):
+            raise ValueError("Dev34 extension must add exactly two million cells.")
+        validation_hash = next(
+            record.row_ids_hash for record in self.row_roles if record.role == "training_validation"
+        )
+        if self.feature_ranking.validation_rows_hash != validation_hash:
+            raise ValueError("Dev34 feature validation rows differ from the frozen role.")
+        if (
+            self.serial_selection.frozen_nested_training_row_order_hash
+            != self.training_scale_row_order_hash
+        ):
+            raise ValueError("Dev34 serial selection must bind the frozen nested row order.")
+        if (
+            self.serial_selection.feature_selection_reference_rows_hash
+            != self.feature_ranking.fit_reference_rows_hash
+        ):
+            raise ValueError("Dev34 serial selection must bind the one-million-row prefix.")
+        if (
+            self.common_support_metric.residual_frequency_fit_rows_hash
+            != self.feature_ranking.fit_reference_rows_hash
+        ):
+            raise ValueError("Dev34 residual frequencies must use the frozen ranking rows.")
+        if self.refits.seed_schedule_id != self.seed_schedule.schedule_id:
+            raise ValueError("Dev34 refits must bind the expanded seed schedule.")
+        expected = self.identity(id_field="freeze_id")
+        if self.freeze_id != expected:
+            raise ValueError(f"freeze_id mismatch: expected {expected}.")
+        return self
+
+
 class G00DParityGateContract(StrictModel):
     """Frozen comparison semantics for one integrated-loader parity gate."""
 
@@ -3254,7 +3791,7 @@ class CompiledRunContract(StrictModel):
     schema_version: int = 1
     compiled_run_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev33"] = "4.0.dev33"
+    recipe_version: Literal["4.0.dev34"] = "4.0.dev34"
     recipe_wheel_hash: Sha256
     frozen_credo_artifact_hash: Sha256
     environment_lock_hash: Sha256
@@ -3321,7 +3858,7 @@ class InferenceBundleManifest(StrictModel):
     compiled_run_id: str
     selected_checkpoint_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev33"] = "4.0.dev33"
+    recipe_version: Literal["4.0.dev34"] = "4.0.dev34"
     selected_family: Literal[
         "configured_checkpoint",
         "gene_decoder_selected",

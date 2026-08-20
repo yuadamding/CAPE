@@ -1,0 +1,1392 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    },
+    "FoldRowRoleRecord": {
+      "additionalProperties": false,
+      "description": "One frozen row role in a fold-native extraction.",
+      "properties": {
+        "role": {
+          "enum": [
+            "training_fit",
+            "training_validation",
+            "heldout_source_query",
+            "protected_heldout_stimulated"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "row_ids_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Row Ids Hash",
+          "type": "string"
+        },
+        "rows": {
+          "exclusiveMinimum": 0,
+          "title": "Rows",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "role",
+        "rows",
+        "row_ids_hash"
+      ],
+      "title": "FoldRowRoleRecord",
+      "type": "object"
+    },
+    "G00CCanaryPrerequisiteV1": {
+      "additionalProperties": false,
+      "description": "Finalized Dev33-B prerequisite that is forbidden as a claim parent.",
+      "properties": {
+        "authority_archive_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Authority Archive Sha256",
+          "type": "string"
+        },
+        "authority_archive_uri": {
+          "minLength": 1,
+          "title": "Authority Archive Uri",
+          "type": "string"
+        },
+        "canary_contract_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Canary Contract Id",
+          "type": "string"
+        },
+        "compact_payload_reuse_permitted": {
+          "const": false,
+          "default": false,
+          "title": "Compact Payload Reuse Permitted",
+          "type": "boolean"
+        },
+        "dev33_code_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Dev33 Code Commit",
+          "type": "string"
+        },
+        "dev33_wheel_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Dev33 Wheel Sha256",
+          "type": "string"
+        },
+        "evidence_role": {
+          "const": "engineering_canary",
+          "default": "engineering_canary",
+          "title": "Evidence Role",
+          "type": "string"
+        },
+        "execution_record_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Execution Record Commit",
+          "type": "string"
+        },
+        "feature_artifact_reuse_permitted": {
+          "const": false,
+          "default": false,
+          "title": "Feature Artifact Reuse Permitted",
+          "type": "boolean"
+        },
+        "final_audit_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Final Audit Id",
+          "type": "string"
+        },
+        "independent_verification_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Independent Verification Id",
+          "type": "string"
+        },
+        "parent_eligible": {
+          "const": false,
+          "default": false,
+          "title": "Parent Eligible",
+          "type": "boolean"
+        },
+        "prerequisite_satisfied": {
+          "const": true,
+          "default": true,
+          "title": "Prerequisite Satisfied",
+          "type": "boolean"
+        },
+        "promotion_eligible": {
+          "const": false,
+          "default": false,
+          "title": "Promotion Eligible",
+          "type": "boolean"
+        },
+        "row_artifact_reuse_permitted": {
+          "const": false,
+          "default": false,
+          "title": "Row Artifact Reuse Permitted",
+          "type": "boolean"
+        },
+        "sampler_artifact_reuse_permitted": {
+          "const": false,
+          "default": false,
+          "title": "Sampler Artifact Reuse Permitted",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "dev33_code_commit",
+        "dev33_wheel_sha256",
+        "canary_contract_id",
+        "execution_record_commit",
+        "independent_verification_id",
+        "final_audit_id",
+        "authority_archive_uri",
+        "authority_archive_sha256"
+      ],
+      "title": "G00CCanaryPrerequisiteV1",
+      "type": "object"
+    },
+    "G00CCommonSupportFeatureMetricV1": {
+      "additionalProperties": false,
+      "description": "Common 4,096-feature scoring surface for every prefix candidate.",
+      "properties": {
+        "candidate_distribution": {
+          "const": "prefix_plus_residual_category_v1",
+          "default": "prefix_plus_residual_category_v1",
+          "title": "Candidate Distribution",
+          "type": "string"
+        },
+        "candidate_feature_counts": {
+          "default": [
+            256,
+            512,
+            1024,
+            2048,
+            4096
+          ],
+          "items": {
+            "type": "integer"
+          },
+          "title": "Candidate Feature Counts",
+          "type": "array"
+        },
+        "checkpoint_ids": {
+          "default": [
+            "Rest",
+            "Stim8hr",
+            "Stim48hr"
+          ],
+          "items": {
+            "enum": [
+              "Rest",
+              "Stim8hr",
+              "Stim48hr"
+            ],
+            "type": "string"
+          },
+          "title": "Checkpoint Ids",
+          "type": "array"
+        },
+        "comparison": {
+          "const": "q95_absolute_paired_nll_difference_to_4096",
+          "default": "q95_absolute_paired_nll_difference_to_4096",
+          "title": "Comparison",
+          "type": "string"
+        },
+        "custom001_puror_excluded": {
+          "const": true,
+          "default": true,
+          "title": "Custom001 Puror Excluded",
+          "type": "boolean"
+        },
+        "feature_equivalence_epsilon": {
+          "const": 0.0001,
+          "default": 0.0001,
+          "title": "Feature Equivalence Epsilon",
+          "type": "number"
+        },
+        "inverse_probability_weights_paired": {
+          "const": true,
+          "default": true,
+          "title": "Inverse Probability Weights Paired",
+          "type": "boolean"
+        },
+        "metric_unit": {
+          "const": "nats_per_weighted_validation_count",
+          "default": "nats_per_weighted_validation_count",
+          "title": "Metric Unit",
+          "type": "string"
+        },
+        "omitted_mass_expansion": {
+          "const": "frozen_checkpoint_specific_training_only_frequency_vector_v1",
+          "default": "frozen_checkpoint_specific_training_only_frequency_vector_v1",
+          "title": "Omitted Mass Expansion",
+          "type": "string"
+        },
+        "reference_feature_count": {
+          "const": 4096,
+          "default": 4096,
+          "title": "Reference Feature Count",
+          "type": "integer"
+        },
+        "residual_frequency_artifact": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "residual_frequency_fit_rows_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Residual Frequency Fit Rows Hash",
+          "type": "string"
+        },
+        "selection_rule": {
+          "const": "smallest_qualifying_prefix_v1",
+          "default": "smallest_qualifying_prefix_v1",
+          "title": "Selection Rule",
+          "type": "string"
+        },
+        "validation_count_total": {
+          "const": "identical_across_feature_candidates",
+          "default": "identical_across_feature_candidates",
+          "title": "Validation Count Total",
+          "type": "string"
+        },
+        "validation_support": {
+          "const": "same_frozen_4096_features_for_every_candidate",
+          "default": "same_frozen_4096_features_for_every_candidate",
+          "title": "Validation Support",
+          "type": "string"
+        }
+      },
+      "required": [
+        "residual_frequency_artifact",
+        "residual_frequency_fit_rows_hash"
+      ],
+      "title": "G00CCommonSupportFeatureMetricV1",
+      "type": "object"
+    },
+    "G00CFeatureRankingFreezeV1": {
+      "additionalProperties": false,
+      "description": "Training-only 4,096-feature ranking at the frozen one-million-row scale.",
+      "properties": {
+        "candidate_feature_counts": {
+          "default": [
+            256,
+            512,
+            1024,
+            2048,
+            4096
+          ],
+          "items": {
+            "type": "integer"
+          },
+          "title": "Candidate Feature Counts",
+          "type": "array"
+        },
+        "checkpoint_effect": {
+          "const": "fixed_intercept_per_checkpoint",
+          "default": "fixed_intercept_per_checkpoint",
+          "title": "Checkpoint Effect",
+          "type": "string"
+        },
+        "custom001_puror_in_primary_metric": {
+          "const": false,
+          "default": false,
+          "title": "Custom001 Puror In Primary Metric",
+          "type": "boolean"
+        },
+        "custom001_puror_is_sidecar": {
+          "const": true,
+          "default": true,
+          "title": "Custom001 Puror Is Sidecar",
+          "type": "boolean"
+        },
+        "fit_reference_cells": {
+          "const": 1000000,
+          "default": 1000000,
+          "title": "Fit Reference Cells",
+          "type": "integer"
+        },
+        "fit_reference_rows_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Fit Reference Rows Hash",
+          "type": "string"
+        },
+        "library_size_offset": {
+          "const": "log_total_primary_umi",
+          "default": "log_total_primary_umi",
+          "title": "Library Size Offset",
+          "type": "string"
+        },
+        "method": {
+          "const": "checkpoint_conditioned_poisson_deviance_v1",
+          "default": "checkpoint_conditioned_poisson_deviance_v1",
+          "title": "Method",
+          "type": "string"
+        },
+        "reference_feature_count": {
+          "const": 4096,
+          "default": 4096,
+          "title": "Reference Feature Count",
+          "type": "integer"
+        },
+        "score": {
+          "const": "summed_poisson_deviance_from_checkpoint_null",
+          "default": "summed_poisson_deviance_from_checkpoint_null",
+          "title": "Score",
+          "type": "string"
+        },
+        "tie_breaks": {
+          "items": {
+            "enum": [
+              "total_umi_desc",
+              "detection_count_desc",
+              "feature_id_utf8_asc"
+            ],
+            "type": "string"
+          },
+          "title": "Tie Breaks",
+          "type": "array"
+        },
+        "validation_rows_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Validation Rows Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tie_breaks",
+        "fit_reference_rows_hash",
+        "validation_rows_hash"
+      ],
+      "title": "G00CFeatureRankingFreezeV1",
+      "type": "object"
+    },
+    "G00CMonitorFreezeV1": {
+      "additionalProperties": false,
+      "description": "Process-tree monitor completeness and bounded-memory contract.",
+      "properties": {
+        "child_process_aggregation_required": {
+          "const": true,
+          "default": true,
+          "title": "Child Process Aggregation Required",
+          "type": "boolean"
+        },
+        "expression_access_end_covered": {
+          "const": true,
+          "default": true,
+          "title": "Expression Access End Covered",
+          "type": "boolean"
+        },
+        "expression_access_start_covered": {
+          "const": true,
+          "default": true,
+          "title": "Expression Access Start Covered",
+          "type": "boolean"
+        },
+        "implementation_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Implementation Sha256",
+          "type": "string"
+        },
+        "maximum_consecutive_unreadable_samples": {
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Maximum Consecutive Unreadable Samples",
+          "type": "integer"
+        },
+        "maximum_process_tree_rss_bytes": {
+          "exclusiveMinimum": 0,
+          "title": "Maximum Process Tree Rss Bytes",
+          "type": "integer"
+        },
+        "maximum_temporal_gap_milliseconds": {
+          "maximum": 5000,
+          "minimum": 10,
+          "title": "Maximum Temporal Gap Milliseconds",
+          "type": "integer"
+        },
+        "maximum_unreadable_fraction": {
+          "maximum": 0.01,
+          "minimum": 0.0,
+          "title": "Maximum Unreadable Fraction",
+          "type": "number"
+        },
+        "maximum_unreadable_samples": {
+          "minimum": 0,
+          "title": "Maximum Unreadable Samples",
+          "type": "integer"
+        },
+        "polling_interval_milliseconds": {
+          "maximum": 1000,
+          "minimum": 10,
+          "title": "Polling Interval Milliseconds",
+          "type": "integer"
+        },
+        "process_tree_coverage_required": {
+          "const": true,
+          "default": true,
+          "title": "Process Tree Coverage Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "implementation_sha256",
+        "polling_interval_milliseconds",
+        "maximum_unreadable_samples",
+        "maximum_unreadable_fraction",
+        "maximum_consecutive_unreadable_samples",
+        "maximum_temporal_gap_milliseconds",
+        "maximum_process_tree_rss_bytes"
+      ],
+      "title": "G00CMonitorFreezeV1",
+      "type": "object"
+    },
+    "G00CParentBindingV1": {
+      "additionalProperties": false,
+      "description": "One immutable B0-A2 parent used by the Dev34 G00C selection freeze.",
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "identity_field": {
+          "minLength": 1,
+          "title": "Identity Field",
+          "type": "string"
+        },
+        "identity_value": {
+          "minLength": 1,
+          "title": "Identity Value",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "g00a_v2",
+            "g00b_v2",
+            "source_plane_amendment",
+            "source_plane_amendment_receipt",
+            "source_plane_decision_receipt",
+            "b0_a2_execution_amendment"
+          ],
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "identity_field",
+        "identity_value",
+        "artifact"
+      ],
+      "title": "G00CParentBindingV1",
+      "type": "object"
+    },
+    "G00CPublicationFreezeV1": {
+      "additionalProperties": false,
+      "description": "Fresh-workspace publication and status-dependent evidence surface.",
+      "properties": {
+        "always_required_artifacts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Always Required Artifacts",
+          "type": "array"
+        },
+        "canary_payload_reuse_permitted": {
+          "const": false,
+          "default": false,
+          "title": "Canary Payload Reuse Permitted",
+          "type": "boolean"
+        },
+        "canary_selection_artifact_reuse_permitted": {
+          "const": false,
+          "default": false,
+          "title": "Canary Selection Artifact Reuse Permitted",
+          "type": "boolean"
+        },
+        "candidate_workspace_rename_permitted": {
+          "const": false,
+          "default": false,
+          "title": "Candidate Workspace Rename Permitted",
+          "type": "boolean"
+        },
+        "extension_required_artifacts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Extension Required Artifacts",
+          "type": "array"
+        },
+        "fail_no_saturation_required_artifacts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Fail No Saturation Required Artifacts",
+          "type": "array"
+        },
+        "fresh_workspace_required": {
+          "const": true,
+          "default": true,
+          "title": "Fresh Workspace Required",
+          "type": "boolean"
+        },
+        "manifest_last": {
+          "const": true,
+          "default": true,
+          "title": "Manifest Last",
+          "type": "boolean"
+        },
+        "no_clobber": {
+          "const": true,
+          "default": true,
+          "title": "No Clobber",
+          "type": "boolean"
+        },
+        "pass_only_required_artifacts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Pass Only Required Artifacts",
+          "type": "array"
+        },
+        "selected_artifacts_forbidden_on_nonpass": {
+          "const": true,
+          "default": true,
+          "title": "Selected Artifacts Forbidden On Nonpass",
+          "type": "boolean"
+        },
+        "selected_view_rebuilt_from_g00b": {
+          "const": true,
+          "default": true,
+          "title": "Selected View Rebuilt From G00B",
+          "type": "boolean"
+        },
+        "stop_before_g00d": {
+          "const": true,
+          "default": true,
+          "title": "Stop Before G00D",
+          "type": "boolean"
+        },
+        "terminal_statuses": {
+          "default": [
+            "pass",
+            "extension_required",
+            "fail_no_saturation",
+            "failed_integrity"
+          ],
+          "items": {
+            "enum": [
+              "pass",
+              "extension_required",
+              "fail_no_saturation",
+              "failed_integrity"
+            ],
+            "type": "string"
+          },
+          "title": "Terminal Statuses",
+          "type": "array"
+        }
+      },
+      "required": [
+        "always_required_artifacts",
+        "pass_only_required_artifacts",
+        "extension_required_artifacts",
+        "fail_no_saturation_required_artifacts"
+      ],
+      "title": "G00CPublicationFreezeV1",
+      "type": "object"
+    },
+    "G00CRefitFreezeV1": {
+      "additionalProperties": false,
+      "description": "Exact paired-refit identity shared by feature and cell selection.",
+      "properties": {
+        "count_thinning_method": {
+          "const": "paired_binomial_half_count_v1",
+          "default": "paired_binomial_half_count_v1",
+          "title": "Count Thinning Method",
+          "type": "string"
+        },
+        "exact_replay_required": {
+          "const": true,
+          "default": true,
+          "title": "Exact Replay Required",
+          "type": "boolean"
+        },
+        "initial_state": {
+          "const": "closed_form_zero_state",
+          "default": "closed_form_zero_state",
+          "title": "Initial State",
+          "type": "string"
+        },
+        "maximum_updates": {
+          "const": 0,
+          "default": 0,
+          "title": "Maximum Updates",
+          "type": "integer"
+        },
+        "model_config_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Model Config Hash",
+          "type": "string"
+        },
+        "model_family": {
+          "const": "checkpoint_conditioned_multinomial_intercept_v1",
+          "default": "checkpoint_conditioned_multinomial_intercept_v1",
+          "title": "Model Family",
+          "type": "string"
+        },
+        "optimizer": {
+          "const": "closed_form_no_optimizer",
+          "default": "closed_form_no_optimizer",
+          "title": "Optimizer",
+          "type": "string"
+        },
+        "pseudocount": {
+          "default": 0.5,
+          "exclusiveMinimum": 0.0,
+          "title": "Pseudocount",
+          "type": "number"
+        },
+        "replay_implementation_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Replay Implementation Sha256",
+          "type": "string"
+        },
+        "seed_schedule_artifact": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "seed_schedule_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Seed Schedule Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "seed_schedule_id",
+        "seed_schedule_artifact",
+        "model_config_hash",
+        "replay_implementation_sha256"
+      ],
+      "title": "G00CRefitFreezeV1",
+      "type": "object"
+    },
+    "G00CRefitSeedRecordV1": {
+      "additionalProperties": false,
+      "description": "Expanded deterministic seed streams for one paired refit draw.",
+      "properties": {
+        "draw_id": {
+          "maximum": 58,
+          "minimum": 0,
+          "title": "Draw Id",
+          "type": "integer"
+        },
+        "initialization": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Initialization",
+          "type": "integer"
+        },
+        "restart_interruption_point": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Restart Interruption Point",
+          "type": "integer"
+        },
+        "stochastic_optimizer_or_augmentation": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Stochastic Optimizer Or Augmentation",
+          "type": "integer"
+        },
+        "thinning": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Thinning",
+          "type": "integer"
+        },
+        "training_sampler": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Training Sampler",
+          "type": "integer"
+        },
+        "validation_evaluation": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Validation Evaluation",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "draw_id",
+        "initialization",
+        "training_sampler",
+        "thinning",
+        "validation_evaluation",
+        "stochastic_optimizer_or_augmentation",
+        "restart_interruption_point"
+      ],
+      "title": "G00CRefitSeedRecordV1",
+      "type": "object"
+    },
+    "G00CRefitSeedScheduleV1": {
+      "additionalProperties": false,
+      "description": "Hash-bound, pre-result seed schedule shared by every paired candidate.",
+      "properties": {
+        "derivation": {
+          "const": "sha256_namespace_fold_stage_draw_stream_uint64_be_v1",
+          "default": "sha256_namespace_fold_stage_draw_stream_uint64_be_v1",
+          "title": "Derivation",
+          "type": "string"
+        },
+        "derivation_namespace_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Derivation Namespace Id",
+          "type": "string"
+        },
+        "fold_id": {
+          "const": "lodo-D1",
+          "default": "lodo-D1",
+          "title": "Fold Id",
+          "type": "string"
+        },
+        "other_candidate_replay_draw_ids": {
+          "default": [
+            0,
+            6,
+            12,
+            18,
+            24,
+            30,
+            36,
+            42,
+            48,
+            58
+          ],
+          "items": {
+            "type": "integer"
+          },
+          "title": "Other Candidate Replay Draw Ids",
+          "type": "array"
+        },
+        "paired_across_candidates": {
+          "const": true,
+          "default": true,
+          "title": "Paired Across Candidates",
+          "type": "boolean"
+        },
+        "records": {
+          "items": {
+            "$ref": "#/$defs/G00CRefitSeedRecordV1"
+          },
+          "title": "Records",
+          "type": "array"
+        },
+        "reference_candidate_replay_draw_ids": {
+          "default": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39,
+            40,
+            41,
+            42,
+            43,
+            44,
+            45,
+            46,
+            47,
+            48,
+            49,
+            50,
+            51,
+            52,
+            53,
+            54,
+            55,
+            56,
+            57,
+            58
+          ],
+          "items": {
+            "type": "integer"
+          },
+          "title": "Reference Candidate Replay Draw Ids",
+          "type": "array"
+        },
+        "schedule_id": {
+          "title": "Schedule Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "selected_candidate_replay_draw_ids": {
+          "default": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39,
+            40,
+            41,
+            42,
+            43,
+            44,
+            45,
+            46,
+            47,
+            48,
+            49,
+            50,
+            51,
+            52,
+            53,
+            54,
+            55,
+            56,
+            57,
+            58
+          ],
+          "items": {
+            "type": "integer"
+          },
+          "title": "Selected Candidate Replay Draw Ids",
+          "type": "array"
+        },
+        "stage": {
+          "const": "g00c_feature_and_cell_selection",
+          "default": "g00c_feature_and_cell_selection",
+          "title": "Stage",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schedule_id",
+        "derivation_namespace_id",
+        "records"
+      ],
+      "title": "G00CRefitSeedScheduleV1",
+      "type": "object"
+    },
+    "G00CSelectionMarginFreezeV1": {
+      "additionalProperties": false,
+      "description": "Fixed, pre-result feature and cell equivalence margins.",
+      "properties": {
+        "candidate_curve_values_accessed": {
+          "const": false,
+          "default": false,
+          "title": "Candidate Curve Values Accessed",
+          "type": "boolean"
+        },
+        "cell_equivalence_epsilon": {
+          "const": 0.0001,
+          "default": 0.0001,
+          "title": "Cell Equivalence Epsilon",
+          "type": "number"
+        },
+        "cohort_expression_values_accessed": {
+          "const": false,
+          "default": false,
+          "title": "Cohort Expression Values Accessed",
+          "type": "boolean"
+        },
+        "feature_equivalence_epsilon": {
+          "const": 0.0001,
+          "default": 0.0001,
+          "title": "Feature Equivalence Epsilon",
+          "type": "number"
+        },
+        "heldout_stimulated_expression_values_accessed": {
+          "const": false,
+          "default": false,
+          "title": "Heldout Stimulated Expression Values Accessed",
+          "type": "boolean"
+        },
+        "metric_unit": {
+          "const": "nats_per_weighted_validation_count",
+          "default": "nats_per_weighted_validation_count",
+          "title": "Metric Unit",
+          "type": "string"
+        }
+      },
+      "title": "G00CSelectionMarginFreezeV1",
+      "type": "object"
+    },
+    "G00CSerialSelectionFreezeV1": {
+      "additionalProperties": false,
+      "description": "Feature selection must become an immutable parent of cell selection.",
+      "properties": {
+        "feature_result_frozen_before_cell_curve_access": {
+          "const": true,
+          "default": true,
+          "title": "Feature Result Frozen Before Cell Curve Access",
+          "type": "boolean"
+        },
+        "feature_selection_reference_rows_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Feature Selection Reference Rows Hash",
+          "type": "string"
+        },
+        "feature_selection_training_cells": {
+          "const": 1000000,
+          "default": 1000000,
+          "title": "Feature Selection Training Cells",
+          "type": "integer"
+        },
+        "feature_selection_uses_first_rows_of_frozen_nested_order": {
+          "const": true,
+          "default": true,
+          "title": "Feature Selection Uses First Rows Of Frozen Nested Order",
+          "type": "boolean"
+        },
+        "feature_width_changed_per_cell_candidate": {
+          "const": false,
+          "default": false,
+          "title": "Feature Width Changed Per Cell Candidate",
+          "type": "boolean"
+        },
+        "frozen_nested_training_row_order_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Frozen Nested Training Row Order Hash",
+          "type": "string"
+        },
+        "ranking_recomputed_per_cell_candidate": {
+          "const": false,
+          "default": false,
+          "title": "Ranking Recomputed Per Cell Candidate",
+          "type": "boolean"
+        },
+        "sample_result_binds_parent_feature_selection_result_sha256": {
+          "const": true,
+          "default": true,
+          "title": "Sample Result Binds Parent Feature Selection Result Sha256",
+          "type": "boolean"
+        },
+        "sample_result_binds_selected_feature_count": {
+          "const": true,
+          "default": true,
+          "title": "Sample Result Binds Selected Feature Count",
+          "type": "boolean"
+        },
+        "sample_result_binds_selected_feature_order_sha256": {
+          "const": true,
+          "default": true,
+          "title": "Sample Result Binds Selected Feature Order Sha256",
+          "type": "boolean"
+        },
+        "serial_dependency": {
+          "const": "feature_then_cell_budget_v1",
+          "default": "feature_then_cell_budget_v1",
+          "title": "Serial Dependency",
+          "type": "string"
+        },
+        "smaller_cell_budget_interpretation": {
+          "const": "model_fit_budget_conditional_on_one_million_cell_feature_selection",
+          "default": "model_fit_budget_conditional_on_one_million_cell_feature_selection",
+          "title": "Smaller Cell Budget Interpretation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "frozen_nested_training_row_order_hash",
+        "feature_selection_reference_rows_hash"
+      ],
+      "title": "G00CSerialSelectionFreezeV1",
+      "type": "object"
+    },
+    "G00CSupportAuditFreezeV1": {
+      "additionalProperties": false,
+      "description": "Mandatory support diagnostics for every candidate row budget.",
+      "properties": {
+        "candidate_cell_counts": {
+          "default": [
+            50000,
+            100000,
+            250000,
+            500000,
+            1000000,
+            2000000
+          ],
+          "items": {
+            "type": "integer"
+          },
+          "title": "Candidate Cell Counts",
+          "type": "array"
+        },
+        "dimensions": {
+          "items": {
+            "enum": [
+              "donor_checkpoint",
+              "target",
+              "guide",
+              "control_vs_targeting",
+              "sampler_stratum"
+            ],
+            "type": "string"
+          },
+          "title": "Dimensions",
+          "type": "array"
+        },
+        "reject_declared_zero_support_strata": {
+          "const": true,
+          "default": true,
+          "title": "Reject Declared Zero Support Strata",
+          "type": "boolean"
+        },
+        "report_maximum_to_median_weight_ratio": {
+          "const": true,
+          "default": true,
+          "title": "Report Maximum To Median Weight Ratio",
+          "type": "boolean"
+        },
+        "report_minimum_and_maximum_cells_per_stratum": {
+          "const": true,
+          "default": true,
+          "title": "Report Minimum And Maximum Cells Per Stratum",
+          "type": "boolean"
+        },
+        "report_weight_distribution": {
+          "const": true,
+          "default": true,
+          "title": "Report Weight Distribution",
+          "type": "boolean"
+        },
+        "report_weighted_effective_sample_size": {
+          "const": true,
+          "default": true,
+          "title": "Report Weighted Effective Sample Size",
+          "type": "boolean"
+        },
+        "report_zero_support_strata": {
+          "const": true,
+          "default": true,
+          "title": "Report Zero Support Strata",
+          "type": "boolean"
+        },
+        "silent_weight_renormalization_permitted": {
+          "const": false,
+          "default": false,
+          "title": "Silent Weight Renormalization Permitted",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "dimensions"
+      ],
+      "title": "G00CSupportAuditFreezeV1",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/g00c-selection-freeze.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Dev34-A no-expression contract for one promotion-eligible G00C fold.",
+  "properties": {
+    "any_cohort_expression_values_accessed_during_freeze": {
+      "const": false,
+      "default": false,
+      "title": "Any Cohort Expression Values Accessed During Freeze",
+      "type": "boolean"
+    },
+    "base_cell_grid": {
+      "default": [
+        50000,
+        100000,
+        250000,
+        500000,
+        1000000
+      ],
+      "items": {
+        "type": "integer"
+      },
+      "title": "Base Cell Grid",
+      "type": "array"
+    },
+    "biological_claims": {
+      "const": false,
+      "default": false,
+      "title": "Biological Claims",
+      "type": "boolean"
+    },
+    "common_support_metric": {
+      "$ref": "#/$defs/G00CCommonSupportFeatureMetricV1"
+    },
+    "dev33_canary": {
+      "$ref": "#/$defs/G00CCanaryPrerequisiteV1"
+    },
+    "execution_backend": {
+      "const": "cpu_only",
+      "default": "cpu_only",
+      "title": "Execution Backend",
+      "type": "string"
+    },
+    "extension_additional_cell_grid": {
+      "default": [
+        2000000
+      ],
+      "items": {
+        "type": "integer"
+      },
+      "title": "Extension Additional Cell Grid",
+      "type": "array"
+    },
+    "extension_requires_new_contract": {
+      "const": true,
+      "default": true,
+      "title": "Extension Requires New Contract",
+      "type": "boolean"
+    },
+    "feature_ranking": {
+      "$ref": "#/$defs/G00CFeatureRankingFreezeV1"
+    },
+    "freeze_id": {
+      "title": "Freeze Id",
+      "type": "string"
+    },
+    "g00c_status": {
+      "const": "contract_frozen_not_run",
+      "default": "contract_frozen_not_run",
+      "title": "G00C Status",
+      "type": "string"
+    },
+    "g00d_status": {
+      "const": "blocked",
+      "default": "blocked",
+      "title": "G00D Status",
+      "type": "string"
+    },
+    "g04_g07_g08_status": {
+      "const": "blocked",
+      "default": "blocked",
+      "title": "G04 G07 G08 Status",
+      "type": "string"
+    },
+    "heldout_donor_id": {
+      "const": "D1",
+      "default": "D1",
+      "title": "Heldout Donor Id",
+      "type": "string"
+    },
+    "monitor": {
+      "$ref": "#/$defs/G00CMonitorFreezeV1"
+    },
+    "outer_split_id": {
+      "const": "lodo-D1",
+      "default": "lodo-D1",
+      "title": "Outer Split Id",
+      "type": "string"
+    },
+    "parent_bindings": {
+      "items": {
+        "$ref": "#/$defs/G00CParentBindingV1"
+      },
+      "title": "Parent Bindings",
+      "type": "array"
+    },
+    "parent_eligible_rows": {
+      "const": 21996842,
+      "default": 21996842,
+      "title": "Parent Eligible Rows",
+      "type": "integer"
+    },
+    "protected_heldout_stimulated_expression_values_accessed_during_freeze": {
+      "const": false,
+      "default": false,
+      "title": "Protected Heldout Stimulated Expression Values Accessed During Freeze",
+      "type": "boolean"
+    },
+    "publication": {
+      "$ref": "#/$defs/G00CPublicationFreezeV1"
+    },
+    "refits": {
+      "$ref": "#/$defs/G00CRefitFreezeV1"
+    },
+    "row_role_freeze": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "row_roles": {
+      "items": {
+        "$ref": "#/$defs/FoldRowRoleRecord"
+      },
+      "title": "Row Roles",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "seed_schedule": {
+      "$ref": "#/$defs/G00CRefitSeedScheduleV1"
+    },
+    "seed_schedule_artifact": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "selection_margins": {
+      "$ref": "#/$defs/G00CSelectionMarginFreezeV1"
+    },
+    "serial_selection": {
+      "$ref": "#/$defs/G00CSerialSelectionFreezeV1"
+    },
+    "support_audit": {
+      "$ref": "#/$defs/G00CSupportAuditFreezeV1"
+    },
+    "third_extension_permitted": {
+      "const": false,
+      "default": false,
+      "title": "Third Extension Permitted",
+      "type": "boolean"
+    },
+    "training_donor_ids": {
+      "default": [
+        "D2",
+        "D3",
+        "D4"
+      ],
+      "items": {
+        "enum": [
+          "D2",
+          "D3",
+          "D4"
+        ],
+        "type": "string"
+      },
+      "title": "Training Donor Ids",
+      "type": "array"
+    },
+    "training_scale_row_order_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Training Scale Row Order Hash",
+      "type": "string"
+    }
+  },
+  "required": [
+    "freeze_id",
+    "parent_bindings",
+    "dev33_canary",
+    "row_roles",
+    "row_role_freeze",
+    "training_scale_row_order_hash",
+    "seed_schedule",
+    "seed_schedule_artifact",
+    "feature_ranking",
+    "common_support_metric",
+    "serial_selection",
+    "selection_margins",
+    "refits",
+    "support_audit",
+    "monitor",
+    "publication"
+  ],
+  "title": "G00CSelectionFreezeContractV1",
+  "type": "object"
+}

@@ -2,6 +2,13 @@
 
 from .csr import CountStore, SparseCountBatch, build_count_store
 from .g00c import validate_g00c_execution
+from .g00c_selection import (
+    checkpoint_multinomial_refit,
+    derive_refit_seed_schedule,
+    expand_common_support_probabilities,
+    sample_size_decision_v3,
+    weighted_multinomial_nll_per_count,
+)
 from .g00c_v2 import (
     RefitReplayObservation,
     sample_size_decision_v2,
@@ -33,6 +40,10 @@ __all__ = [
     "VirtualCanonicalCountStore",
     "RefitReplayObservation",
     "sample_size_decision_v2",
+    "sample_size_decision_v3",
+    "checkpoint_multinomial_refit",
+    "derive_refit_seed_schedule",
+    "expand_common_support_probabilities",
     "build_legacy_parent_attestation",
     "build_count_store",
     "validate_g00c_decision",
@@ -46,4 +57,5 @@ __all__ = [
     "verify_legacy_parent_attestation",
     "verify_integrated_loader_qualification",
     "verify_sample_size_selection_v2",
+    "weighted_multinomial_nll_per_count",
 ]

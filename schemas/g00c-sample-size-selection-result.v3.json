@@ -1,0 +1,163 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/g00c-sample-size-selection-result.v3.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Serially bound sample result with a terminal no-saturation state.",
+  "properties": {
+    "base_grid_extension_required_receipt": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "curve": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "grid_stage": {
+      "enum": [
+        "base",
+        "extension"
+      ],
+      "title": "Grid Stage",
+      "type": "string"
+    },
+    "parent_feature_selection_result_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Parent Feature Selection Result Sha256",
+      "type": "string"
+    },
+    "refit_records": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "result_id": {
+      "title": "Result Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 3,
+      "default": 3,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "selected_feature_count": {
+      "enum": [
+        256,
+        512,
+        1024,
+        2048,
+        4096
+      ],
+      "title": "Selected Feature Count",
+      "type": "integer"
+    },
+    "selected_feature_order_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Selected Feature Order Sha256",
+      "type": "string"
+    },
+    "selected_training_cells": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Selected Training Cells"
+    },
+    "selected_training_rows": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "selection_status": {
+      "enum": [
+        "selected",
+        "extension_required",
+        "fail_no_saturation"
+      ],
+      "title": "Selection Status",
+      "type": "string"
+    },
+    "serial_dependency": {
+      "const": "feature_then_cell_budget_v1",
+      "default": "feature_then_cell_budget_v1",
+      "title": "Serial Dependency",
+      "type": "string"
+    },
+    "training_scale_row_order": {
+      "$ref": "#/$defs/ArtifactRef"
+    }
+  },
+  "required": [
+    "result_id",
+    "grid_stage",
+    "curve",
+    "refit_records",
+    "training_scale_row_order",
+    "parent_feature_selection_result_sha256",
+    "selected_feature_count",
+    "selected_feature_order_sha256",
+    "selection_status"
+  ],
+  "title": "G00CSampleSizeSelectionResultV3",
+  "type": "object"
+}

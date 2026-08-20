@@ -8,7 +8,7 @@ count_state → count_measure → count_context
 ```
 
 It is a sibling of, not a modification to, the frozen CREDO checkout. Version
-`4.0.0.dev33` is engineering software; it is not a biological result and cannot
+`4.0.0.dev34` is engineering software; it is not a biological result and cannot
 be relabeled as stable `4.0`.
 
 Implemented surfaces include strict hash-bound contracts, sparse count storage,
@@ -77,6 +77,13 @@ The separately frozen
 passed on LODO fold 0 with 58,192 rows and 256 primary features. It is
 non-promotable engineering evidence only; claim-bearing G00C, G00D, and G04
 remain blocked.
+
+Dev34-A closes Dev33-B and freezes the first claim-bearing G00C contract without
+reading expression. The [Dev34-A claim-contract record](docs/g00-dev34a-claim-contract.md)
+binds all 59 expanded seed tuples, feature-then-cell parentage, common 4,096-
+feature scoring support, fixed `1e-4` margins, and terminal
+`fail_no_saturation` semantics. Claim-bearing G00C remains unrun; no G00D, GPU,
+model, or biological operation is authorized by this release.
 
 ## Quick start
 

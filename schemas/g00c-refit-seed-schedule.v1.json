@@ -1,0 +1,277 @@
+{
+  "$defs": {
+    "G00CRefitSeedRecordV1": {
+      "additionalProperties": false,
+      "description": "Expanded deterministic seed streams for one paired refit draw.",
+      "properties": {
+        "draw_id": {
+          "maximum": 58,
+          "minimum": 0,
+          "title": "Draw Id",
+          "type": "integer"
+        },
+        "initialization": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Initialization",
+          "type": "integer"
+        },
+        "restart_interruption_point": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Restart Interruption Point",
+          "type": "integer"
+        },
+        "stochastic_optimizer_or_augmentation": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Stochastic Optimizer Or Augmentation",
+          "type": "integer"
+        },
+        "thinning": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Thinning",
+          "type": "integer"
+        },
+        "training_sampler": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Training Sampler",
+          "type": "integer"
+        },
+        "validation_evaluation": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Validation Evaluation",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "draw_id",
+        "initialization",
+        "training_sampler",
+        "thinning",
+        "validation_evaluation",
+        "stochastic_optimizer_or_augmentation",
+        "restart_interruption_point"
+      ],
+      "title": "G00CRefitSeedRecordV1",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/g00c-refit-seed-schedule.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Hash-bound, pre-result seed schedule shared by every paired candidate.",
+  "properties": {
+    "derivation": {
+      "const": "sha256_namespace_fold_stage_draw_stream_uint64_be_v1",
+      "default": "sha256_namespace_fold_stage_draw_stream_uint64_be_v1",
+      "title": "Derivation",
+      "type": "string"
+    },
+    "derivation_namespace_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Derivation Namespace Id",
+      "type": "string"
+    },
+    "fold_id": {
+      "const": "lodo-D1",
+      "default": "lodo-D1",
+      "title": "Fold Id",
+      "type": "string"
+    },
+    "other_candidate_replay_draw_ids": {
+      "default": [
+        0,
+        6,
+        12,
+        18,
+        24,
+        30,
+        36,
+        42,
+        48,
+        58
+      ],
+      "items": {
+        "type": "integer"
+      },
+      "title": "Other Candidate Replay Draw Ids",
+      "type": "array"
+    },
+    "paired_across_candidates": {
+      "const": true,
+      "default": true,
+      "title": "Paired Across Candidates",
+      "type": "boolean"
+    },
+    "records": {
+      "items": {
+        "$ref": "#/$defs/G00CRefitSeedRecordV1"
+      },
+      "title": "Records",
+      "type": "array"
+    },
+    "reference_candidate_replay_draw_ids": {
+      "default": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58
+      ],
+      "items": {
+        "type": "integer"
+      },
+      "title": "Reference Candidate Replay Draw Ids",
+      "type": "array"
+    },
+    "schedule_id": {
+      "title": "Schedule Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "selected_candidate_replay_draw_ids": {
+      "default": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58
+      ],
+      "items": {
+        "type": "integer"
+      },
+      "title": "Selected Candidate Replay Draw Ids",
+      "type": "array"
+    },
+    "stage": {
+      "const": "g00c_feature_and_cell_selection",
+      "default": "g00c_feature_and_cell_selection",
+      "title": "Stage",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schedule_id",
+    "derivation_namespace_id",
+    "records"
+  ],
+  "title": "G00CRefitSeedScheduleV1",
+  "type": "object"
+}

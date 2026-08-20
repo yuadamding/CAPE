@@ -21,7 +21,7 @@ def test_frozen_credo_preflight_when_workspace_is_available() -> None:
 
 def test_development_descriptor_keeps_v4_loader_canonical() -> None:
     assert recipe.recipe_id == "credo.count_sde_v4"
-    assert recipe.recipe_version == "4.0.dev33"
+    assert recipe.recipe_version == "4.0.dev34"
     assert recipe.loader == "credo-v4 open-run"
     assert recipe.discovery_only
 

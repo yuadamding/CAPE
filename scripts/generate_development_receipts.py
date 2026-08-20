@@ -130,9 +130,11 @@ def main() -> None:
     gse314342_g00_dev32_b0_provenance = root / "provenance/g00/dev32-b0-a2/PROVENANCE_INDEX.json"
     gse314342_g00_dev33_hardening = root / "docs/g00-dev33-g00c-hardening.md"
     gse314342_g00_dev33b_canary = root / "docs/g00-dev33b-extraction-canary.md"
-    gse314342_g00_dev33b_provenance = (
-        root / "provenance/g00/dev33b-canary/PROVENANCE_INDEX.json"
+    gse314342_g00_dev33b_provenance = root / "provenance/g00/dev33b-canary/PROVENANCE_INDEX.json"
+    gse314342_g00_dev33b_final_review = Path(
+        "/home/yding1995/.codex/attachments/b3bfe622-6c00-4310-a906-37319354c14e/pasted-text.txt"
     )
+    gse314342_g00_dev34a_claim_contract = root / "docs/g00-dev34a-claim-contract.md"
     gse314342_g00_source_plane = gse314342_g00 / "G00_SOURCE_PLANE_DEV29"
     receipt = {
         "schema_version": 1,
@@ -322,6 +324,16 @@ def main() -> None:
         "gse314342_g00_dev33b_provenance_sha256": (
             sha256_file(gse314342_g00_dev33b_provenance)
             if gse314342_g00_dev33b_provenance.is_file()
+            else None
+        ),
+        "gse314342_g00_dev33b_final_review_sha256": (
+            sha256_file(gse314342_g00_dev33b_final_review)
+            if gse314342_g00_dev33b_final_review.is_file()
+            else None
+        ),
+        "gse314342_g00_dev34a_claim_contract_sha256": (
+            sha256_file(gse314342_g00_dev34a_claim_contract)
+            if gse314342_g00_dev34a_claim_contract.is_file()
             else None
         ),
         "gse314342_g00_dev29_builder_sha256": (
