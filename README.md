@@ -8,7 +8,7 @@ count_state → count_measure → count_context
 ```
 
 It is a sibling of, not a modification to, the frozen CREDO checkout. Version
-`4.0.0.dev34` is engineering software; it is not a biological result and cannot
+`4.0.0.dev35` is engineering software; it is not a biological result and cannot
 be relabeled as stable `4.0`.
 
 Implemented surfaces include strict hash-bound contracts, sparse count storage,
@@ -84,6 +84,13 @@ binds all 59 expanded seed tuples, feature-then-cell parentage, common 4,096-
 feature scoring support, fixed `1e-4` margins, and terminal
 `fail_no_saturation` semantics. Claim-bearing G00C remains unrun; no G00D, GPU,
 model, or biological operation is authorized by this release.
+
+Dev35 preserves that milestone and adds the artifact-derived V3 execution and
+decision chain, a pre-access 2M extension freeze, stage-scoped support gates,
+the common 0.5-per-gene prior, portable review provenance, and an exact tested
+CPU environment authority. See the
+[Dev35 execution-authority record](docs/g00-dev35-execution-authority.md).
+G00C expression access and G00D remain blocked.
 
 ## Quick start
 

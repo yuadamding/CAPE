@@ -1,0 +1,378 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    },
+    "FoldRowRoleRecord": {
+      "additionalProperties": false,
+      "description": "One frozen row role in a fold-native extraction.",
+      "properties": {
+        "role": {
+          "enum": [
+            "training_fit",
+            "training_validation",
+            "heldout_source_query",
+            "protected_heldout_stimulated"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "row_ids_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Row Ids Hash",
+          "type": "string"
+        },
+        "rows": {
+          "exclusiveMinimum": 0,
+          "title": "Rows",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "role",
+        "rows",
+        "row_ids_hash"
+      ],
+      "title": "FoldRowRoleRecord",
+      "type": "object"
+    },
+    "G00CCommonSupportPriorV2": {
+      "additionalProperties": false,
+      "description": "Dev35 prior that is identical per primary gene on the 4,096-gene support.",
+      "properties": {
+        "common_support_probabilities_strictly_positive": {
+          "const": true,
+          "default": true,
+          "title": "Common Support Probabilities Strictly Positive",
+          "type": "boolean"
+        },
+        "modeled_feature_prior": {
+          "const": "0.5_per_primary_feature",
+          "default": "0.5_per_primary_feature",
+          "title": "Modeled Feature Prior",
+          "type": "string"
+        },
+        "per_feature_pseudocount": {
+          "const": 0.5,
+          "default": 0.5,
+          "title": "Per Feature Pseudocount",
+          "type": "number"
+        },
+        "reference_feature_count": {
+          "const": 4096,
+          "default": 4096,
+          "title": "Reference Feature Count",
+          "type": "integer"
+        },
+        "residual_category_prior": {
+          "const": "0.5_times_omitted_feature_count",
+          "default": "0.5_times_omitted_feature_count",
+          "title": "Residual Category Prior",
+          "type": "string"
+        },
+        "residual_frequencies_strictly_positive": {
+          "const": true,
+          "default": true,
+          "title": "Residual Frequencies Strictly Positive",
+          "type": "boolean"
+        },
+        "residual_frequency_estimator": {
+          "const": "checkpoint_training_counts_plus_0.5_per_omitted_feature_v1",
+          "default": "checkpoint_training_counts_plus_0.5_per_omitted_feature_v1",
+          "title": "Residual Frequency Estimator",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": 2,
+          "default": 2,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "selection_threshold": {
+          "const": 0.0001,
+          "default": 0.0001,
+          "title": "Selection Threshold",
+          "type": "number"
+        },
+        "simulation_sensitivity_required_before_expression_access": {
+          "const": false,
+          "default": false,
+          "title": "Simulation Sensitivity Required Before Expression Access",
+          "type": "boolean"
+        }
+      },
+      "title": "G00CCommonSupportPriorV2",
+      "type": "object"
+    },
+    "G00CImplementationAuthorityV1": {
+      "additionalProperties": false,
+      "description": "Exact code and runtime identities required before G00C expression access.",
+      "properties": {
+        "dev35_code_commit": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Dev35 Code Commit",
+          "type": "string"
+        },
+        "environment_kind": {
+          "enum": [
+            "exact_local_lock",
+            "oci_container"
+          ],
+          "title": "Environment Kind",
+          "type": "string"
+        },
+        "environment_lock": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "execution_environment_digest": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Execution Environment Digest",
+          "type": "string"
+        },
+        "implementation_tree_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Implementation Tree Sha256",
+          "type": "string"
+        },
+        "implementations": {
+          "items": {
+            "$ref": "#/$defs/G00CImplementationBindingV1"
+          },
+          "title": "Implementations",
+          "type": "array"
+        },
+        "normalized_sdist": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "wheel": {
+          "$ref": "#/$defs/ArtifactRef"
+        }
+      },
+      "required": [
+        "dev35_code_commit",
+        "wheel",
+        "normalized_sdist",
+        "implementation_tree_sha256",
+        "environment_lock",
+        "environment_kind",
+        "execution_environment_digest",
+        "implementations"
+      ],
+      "title": "G00CImplementationAuthorityV1",
+      "type": "object"
+    },
+    "G00CImplementationBindingV1": {
+      "additionalProperties": false,
+      "description": "One role-labelled implementation artifact in the pre-access authority.",
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "role": {
+          "enum": [
+            "feature_ranking",
+            "residual_frequency",
+            "refit",
+            "sampler",
+            "monitor",
+            "execution_verifier",
+            "decision_verifier"
+          ],
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "artifact"
+      ],
+      "title": "G00CImplementationBindingV1",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/g00c-d1-execution-authority-freeze.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Concrete metadata-only D1 authority layered over the Dev34 design freeze.",
+  "properties": {
+    "authority_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Authority Id",
+      "type": "string"
+    },
+    "base_support_audit_contract": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "biological_claims": {
+      "const": false,
+      "default": false,
+      "title": "Biological Claims",
+      "type": "boolean"
+    },
+    "common_support_prior": {
+      "$ref": "#/$defs/G00CCommonSupportPriorV2"
+    },
+    "expression_access_authorized_by_this_record": {
+      "const": false,
+      "default": false,
+      "title": "Expression Access Authorized By This Record",
+      "type": "boolean"
+    },
+    "expression_values_accessed_during_freeze": {
+      "const": false,
+      "default": false,
+      "title": "Expression Values Accessed During Freeze",
+      "type": "boolean"
+    },
+    "feature_reference_rows": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "feature_reference_rows_are_first_million": {
+      "const": true,
+      "default": true,
+      "title": "Feature Reference Rows Are First Million",
+      "type": "boolean"
+    },
+    "feature_reference_rows_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Feature Reference Rows Hash",
+      "type": "string"
+    },
+    "fresh_attempt_id": {
+      "minLength": 1,
+      "title": "Fresh Attempt Id",
+      "type": "string"
+    },
+    "implementation": {
+      "$ref": "#/$defs/G00CImplementationAuthorityV1"
+    },
+    "nested_training_row_order": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "nested_training_row_order_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Nested Training Row Order Hash",
+      "type": "string"
+    },
+    "outer_split_id": {
+      "const": "lodo-D1",
+      "default": "lodo-D1",
+      "title": "Outer Split Id",
+      "type": "string"
+    },
+    "prior_attempt_artifact_reuse_permitted": {
+      "const": false,
+      "default": false,
+      "title": "Prior Attempt Artifact Reuse Permitted",
+      "type": "boolean"
+    },
+    "protected_heldout_expression_values_accessed_during_freeze": {
+      "const": false,
+      "default": false,
+      "title": "Protected Heldout Expression Values Accessed During Freeze",
+      "type": "boolean"
+    },
+    "publication_root_uri": {
+      "minLength": 1,
+      "title": "Publication Root Uri",
+      "type": "string"
+    },
+    "row_role_freeze": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "row_roles": {
+      "items": {
+        "$ref": "#/$defs/FoldRowRoleRecord"
+      },
+      "title": "Row Roles",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "seed_schedule": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "seed_schedule_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Seed Schedule Id",
+      "type": "string"
+    },
+    "selection_freeze": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "selection_freeze_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Selection Freeze Id",
+      "type": "string"
+    },
+    "status": {
+      "const": "finalized_preaccess_not_executed",
+      "default": "finalized_preaccess_not_executed",
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "authority_id",
+    "selection_freeze",
+    "selection_freeze_id",
+    "row_role_freeze",
+    "row_roles",
+    "nested_training_row_order",
+    "nested_training_row_order_hash",
+    "feature_reference_rows",
+    "feature_reference_rows_hash",
+    "seed_schedule",
+    "seed_schedule_id",
+    "common_support_prior",
+    "base_support_audit_contract",
+    "implementation",
+    "fresh_attempt_id",
+    "publication_root_uri"
+  ],
+  "title": "G00CD1ExecutionAuthorityFreezeV1",
+  "type": "object"
+}

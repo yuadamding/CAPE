@@ -277,6 +277,7 @@ def test_dev34_sample_size_rule_has_terminal_no_saturation() -> None:
         grid_stage="base",
         candidates=base,
         paired_absolute_difference_q95=np.asarray([0.5, 0.4, 0.3, 0.2, 0.0]),
+        support_eligible=(True,) * 5,
     )
     assert (status, selected) == ("extension_required", None)
 
@@ -284,6 +285,7 @@ def test_dev34_sample_size_rule_has_terminal_no_saturation() -> None:
         grid_stage="base",
         candidates=base,
         paired_absolute_difference_q95=np.asarray([0.5, 0.4, 0.3, 0.00005, 0.0]),
+        support_eligible=(True,) * 5,
     )
     assert (status, selected) == ("selected", 500_000)
 
@@ -292,6 +294,7 @@ def test_dev34_sample_size_rule_has_terminal_no_saturation() -> None:
         grid_stage="extension",
         candidates=extension,
         paired_absolute_difference_q95=np.asarray([0.5, 0.4, 0.3, 0.2, 0.1, 0.0]),
+        support_eligible=(True,) * 6,
     )
     assert (status, selected) == ("fail_no_saturation", None)
 
@@ -299,14 +302,16 @@ def test_dev34_sample_size_rule_has_terminal_no_saturation() -> None:
         grid_stage="extension",
         candidates=extension,
         paired_absolute_difference_q95=np.asarray([0.5, 0.4, 0.3, 0.2, 0.00005, 0.0]),
+        support_eligible=(True,) * 6,
     )
     assert (status, selected) == ("selected", 1_000_000)
 
-    with pytest.raises(ValueError, match="frozen Dev34"):
+    with pytest.raises(ValueError, match="frozen Dev35"):
         sample_size_decision_v3(
             grid_stage="base",
             candidates=base,
             paired_absolute_difference_q95=np.zeros(5),
+            support_eligible=(True,) * 5,
             epsilon=0.01,
         )
 

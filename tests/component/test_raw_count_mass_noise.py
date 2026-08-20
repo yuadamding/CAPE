@@ -229,9 +229,7 @@ def test_t02a_amendment_is_derived_without_mutating_parent(tmp_path: Path) -> No
     )
     assert isinstance(amendment, RawCountMassNoiseAmendment)
     assert (amendment_path / "ENVIRONMENT.json").is_file()
-    amendment_receipt = json.loads(
-        (amendment_path / "VERIFICATION_RECEIPT.json").read_text()
-    )
+    amendment_receipt = json.loads((amendment_path / "VERIFICATION_RECEIPT.json").read_text())
     assert amendment_receipt["environment_hash"] == amendment.environment_hash
     assert sha256_file(parent / "raw-count-mass-noise.json") == parent_hash_before
     checkpoint = pd.read_parquet(amendment_path / "THRESHOLDS_BY_CHECKPOINT.parquet")

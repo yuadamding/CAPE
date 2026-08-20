@@ -61,79 +61,28 @@ def main() -> None:
         if path.is_file()
     }
     blueprint = workspace / "docs/credo/count-sde-v4-repository-blueprint.md"
-    amendment = Path(
-        "/home/yding1995/.codex/attachments/52905259-b1cd-4e04-8fae-e2cb672514a8/pasted-text.txt"
-    )
-    component_decision = Path(
-        "/home/yding1995/.codex/attachments/787edecc-16fc-44f4-95bb-0d5589155bbd/pasted-text.txt"
-    )
-    component_assessment = Path(
-        "/home/yding1995/.codex/attachments/adcf3061-ef5f-44d5-abe7-51663447a868/pasted-text.txt"
-    )
-    component_status_assessment = Path(
-        "/home/yding1995/.codex/attachments/419a4b6e-3a98-431d-8dce-6d90bac813f1/pasted-text.txt"
-    )
-    t02a_interpretation_review = Path(
-        "/home/yding1995/.codex/attachments/801c74d4-66df-455e-8b14-0c6730dce794/pasted-text.txt"
-    )
-    t07s_review = Path(
-        "/home/yding1995/.codex/attachments/8b562990-5737-48e1-8374-4dc608aa0541/pasted-text.txt"
-    )
+    review_hashes = json.loads((root / "provenance/reviews/review-hashes.v1.json").read_text())
+    tested_environment_path = root / "locks/tested-environment.v1.json"
+    tested_environment = json.loads(tested_environment_path.read_text())
     t07s_evidence = workspace / "credo_v4_t07s_reaction_recovery_20260815"
     t07s_report = workspace / "CREDO_V4_T07S_REACTION_RECOVERY_20260815_RUN_REPORT.md"
-    t07s_metric_review = Path(
-        "/home/yding1995/.codex/attachments/75263066-934c-4192-96ad-aa9d6d980a75/pasted-text.txt"
-    )
     t07s_metric_amendment = workspace / "credo_v4_t07s_reaction_metric_amendment_20260816_r2"
     t07s_metric_report = (
         workspace / "CREDO_V4_T07S_REACTION_METRIC_AMENDMENT_20260816_RUN_REPORT.md"
-    )
-    t07s_null_interval_review = Path(
-        "/home/yding1995/.codex/attachments/5811dc54-2142-49eb-8fb8-486d3ea1a699/pasted-text.txt"
     )
     t07s_null_interval_amendment = workspace / "credo_v4_t07s_null_interval_amendment_20260816"
     t07s_null_interval_report = (
         workspace / "CREDO_V4_T07S_NULL_INTERVAL_AMENDMENT_20260816_RUN_REPORT.md"
     )
-    t07r_review = Path(
-        "/home/yding1995/.codex/attachments/d35e6db0-950c-4cd0-9540-73f816d5ba06/pasted-text.txt"
-    )
     t07r_evidence = workspace / "credo_v4_renz_t07r_a0_20260816"
     t07r_bundle = t07r_evidence / "T07R_A0_POOLED_LIKELIHOOD"
-    t07r_v2_review = Path(
-        "/home/yding1995/.codex/attachments/3751f141-7899-4e8a-9ced-6caa7aa9525b/pasted-text.txt"
-    )
     t07r_v2_evidence = workspace / "credo_v4_renz_t07r_a0_v2_20260816"
     t07r_v2_bundle = t07r_v2_evidence / "T07R_A0_PHYSICAL_POOL_CONDITIONAL_DM_V2_R2"
     gse314342_g00 = workspace / "credo_v4_gse314342_g00_20260816"
-    gse314342_g00_dev29_review = Path(
-        "/home/yding1995/.codex/attachments/ceb54c9f-8842-40ab-bb98-6b847b7198e9/pasted-text.txt"
-    )
-    gse314342_g00_dev30_review = Path(
-        "/home/yding1995/.codex/attachments/79794ce7-3c6f-4734-9bf8-1cfc9f5fd183/pasted-text.txt"
-    )
-    gse314342_g00_dev30_r2_review = Path(
-        "/home/yding1995/.codex/attachments/284492a6-f9f4-4550-b2ca-d4dbbf27efd1/pasted-text.txt"
-    )
-    gse314342_g00_dev31_review = Path(
-        "/home/yding1995/.codex/attachments/cd0f8deb-9438-4af7-a3c9-b69d044977f5/pasted-text.txt"
-    )
-    gse314342_g00_dev31_b0_authorization = Path(
-        "/home/yding1995/.codex/attachments/4190a8e6-5952-4025-8ade-fd320f4b0a6e/pasted-text.txt"
-    )
-    gse314342_g00_dev32_legacy_review = Path(
-        "/home/yding1995/.codex/attachments/73fc243c-804c-46fd-99d1-e1e573c0602d/pasted-text.txt"
-    )
-    gse314342_g00_dev32_b0_review = Path(
-        "/home/yding1995/.codex/attachments/ea8694ad-2706-4fb1-9bde-c9d6956cc207/pasted-text.txt"
-    )
     gse314342_g00_dev32_b0_provenance = root / "provenance/g00/dev32-b0-a2/PROVENANCE_INDEX.json"
     gse314342_g00_dev33_hardening = root / "docs/g00-dev33-g00c-hardening.md"
     gse314342_g00_dev33b_canary = root / "docs/g00-dev33b-extraction-canary.md"
     gse314342_g00_dev33b_provenance = root / "provenance/g00/dev33b-canary/PROVENANCE_INDEX.json"
-    gse314342_g00_dev33b_final_review = Path(
-        "/home/yding1995/.codex/attachments/b3bfe622-6c00-4310-a906-37319354c14e/pasted-text.txt"
-    )
     gse314342_g00_dev34a_claim_contract = root / "docs/g00-dev34a-claim-contract.md"
     gse314342_g00_source_plane = gse314342_g00 / "G00_SOURCE_PLANE_DEV29"
     receipt = {
@@ -149,26 +98,20 @@ def main() -> None:
         "cuda_device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
         "implementation_tree_hash": implementation_tree_hash(),
         "environment_lock_hash": environment_lock_hash(),
+        "tested_environment_lock_sha256": sha256_file(tested_environment_path),
+        "tested_execution_environment_digest": tested_environment["execution_environment_digest"],
         "frozen_credo": verify_frozen_credo(workspace),
         "blueprint_sha256": sha256_file(blueprint) if blueprint.is_file() else None,
-        "amendment_sha256": sha256_file(amendment) if amendment.is_file() else None,
-        "component_qualification_decision_sha256": (
-            sha256_file(component_decision) if component_decision.is_file() else None
-        ),
-        "component_qualification_assessment_sha256": (
-            sha256_file(component_assessment) if component_assessment.is_file() else None
-        ),
-        "component_status_assessment_sha256": (
-            sha256_file(component_status_assessment)
-            if component_status_assessment.is_file()
-            else None
-        ),
-        "t02a_interpretation_review_sha256": (
-            sha256_file(t02a_interpretation_review)
-            if t02a_interpretation_review.is_file()
-            else None
-        ),
-        "t07s_review_sha256": sha256_file(t07s_review) if t07s_review.is_file() else None,
+        "amendment_sha256": review_hashes["amendment_sha256"],
+        "component_qualification_decision_sha256": review_hashes[
+            "component_qualification_decision_sha256"
+        ],
+        "component_qualification_assessment_sha256": review_hashes[
+            "component_qualification_assessment_sha256"
+        ],
+        "component_status_assessment_sha256": review_hashes["component_status_assessment_sha256"],
+        "t02a_interpretation_review_sha256": review_hashes["t02a_interpretation_review_sha256"],
+        "t07s_review_sha256": review_hashes["t07s_review_sha256"],
         "t07s_qualification_sha256": (
             sha256_file(t07s_evidence / "reaction-recovery.json")
             if (t07s_evidence / "reaction-recovery.json").is_file()
@@ -180,9 +123,7 @@ def main() -> None:
             else None
         ),
         "t07s_run_report_sha256": sha256_file(t07s_report) if t07s_report.is_file() else None,
-        "t07s_metric_review_sha256": (
-            sha256_file(t07s_metric_review) if t07s_metric_review.is_file() else None
-        ),
+        "t07s_metric_review_sha256": review_hashes["t07s_metric_review_sha256"],
         "t07s_metric_amendment_sha256": (
             sha256_file(t07s_metric_amendment / "reaction-recovery-amendment.json")
             if (t07s_metric_amendment / "reaction-recovery-amendment.json").is_file()
@@ -196,9 +137,7 @@ def main() -> None:
         "t07s_metric_run_report_sha256": (
             sha256_file(t07s_metric_report) if t07s_metric_report.is_file() else None
         ),
-        "t07s_null_interval_review_sha256": (
-            sha256_file(t07s_null_interval_review) if t07s_null_interval_review.is_file() else None
-        ),
+        "t07s_null_interval_review_sha256": review_hashes["t07s_null_interval_review_sha256"],
         "t07s_null_interval_amendment_sha256": (
             sha256_file(t07s_null_interval_amendment / "reaction-recovery-amendment.json")
             if (t07s_null_interval_amendment / "reaction-recovery-amendment.json").is_file()
@@ -212,7 +151,7 @@ def main() -> None:
         "t07s_null_interval_run_report_sha256": (
             sha256_file(t07s_null_interval_report) if t07s_null_interval_report.is_file() else None
         ),
-        "t07r_review_sha256": sha256_file(t07r_review) if t07r_review.is_file() else None,
+        "t07r_review_sha256": review_hashes["t07r_review_sha256"],
         "t07r_qualification_sha256": (
             sha256_file(t07r_bundle / "pooled-reaction-likelihood.json")
             if (t07r_bundle / "pooled-reaction-likelihood.json").is_file()
@@ -228,9 +167,7 @@ def main() -> None:
             if (t07r_evidence / "RUN_REPORT.md").is_file()
             else None
         ),
-        "t07r_v2_review_sha256": (
-            sha256_file(t07r_v2_review) if t07r_v2_review.is_file() else None
-        ),
+        "t07r_v2_review_sha256": review_hashes["t07r_v2_review_sha256"],
         "t07r_v2_qualification_sha256": (
             sha256_file(t07r_v2_bundle / "physical-pool-conditional-reaction.json")
             if (t07r_v2_bundle / "physical-pool-conditional-reaction.json").is_file()
@@ -271,41 +208,21 @@ def main() -> None:
             if (gse314342_g00 / "G14_FROZEN_CONTRACT/SHA256SUMS").is_file()
             else None
         ),
-        "gse314342_g00_dev29_review_sha256": (
-            sha256_file(gse314342_g00_dev29_review)
-            if gse314342_g00_dev29_review.is_file()
-            else None
-        ),
-        "gse314342_g00_dev30_review_sha256": (
-            sha256_file(gse314342_g00_dev30_review)
-            if gse314342_g00_dev30_review.is_file()
-            else None
-        ),
-        "gse314342_g00_dev30_r2_review_sha256": (
-            sha256_file(gse314342_g00_dev30_r2_review)
-            if gse314342_g00_dev30_r2_review.is_file()
-            else None
-        ),
-        "gse314342_g00_dev31_review_sha256": (
-            sha256_file(gse314342_g00_dev31_review)
-            if gse314342_g00_dev31_review.is_file()
-            else None
-        ),
-        "gse314342_g00_dev31_b0_authorization_sha256": (
-            sha256_file(gse314342_g00_dev31_b0_authorization)
-            if gse314342_g00_dev31_b0_authorization.is_file()
-            else None
-        ),
-        "gse314342_g00_dev32_legacy_review_sha256": (
-            sha256_file(gse314342_g00_dev32_legacy_review)
-            if gse314342_g00_dev32_legacy_review.is_file()
-            else None
-        ),
-        "gse314342_g00_dev32_b0_review_sha256": (
-            sha256_file(gse314342_g00_dev32_b0_review)
-            if gse314342_g00_dev32_b0_review.is_file()
-            else None
-        ),
+        "gse314342_g00_dev29_review_sha256": review_hashes["gse314342_g00_dev29_review_sha256"],
+        "gse314342_g00_dev30_review_sha256": review_hashes["gse314342_g00_dev30_review_sha256"],
+        "gse314342_g00_dev30_r2_review_sha256": review_hashes[
+            "gse314342_g00_dev30_r2_review_sha256"
+        ],
+        "gse314342_g00_dev31_review_sha256": review_hashes["gse314342_g00_dev31_review_sha256"],
+        "gse314342_g00_dev31_b0_authorization_sha256": review_hashes[
+            "gse314342_g00_dev31_b0_authorization_sha256"
+        ],
+        "gse314342_g00_dev32_legacy_review_sha256": review_hashes[
+            "gse314342_g00_dev32_legacy_review_sha256"
+        ],
+        "gse314342_g00_dev32_b0_review_sha256": review_hashes[
+            "gse314342_g00_dev32_b0_review_sha256"
+        ],
         "gse314342_g00_dev32_b0_provenance_sha256": (
             sha256_file(gse314342_g00_dev32_b0_provenance)
             if gse314342_g00_dev32_b0_provenance.is_file()
@@ -326,11 +243,12 @@ def main() -> None:
             if gse314342_g00_dev33b_provenance.is_file()
             else None
         ),
-        "gse314342_g00_dev33b_final_review_sha256": (
-            sha256_file(gse314342_g00_dev33b_final_review)
-            if gse314342_g00_dev33b_final_review.is_file()
-            else None
-        ),
+        "gse314342_g00_dev33b_final_review_sha256": review_hashes[
+            "gse314342_g00_dev33b_final_review_sha256"
+        ],
+        "gse314342_g00_dev34a_independent_review_sha256": review_hashes[
+            "gse314342_g00_dev34a_independent_review_sha256"
+        ],
         "gse314342_g00_dev34a_claim_contract_sha256": (
             sha256_file(gse314342_g00_dev34a_claim_contract)
             if gse314342_g00_dev34a_claim_contract.is_file()

@@ -120,9 +120,7 @@ def _make_parent(tmp_path: Path, name: str = "G00_SOURCE_PLANE_DEV29") -> Path:
             "canonical_feature_index_hash": "1" * 64,
             "guide_catalog_hash": _hash_strings(guide_ids),
             "target_catalog_hash": _hash_strings(target_ids),
-            "eligibility_rule": (
-                "guide_group == targeting single sgRNA AND low_quality == false"
-            ),
+            "eligibility_rule": ("guide_group == targeting single sgRNA AND low_quality == false"),
             "eligible_row_ids_hash": hashlib.sha256(
                 np.asarray(row_ids, dtype="<i8").tobytes()
             ).hexdigest(),
@@ -131,9 +129,7 @@ def _make_parent(tmp_path: Path, name: str = "G00_SOURCE_PLANE_DEV29") -> Path:
         },
         "authority_id",
     )
-    (parent / "G00A_SOURCE_AUTHORITY.json").write_text(
-        authority.model_dump_json() + "\n"
-    )
+    (parent / "G00A_SOURCE_AUTHORITY.json").write_text(authority.model_dump_json() + "\n")
     manifest = _identified(
         VirtualCanonicalCountStoreManifestV1,
         {
@@ -335,6 +331,4 @@ def test_native_parent_cannot_be_smuggled_through_legacy_mode(
     with pytest.raises(IntegrityError, match="wrapper"):
         resolve_parent_publication_boundary(boundary, parent_root=parent)
     with pytest.raises(IntegrityError, match="distinct exact sibling"):
-        resolve_parent_publication_boundary(
-            boundary, parent_root=parent, wrapper_root=parent
-        )
+        resolve_parent_publication_boundary(boundary, parent_root=parent, wrapper_root=parent)

@@ -1,0 +1,217 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    },
+    "G00CCommonSupportPriorV2": {
+      "additionalProperties": false,
+      "description": "Dev35 prior that is identical per primary gene on the 4,096-gene support.",
+      "properties": {
+        "common_support_probabilities_strictly_positive": {
+          "const": true,
+          "default": true,
+          "title": "Common Support Probabilities Strictly Positive",
+          "type": "boolean"
+        },
+        "modeled_feature_prior": {
+          "const": "0.5_per_primary_feature",
+          "default": "0.5_per_primary_feature",
+          "title": "Modeled Feature Prior",
+          "type": "string"
+        },
+        "per_feature_pseudocount": {
+          "const": 0.5,
+          "default": 0.5,
+          "title": "Per Feature Pseudocount",
+          "type": "number"
+        },
+        "reference_feature_count": {
+          "const": 4096,
+          "default": 4096,
+          "title": "Reference Feature Count",
+          "type": "integer"
+        },
+        "residual_category_prior": {
+          "const": "0.5_times_omitted_feature_count",
+          "default": "0.5_times_omitted_feature_count",
+          "title": "Residual Category Prior",
+          "type": "string"
+        },
+        "residual_frequencies_strictly_positive": {
+          "const": true,
+          "default": true,
+          "title": "Residual Frequencies Strictly Positive",
+          "type": "boolean"
+        },
+        "residual_frequency_estimator": {
+          "const": "checkpoint_training_counts_plus_0.5_per_omitted_feature_v1",
+          "default": "checkpoint_training_counts_plus_0.5_per_omitted_feature_v1",
+          "title": "Residual Frequency Estimator",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": 2,
+          "default": 2,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "selection_threshold": {
+          "const": 0.0001,
+          "default": 0.0001,
+          "title": "Selection Threshold",
+          "type": "number"
+        },
+        "simulation_sensitivity_required_before_expression_access": {
+          "const": false,
+          "default": false,
+          "title": "Simulation Sensitivity Required Before Expression Access",
+          "type": "boolean"
+        }
+      },
+      "title": "G00CCommonSupportPriorV2",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/g00c-common-support-metric-receipt.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Hash-bound proof that every feature candidate used one scoring alphabet.",
+  "properties": {
+    "candidate_feature_counts": {
+      "default": [
+        256,
+        512,
+        1024,
+        2048,
+        4096
+      ],
+      "items": {
+        "type": "integer"
+      },
+      "title": "Candidate Feature Counts",
+      "type": "array"
+    },
+    "prior": {
+      "$ref": "#/$defs/G00CCommonSupportPriorV2"
+    },
+    "prior_sensitivity": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "probabilities_finite_and_strictly_positive": {
+      "const": true,
+      "default": true,
+      "title": "Probabilities Finite And Strictly Positive",
+      "type": "boolean"
+    },
+    "receipt_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Receipt Id",
+      "type": "string"
+    },
+    "reference_draw_differences_zero_tolerance": {
+      "default": 1e-12,
+      "exclusiveMinimum": 0.0,
+      "maximum": 1e-10,
+      "title": "Reference Draw Differences Zero Tolerance",
+      "type": "number"
+    },
+    "refit_records": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "residual_frequencies": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "seed_schedule_artifact": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "seed_schedule_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Seed Schedule Id",
+      "type": "string"
+    },
+    "selection_freeze_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Selection Freeze Id",
+      "type": "string"
+    },
+    "status": {
+      "const": "pass",
+      "default": "pass",
+      "title": "Status",
+      "type": "string"
+    },
+    "validation_counts": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "validation_total_count_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Validation Total Count Hash",
+      "type": "string"
+    },
+    "validation_total_identical_across_candidates": {
+      "const": true,
+      "default": true,
+      "title": "Validation Total Identical Across Candidates",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "receipt_id",
+    "selection_freeze_id",
+    "seed_schedule_id",
+    "seed_schedule_artifact",
+    "refit_records",
+    "validation_counts",
+    "residual_frequencies",
+    "prior_sensitivity",
+    "prior",
+    "validation_total_count_hash"
+  ],
+  "title": "G00CCommonSupportMetricReceiptV1",
+  "type": "object"
+}

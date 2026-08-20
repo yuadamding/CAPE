@@ -244,8 +244,7 @@ def _deterministic_drift_metrics() -> tuple[pd.DataFrame, dict[str, Any]]:
         "refinement_pass": bool(
             max(constant_errors) <= 1e-12
             and all(
-                right < left
-                for left, right in zip(linear_errors, linear_errors[1:], strict=False)
+                right < left for left, right in zip(linear_errors, linear_errors[1:], strict=False)
             )
         ),
     }
@@ -309,12 +308,12 @@ def _ou_metrics() -> tuple[pd.DataFrame, dict[str, Any]]:
                     abs(value - exact_variance) / exact_variance for value in variances
                 ]
     frame = pd.DataFrame(rows)
-    largest = frame[
-        (frame.particles == _PARTICLE_GRID[-1]) & (frame.steps == _STEP_GRID[-1])
-    ].iloc[0]
-    coarsest = frame[
-        (frame.particles == _PARTICLE_GRID[0]) & (frame.steps == _STEP_GRID[0])
-    ].iloc[0]
+    largest = frame[(frame.particles == _PARTICLE_GRID[-1]) & (frame.steps == _STEP_GRID[-1])].iloc[
+        0
+    ]
+    coarsest = frame[(frame.particles == _PARTICLE_GRID[0]) & (frame.steps == _STEP_GRID[0])].iloc[
+        0
+    ]
     finest_error = float(largest.mean_abs_error + largest.variance_relative_error)
     coarsest_error = float(coarsest.mean_abs_error + coarsest.variance_relative_error)
     analytic_step_errors = []
@@ -322,9 +321,7 @@ def _ou_metrics() -> tuple[pd.DataFrame, dict[str, Any]]:
         dt = duration_value / steps
         multiplier = 1.0 - theta * dt
         euler_mean = x0 * multiplier**steps
-        euler_variance = sigma**2 * dt * (1.0 - multiplier ** (2 * steps)) / (
-            1.0 - multiplier**2
-        )
+        euler_variance = sigma**2 * dt * (1.0 - multiplier ** (2 * steps)) / (1.0 - multiplier**2)
         analytic_step_errors.append(
             abs(euler_mean - exact_mean) + abs(euler_variance - exact_variance) / exact_variance
         )
@@ -345,9 +342,7 @@ def _ou_metrics() -> tuple[pd.DataFrame, dict[str, Any]]:
             finest_error < coarsest_error
             and all(
                 right < left
-                for left, right in zip(
-                    analytic_step_errors, analytic_step_errors[1:], strict=False
-                )
+                for left, right in zip(analytic_step_errors, analytic_step_errors[1:], strict=False)
             )
         ),
         "largest_grid_seed_variance_error_interval": [
@@ -360,9 +355,9 @@ def _ou_metrics() -> tuple[pd.DataFrame, dict[str, Any]]:
 
 def _reaction_metrics() -> tuple[pd.DataFrame, dict[str, Any]]:
     rates = (-0.7, math.log(2.0))
-    model = _FixedTruthModel(
-        mode="identity", reaction_rates=rates, pool_count=2
-    ).to(dtype=torch.float64)
+    model = _FixedTruthModel(mode="identity", reaction_rates=rates, pool_count=2).to(
+        dtype=torch.float64
+    )
     source = torch.zeros(2, 1, dtype=torch.float64)
     target = torch.tensor([0, 1], dtype=torch.int64)
     pool = torch.tensor([0, 1], dtype=torch.int64)
@@ -452,9 +447,7 @@ def _ecology_metrics() -> tuple[pd.DataFrame, dict[str, Any]]:
     observed_means = [float(item[0][0, 0]) for item in schedule]
     absolute_error = float(torch.max(torch.abs(observed_mass - expected_mass)))
     normalized_within_guide_mass = torch.ones_like(observed_mass)
-    negative_control_gap = float(
-        torch.max(torch.abs(normalized_within_guide_mass - expected_mass))
-    )
+    negative_control_gap = float(torch.max(torch.abs(normalized_within_guide_mass - expected_mass)))
 
     direct = DynamicPoolBank.from_series(source, exposure, pool, pool_count=1)
     logged = DynamicPoolBank.from_log_series(source, exposure.log(), pool, pool_count=1)
@@ -664,8 +657,7 @@ def qualify_particle_engine(destination: Path) -> Path:
         drift["constant_max_abs_error"] <= drift["constant_tolerance"]
         and drift["refinement_pass"]
         and ou["largest_grid_mean_within_two_standard_errors"]
-        and ou["largest_grid_variance_relative_error"]
-        <= ou["largest_grid_variance_error_limit"]
+        and ou["largest_grid_variance_relative_error"] <= ou["largest_grid_variance_error_limit"]
         and ou["convergence_pass"]
         and reaction["max_relative_error"] <= reaction["relative_error_limit"]
         and ecology["absolute_weight_max_error"] <= ecology["absolute_weight_error_limit"]
@@ -730,9 +722,7 @@ def qualify_particle_engine(destination: Path) -> Path:
             "ou_mean_within_two_standard_errors": ou[
                 "largest_grid_mean_within_two_standard_errors"
             ],
-            "ou_largest_grid_variance_relative_error": ou[
-                "largest_grid_variance_relative_error"
-            ],
+            "ou_largest_grid_variance_relative_error": ou["largest_grid_variance_relative_error"],
             "ou_convergence_pass": ou["convergence_pass"],
             "reaction_max_relative_error": reaction["max_relative_error"],
             "ecology_absolute_weight_max_error": ecology["absolute_weight_max_error"],
@@ -909,8 +899,7 @@ def verify_particle_engine_qualification(path: Path) -> ParticleEngineQualificat
         raise IntegrityError("T04 implementation file identities differ from the receipt.")
     config = json.loads((path / "CONFIG.json").read_text())
     if (
-        sha256_bytes(canonical_json_bytes(config.get("environment")))
-        != receipt.environment_hash
+        sha256_bytes(canonical_json_bytes(config.get("environment"))) != receipt.environment_hash
         or receipt.environment_hash != bundle.environment_hash
     ):
         raise IntegrityError("T04 numerical environment differs from its receipt.")
@@ -923,8 +912,7 @@ def verify_particle_engine_qualification(path: Path) -> ParticleEngineQualificat
         drift["constant_max_abs_error"] <= drift["constant_tolerance"]
         and drift["refinement_pass"]
         and ou["largest_grid_mean_within_two_standard_errors"]
-        and ou["largest_grid_variance_relative_error"]
-        <= ou["largest_grid_variance_error_limit"]
+        and ou["largest_grid_variance_relative_error"] <= ou["largest_grid_variance_error_limit"]
         and ou["convergence_pass"]
         and reaction["max_relative_error"] <= reaction["relative_error_limit"]
         and ecology["absolute_weight_max_error"] <= ecology["absolute_weight_error_limit"]

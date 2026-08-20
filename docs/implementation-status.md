@@ -1,6 +1,6 @@
 # Implementation status
 
-Last verified: 2026-08-17. Authority: package engineering status; biological
+Last verified: 2026-08-20. Authority: package engineering status; biological
 run receipts and cohort audits remain external to this repository.
 
 Implemented in this repository:
@@ -191,6 +191,15 @@ count. No cohort expression, G00C execution, G00D, GPU, model, or biological
 result is part of Dev34-A. See the
 [Dev34-A claim-contract record](g00-dev34a-claim-contract.md).
 
+Dev35 preserves Dev34-A and makes the not-yet-run selection path decidable from
+artifacts. V3 execution and decision verifiers recompute all 59 paired refits,
+reference-zero checks, support eligibility, feature and row prefixes, and the
+terminal publication state. A separate pre-access extension contract is the
+only way to expose the 2M candidate. The smoothing prior is now exactly 0.5 per
+gene on the shared 4,096-gene support. Portable review hashes and the exact
+tested CPU environment replace attachment-path and stale-lock provenance. See
+the [Dev35 execution-authority record](g00-dev35-execution-authority.md).
+
 Dev7 replaced the invalid reconstructed-SVD softmax with a checkpoint-owned
 multinomial count-composition decoder. Dev10 added a deterministic
 training-only validation holdout and minimum-validation-cross-entropy
@@ -237,7 +246,7 @@ conditional-interaction, and joint nulls, freezes fold and seed identities,
 and strengthens noninteraction comparators. That T03 code remains unqualified
 until T01, T02, and the prescribed pooled pilot pass.
 
-Deliberately not asserted complete in `4.0.0.dev34`:
+Deliberately not asserted complete in `4.0.0.dev35`:
 
 - stable CREDO entry-point discovery;
 - in-repository real-cohort adapters, biological thresholds, or biological claims;

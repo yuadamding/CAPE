@@ -141,9 +141,7 @@ def _parse_legacy_manifest(parent_root: Path) -> tuple[dict[str, str], list[dict
     return entries, verification_rows
 
 
-def _inventory_parent(
-    parent_root: Path, manifest_entries: dict[str, str]
-) -> list[dict[str, Any]]:
+def _inventory_parent(parent_root: Path, manifest_entries: dict[str, str]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     regular_paths: set[str] = set()
     for path in sorted(parent_root.rglob("*"), key=lambda value: value.as_posix()):
@@ -294,51 +292,49 @@ def build_legacy_parent_attestation(
         attestation = _identified(
             LegacyParentAttestationV1,
             {
-                    "schema_id": "credo.legacy_parent_attestation",
-                    "schema_version": 1,
-                    "evidence_role": (
-                        "nonretroactive_legacy_checksum_parent_attestation"
+                "schema_id": "credo.legacy_parent_attestation",
+                "schema_version": 1,
+                "evidence_role": ("nonretroactive_legacy_checksum_parent_attestation"),
+                "parent": LegacyParentDescriptor(
+                    logical_name=parent.name,
+                    g00a_v1_authority_id=authority.authority_id,
+                    g00b_v1_virtual_store_id=manifest.virtual_store_id,
+                    sha256sums=LegacyChecksumManifestBinding(
+                        sha256=sha256_file(parent / "SHA256SUMS"),
+                        size_bytes=(parent / "SHA256SUMS").stat().st_size,
                     ),
-                    "parent": LegacyParentDescriptor(
-                        logical_name=parent.name,
-                        g00a_v1_authority_id=authority.authority_id,
-                        g00b_v1_virtual_store_id=manifest.virtual_store_id,
-                        sha256sums=LegacyChecksumManifestBinding(
-                            sha256=sha256_file(parent / "SHA256SUMS"),
-                            size_bytes=(parent / "SHA256SUMS").stat().st_size,
-                        ),
-                    ).model_dump(mode="json"),
-                    "legacy_publication_semantics": (
-                        LegacyPublicationSemantics().model_dump(mode="json")
+                ).model_dump(mode="json"),
+                "legacy_publication_semantics": (
+                    LegacyPublicationSemantics().model_dump(mode="json")
+                ),
+                "verification": summary.model_dump(mode="json"),
+                "artifacts": LegacyAttestationArtifacts(
+                    directory_inventory=_artifact(
+                        root / "LEGACY_DIRECTORY_INVENTORY.parquet",
+                        root,
+                        "credo.legacy_directory_inventory",
+                        "application/x-parquet",
                     ),
-                    "verification": summary.model_dump(mode="json"),
-                    "artifacts": LegacyAttestationArtifacts(
-                        directory_inventory=_artifact(
-                            root / "LEGACY_DIRECTORY_INVENTORY.parquet",
-                            root,
-                            "credo.legacy_directory_inventory",
-                            "application/x-parquet",
-                        ),
-                        checksum_verification=_artifact(
-                            root / "LEGACY_SHA256SUMS_VERIFICATION.json",
-                            root,
-                            "credo.legacy_sha256sums_verification",
-                            "application/json",
-                        ),
-                        parent_link=_artifact(
-                            root / "PARENT_LINK.json",
-                            root,
-                            "credo.legacy_parent_link",
-                            "application/json",
-                        ),
-                    ).model_dump(mode="json"),
-                    "execution_boundary": LegacyExecutionBoundary().model_dump(mode="json"),
-                    "builder": LegacyAttestationBuilder(
-                        git_commit=git_commit,
-                        distribution_sha256=distribution_sha256,
-                        implementation_sha256=implementation_sha256,
-                        environment_sha256=environment_sha256,
-                    ).model_dump(mode="json"),
+                    checksum_verification=_artifact(
+                        root / "LEGACY_SHA256SUMS_VERIFICATION.json",
+                        root,
+                        "credo.legacy_sha256sums_verification",
+                        "application/json",
+                    ),
+                    parent_link=_artifact(
+                        root / "PARENT_LINK.json",
+                        root,
+                        "credo.legacy_parent_link",
+                        "application/json",
+                    ),
+                ).model_dump(mode="json"),
+                "execution_boundary": LegacyExecutionBoundary().model_dump(mode="json"),
+                "builder": LegacyAttestationBuilder(
+                    git_commit=git_commit,
+                    distribution_sha256=distribution_sha256,
+                    implementation_sha256=implementation_sha256,
+                    environment_sha256=environment_sha256,
+                ).model_dump(mode="json"),
             },
             "attestation_id",
         )
@@ -350,17 +346,17 @@ def build_legacy_parent_attestation(
         receipt = _identified(
             LegacyParentAttestationReceiptV1,
             {
-                    "schema_version": 1,
-                    "test_contract_id": contract.test_contract_id,
-                    "attestation_id": attestation.attestation_id,
-                    "attestation": attestation_ref.model_dump(mode="json"),
-                    "legacy_sha256sums_verified": True,
-                    "all_authoritative_files_covered": True,
-                    "parent_g00a_v1_verified": True,
-                    "parent_g00b_v1_verified": True,
-                    "parent_g00a_g00b_relationship_verified": True,
-                    "original_atomicity_not_claimed": True,
-                    "status": "pass",
+                "schema_version": 1,
+                "test_contract_id": contract.test_contract_id,
+                "attestation_id": attestation.attestation_id,
+                "attestation": attestation_ref.model_dump(mode="json"),
+                "legacy_sha256sums_verified": True,
+                "all_authoritative_files_covered": True,
+                "parent_g00a_v1_verified": True,
+                "parent_g00b_v1_verified": True,
+                "parent_g00a_g00b_relationship_verified": True,
+                "original_atomicity_not_claimed": True,
+                "status": "pass",
             },
             "receipt_id",
         )
@@ -495,9 +491,7 @@ def resolve_parent_publication_boundary(
     else:
         if wrapper_root is None:
             raise IntegrityError("Legacy parent resolution requires its exact wrapper.")
-        attestation, receipt = verify_legacy_parent_attestation(
-            wrapper_root, parent_root=parent
-        )
+        attestation, receipt = verify_legacy_parent_attestation(wrapper_root, parent_root=parent)
         if (
             receipt.status != "pass"
             or boundary.attestation_id != attestation.attestation_id

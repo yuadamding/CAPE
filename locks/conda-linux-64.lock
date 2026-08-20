@@ -3,6 +3,6 @@
 platform: linux-64
 python: 3.13.12
 cuda: "13.0"
-torch: 2.11.0
-recipe: credo.count_sde_v4@4.0.dev34
+torch: 2.13.0
+recipe: credo.count_sde_v4@4.0.dev35
 frozen_credo_sha256: 2020b0f2549bb98b2b0fbb9384783d39be3ce11aeef9ae2bfecf232ae07fc684

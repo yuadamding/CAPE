@@ -1,0 +1,186 @@
+{
+  "$defs": {
+    "ArtifactRef": {
+      "additionalProperties": false,
+      "properties": {
+        "media_type": {
+          "title": "Media Type",
+          "type": "string"
+        },
+        "relative_uri": {
+          "title": "Relative Uri",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "minimum": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_id",
+        "schema_version",
+        "sha256",
+        "size_bytes",
+        "media_type",
+        "relative_uri"
+      ],
+      "title": "ArtifactRef",
+      "type": "object"
+    }
+  },
+  "$id": "https://credo.local/schemas/g00c-sample-size-extension-freeze.v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Pre-access authority for the single permitted two-million-row extension.",
+  "properties": {
+    "added_candidate_cells": {
+      "default": [
+        2000000
+      ],
+      "items": {
+        "type": "integer"
+      },
+      "title": "Added Candidate Cells",
+      "type": "array"
+    },
+    "base_candidate_cells": {
+      "default": [
+        50000,
+        100000,
+        250000,
+        500000,
+        1000000
+      ],
+      "items": {
+        "type": "integer"
+      },
+      "title": "Base Candidate Cells",
+      "type": "array"
+    },
+    "base_execution_bundle": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "base_extension_required_receipt": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "base_feature_selection_result": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "base_selection_freeze_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Base Selection Freeze Id",
+      "type": "string"
+    },
+    "base_support_audit": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "expression_values_accessed_during_freeze": {
+      "const": false,
+      "default": false,
+      "title": "Expression Values Accessed During Freeze",
+      "type": "boolean"
+    },
+    "extension_freeze_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Extension Freeze Id",
+      "type": "string"
+    },
+    "extension_support_audit_contract": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "fresh_attempt_id": {
+      "minLength": 1,
+      "title": "Fresh Attempt Id",
+      "type": "string"
+    },
+    "publication_root_uri": {
+      "minLength": 1,
+      "title": "Publication Root Uri",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "seed_schedule_artifact": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "seed_schedule_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Seed Schedule Id",
+      "type": "string"
+    },
+    "seed_schedule_policy": {
+      "const": "unchanged_from_base",
+      "default": "unchanged_from_base",
+      "title": "Seed Schedule Policy",
+      "type": "string"
+    },
+    "selected_feature_count": {
+      "enum": [
+        256,
+        512,
+        1024,
+        2048,
+        4096
+      ],
+      "title": "Selected Feature Count",
+      "type": "integer"
+    },
+    "selected_feature_order_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Selected Feature Order Sha256",
+      "type": "string"
+    },
+    "selected_feature_surface": {
+      "$ref": "#/$defs/ArtifactRef"
+    },
+    "status": {
+      "const": "extension_frozen_not_run",
+      "default": "extension_frozen_not_run",
+      "title": "Status",
+      "type": "string"
+    },
+    "third_extension_permitted": {
+      "const": false,
+      "default": false,
+      "title": "Third Extension Permitted",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "extension_freeze_id",
+    "base_selection_freeze_id",
+    "base_execution_bundle",
+    "base_extension_required_receipt",
+    "base_feature_selection_result",
+    "selected_feature_count",
+    "selected_feature_order_sha256",
+    "selected_feature_surface",
+    "seed_schedule_id",
+    "seed_schedule_artifact",
+    "base_support_audit",
+    "extension_support_audit_contract",
+    "fresh_attempt_id",
+    "publication_root_uri"
+  ],
+  "title": "G00CSampleSizeExtensionFreezeV1",
+  "type": "object"
+}

@@ -1,0 +1,81 @@
+{
+  "$id": "https://credo.local/schemas/g00c-support-audit-contract.v2.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Stage-scoped support authority; two-million rows exist only after extension freeze.",
+  "properties": {
+    "cell_candidate_counts": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Cell Candidate Counts",
+      "type": "array"
+    },
+    "contract_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Contract Id",
+      "type": "string"
+    },
+    "dimensions": {
+      "default": [
+        "donor_checkpoint",
+        "target",
+        "guide",
+        "control_vs_targeting",
+        "sampler_stratum"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Dimensions",
+      "type": "array"
+    },
+    "feature_candidate_counts": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Feature Candidate Counts",
+      "type": "array"
+    },
+    "reject_zero_support_candidate": {
+      "const": true,
+      "default": true,
+      "title": "Reject Zero Support Candidate",
+      "type": "boolean"
+    },
+    "report_zero_support_strata": {
+      "const": true,
+      "default": true,
+      "title": "Report Zero Support Strata",
+      "type": "boolean"
+    },
+    "schema_version": {
+      "const": 2,
+      "default": 2,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "silent_weight_renormalization_permitted": {
+      "const": false,
+      "default": false,
+      "title": "Silent Weight Renormalization Permitted",
+      "type": "boolean"
+    },
+    "stage": {
+      "enum": [
+        "base",
+        "extension"
+      ],
+      "title": "Stage",
+      "type": "string"
+    }
+  },
+  "required": [
+    "contract_id",
+    "stage",
+    "feature_candidate_counts",
+    "cell_candidate_counts"
+  ],
+  "title": "G00CSupportAuditContractV2",
+  "type": "object"
+}

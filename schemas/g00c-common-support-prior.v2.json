@@ -1,0 +1,70 @@
+{
+  "$id": "https://credo.local/schemas/g00c-common-support-prior.v2.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Dev35 prior that is identical per primary gene on the 4,096-gene support.",
+  "properties": {
+    "common_support_probabilities_strictly_positive": {
+      "const": true,
+      "default": true,
+      "title": "Common Support Probabilities Strictly Positive",
+      "type": "boolean"
+    },
+    "modeled_feature_prior": {
+      "const": "0.5_per_primary_feature",
+      "default": "0.5_per_primary_feature",
+      "title": "Modeled Feature Prior",
+      "type": "string"
+    },
+    "per_feature_pseudocount": {
+      "const": 0.5,
+      "default": 0.5,
+      "title": "Per Feature Pseudocount",
+      "type": "number"
+    },
+    "reference_feature_count": {
+      "const": 4096,
+      "default": 4096,
+      "title": "Reference Feature Count",
+      "type": "integer"
+    },
+    "residual_category_prior": {
+      "const": "0.5_times_omitted_feature_count",
+      "default": "0.5_times_omitted_feature_count",
+      "title": "Residual Category Prior",
+      "type": "string"
+    },
+    "residual_frequencies_strictly_positive": {
+      "const": true,
+      "default": true,
+      "title": "Residual Frequencies Strictly Positive",
+      "type": "boolean"
+    },
+    "residual_frequency_estimator": {
+      "const": "checkpoint_training_counts_plus_0.5_per_omitted_feature_v1",
+      "default": "checkpoint_training_counts_plus_0.5_per_omitted_feature_v1",
+      "title": "Residual Frequency Estimator",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "default": 2,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "selection_threshold": {
+      "const": 0.0001,
+      "default": 0.0001,
+      "title": "Selection Threshold",
+      "type": "number"
+    },
+    "simulation_sensitivity_required_before_expression_access": {
+      "const": false,
+      "default": false,
+      "title": "Simulation Sensitivity Required Before Expression Access",
+      "type": "boolean"
+    }
+  },
+  "title": "G00CCommonSupportPriorV2",
+  "type": "object"
+}

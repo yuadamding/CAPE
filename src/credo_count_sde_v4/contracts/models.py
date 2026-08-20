@@ -2828,7 +2828,7 @@ class G00CCommonSupportFeatureMetricV1(StrictModel):
     comparison: Literal["q95_absolute_paired_nll_difference_to_4096"] = (
         "q95_absolute_paired_nll_difference_to_4096"
     )
-    feature_equivalence_epsilon: Literal[0.0001] = 0.0001
+    feature_equivalence_epsilon: float = Field(default=0.0001, json_schema_extra={"const": 0.0001})
     selection_rule: Literal["smallest_qualifying_prefix_v1"] = "smallest_qualifying_prefix_v1"
 
     @model_validator(mode="after")
@@ -2837,6 +2837,8 @@ class G00CCommonSupportFeatureMetricV1(StrictModel):
             raise ValueError("Dev34 common-support candidates must equal the frozen prefix grid.")
         if self.checkpoint_ids != ("Rest", "Stim8hr", "Stim48hr"):
             raise ValueError("Dev34 common-support checkpoints must follow physical chronology.")
+        if self.feature_equivalence_epsilon != 0.0001:
+            raise ValueError("Dev34 feature equivalence epsilon must remain 1e-4.")
         return self
 
 
@@ -2865,11 +2867,17 @@ class G00CSelectionMarginFreezeV1(StrictModel):
     metric_unit: Literal["nats_per_weighted_validation_count"] = (
         "nats_per_weighted_validation_count"
     )
-    feature_equivalence_epsilon: Literal[0.0001] = 0.0001
-    cell_equivalence_epsilon: Literal[0.0001] = 0.0001
+    feature_equivalence_epsilon: float = Field(default=0.0001, json_schema_extra={"const": 0.0001})
+    cell_equivalence_epsilon: float = Field(default=0.0001, json_schema_extra={"const": 0.0001})
     candidate_curve_values_accessed: Literal[False] = False
     cohort_expression_values_accessed: Literal[False] = False
     heldout_stimulated_expression_values_accessed: Literal[False] = False
+
+    @model_validator(mode="after")
+    def validate_margins(self) -> G00CSelectionMarginFreezeV1:
+        if self.feature_equivalence_epsilon != 0.0001 or self.cell_equivalence_epsilon != 0.0001:
+            raise ValueError("Dev34 feature and cell equivalence margins must remain 1e-4.")
+        return self
 
 
 class G00CRefitFreezeV1(StrictModel):
@@ -3017,6 +3025,49 @@ class G00CSupportAuditFreezeV1(StrictModel):
         )
         if self.dimensions != expected:
             raise ValueError("Dev34 support audit dimensions must equal the frozen ordered set.")
+        return self
+
+
+class G00CSupportAuditContractV2(StrictModel):
+    """Stage-scoped support authority; two-million rows exist only after extension freeze."""
+
+    schema_version: Literal[2] = 2
+    contract_id: Sha256
+    stage: Literal["base", "extension"]
+    dimensions: tuple[str, ...] = (
+        "donor_checkpoint",
+        "target",
+        "guide",
+        "control_vs_targeting",
+        "sampler_stratum",
+    )
+    feature_candidate_counts: tuple[int, ...]
+    cell_candidate_counts: tuple[int, ...]
+    report_zero_support_strata: Literal[True] = True
+    reject_zero_support_candidate: Literal[True] = True
+    silent_weight_renormalization_permitted: Literal[False] = False
+
+    @model_validator(mode="after")
+    def validate_stage(self) -> G00CSupportAuditContractV2:
+        expected_dimensions = (
+            "donor_checkpoint",
+            "target",
+            "guide",
+            "control_vs_targeting",
+            "sampler_stratum",
+        )
+        if self.dimensions != expected_dimensions:
+            raise ValueError("Dev35 support dimensions differ from the frozen ordered set.")
+        if self.stage == "base":
+            if self.feature_candidate_counts != (256, 512, 1024, 2048, 4096) or (
+                self.cell_candidate_counts != (50_000, 100_000, 250_000, 500_000, 1_000_000)
+            ):
+                raise ValueError("Dev35 base support surface changed its candidate grids.")
+        elif self.feature_candidate_counts or self.cell_candidate_counts != (2_000_000,):
+            raise ValueError("Dev35 extension support surface must contain only two million.")
+        expected = self.identity(id_field="contract_id")
+        if self.contract_id != expected:
+            raise ValueError(f"contract_id mismatch: expected {expected}.")
         return self
 
 
@@ -3189,6 +3240,311 @@ class G00CSelectionFreezeContractV1(StrictModel):
         expected = self.identity(id_field="freeze_id")
         if self.freeze_id != expected:
             raise ValueError(f"freeze_id mismatch: expected {expected}.")
+        return self
+
+
+class G00CCommonSupportPriorV2(StrictModel):
+    """Dev35 prior that is identical per primary gene on the 4,096-gene support."""
+
+    schema_version: Literal[2] = 2
+    reference_feature_count: Literal[4096] = 4096
+    per_feature_pseudocount: float = Field(default=0.5, json_schema_extra={"const": 0.5})
+    modeled_feature_prior: Literal["0.5_per_primary_feature"] = "0.5_per_primary_feature"
+    residual_category_prior: Literal["0.5_times_omitted_feature_count"] = (
+        "0.5_times_omitted_feature_count"
+    )
+    residual_frequency_estimator: Literal[
+        "checkpoint_training_counts_plus_0.5_per_omitted_feature_v1"
+    ] = "checkpoint_training_counts_plus_0.5_per_omitted_feature_v1"
+    residual_frequencies_strictly_positive: Literal[True] = True
+    common_support_probabilities_strictly_positive: Literal[True] = True
+    simulation_sensitivity_required_before_expression_access: Literal[False] = False
+    selection_threshold: float = Field(default=0.0001, json_schema_extra={"const": 0.0001})
+
+    @model_validator(mode="after")
+    def validate_prior(self) -> G00CCommonSupportPriorV2:
+        if self.per_feature_pseudocount != 0.5 or self.selection_threshold != 0.0001:
+            raise ValueError("Dev35 prior and selection threshold must remain exactly frozen.")
+        return self
+
+
+class G00CCommonSupportMetricReceiptV1(StrictModel):
+    """Hash-bound proof that every feature candidate used one scoring alphabet."""
+
+    schema_version: Literal[1] = 1
+    receipt_id: Sha256
+    selection_freeze_id: Sha256
+    seed_schedule_id: Sha256
+    seed_schedule_artifact: ArtifactRef
+    refit_records: ArtifactRef
+    validation_counts: ArtifactRef
+    residual_frequencies: ArtifactRef
+    prior_sensitivity: ArtifactRef
+    prior: G00CCommonSupportPriorV2
+    candidate_feature_counts: tuple[int, ...] = (256, 512, 1024, 2048, 4096)
+    validation_total_count_hash: Sha256
+    validation_total_identical_across_candidates: Literal[True] = True
+    reference_draw_differences_zero_tolerance: float = Field(default=1e-12, gt=0.0, le=1e-10)
+    probabilities_finite_and_strictly_positive: Literal[True] = True
+    status: Literal["pass"] = "pass"
+
+    @model_validator(mode="after")
+    def validate_receipt(self) -> G00CCommonSupportMetricReceiptV1:
+        if self.candidate_feature_counts != (256, 512, 1024, 2048, 4096):
+            raise ValueError("Dev35 common-support receipt has a different feature grid.")
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
+        return self
+
+
+class G00CSampleSizeExtensionFreezeV1(StrictModel):
+    """Pre-access authority for the single permitted two-million-row extension."""
+
+    schema_version: Literal[1] = 1
+    extension_freeze_id: Sha256
+    base_selection_freeze_id: Sha256
+    base_execution_bundle: ArtifactRef
+    base_extension_required_receipt: ArtifactRef
+    base_feature_selection_result: ArtifactRef
+    selected_feature_count: Literal[256, 512, 1024, 2048, 4096]
+    selected_feature_order_sha256: Sha256
+    selected_feature_surface: ArtifactRef
+    seed_schedule_id: Sha256
+    seed_schedule_artifact: ArtifactRef
+    seed_schedule_policy: Literal["unchanged_from_base"] = "unchanged_from_base"
+    base_candidate_cells: tuple[int, ...] = (50_000, 100_000, 250_000, 500_000, 1_000_000)
+    added_candidate_cells: tuple[int, ...] = (2_000_000,)
+    base_support_audit: ArtifactRef
+    extension_support_audit_contract: ArtifactRef
+    third_extension_permitted: Literal[False] = False
+    fresh_attempt_id: str = Field(min_length=1)
+    publication_root_uri: str = Field(min_length=1)
+    expression_values_accessed_during_freeze: Literal[False] = False
+    status: Literal["extension_frozen_not_run"] = "extension_frozen_not_run"
+
+    @field_validator("publication_root_uri")
+    @classmethod
+    def safe_publication_root(cls, value: str) -> str:
+        return validate_relative_uri(value)
+
+    @model_validator(mode="after")
+    def validate_extension(self) -> G00CSampleSizeExtensionFreezeV1:
+        if self.base_candidate_cells != (50_000, 100_000, 250_000, 500_000, 1_000_000):
+            raise ValueError("Dev35 extension changed the frozen base grid.")
+        if self.added_candidate_cells != (2_000_000,):
+            raise ValueError("Dev35 permits exactly one two-million-row extension.")
+        expected = self.identity(id_field="extension_freeze_id")
+        if self.extension_freeze_id != expected:
+            raise ValueError(f"extension_freeze_id mismatch: expected {expected}.")
+        return self
+
+
+class G00CImplementationBindingV1(StrictModel):
+    """One role-labelled implementation artifact in the pre-access authority."""
+
+    role: Literal[
+        "feature_ranking",
+        "residual_frequency",
+        "refit",
+        "sampler",
+        "monitor",
+        "execution_verifier",
+        "decision_verifier",
+    ]
+    artifact: ArtifactRef
+
+
+class G00CImplementationAuthorityV1(StrictModel):
+    """Exact code and runtime identities required before G00C expression access."""
+
+    dev35_code_commit: GitCommit
+    wheel: ArtifactRef
+    normalized_sdist: ArtifactRef
+    implementation_tree_sha256: Sha256
+    environment_lock: ArtifactRef
+    environment_kind: Literal["exact_local_lock", "oci_container"]
+    execution_environment_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    implementations: tuple[G00CImplementationBindingV1, ...]
+
+    @model_validator(mode="after")
+    def validate_implementations(self) -> G00CImplementationAuthorityV1:
+        expected = (
+            "feature_ranking",
+            "residual_frequency",
+            "refit",
+            "sampler",
+            "monitor",
+            "execution_verifier",
+            "decision_verifier",
+        )
+        if tuple(binding.role for binding in self.implementations) != expected:
+            raise ValueError("Dev35 implementation roles must equal the frozen ordered set.")
+        return self
+
+
+class G00CD1ExecutionAuthorityFreezeV1(StrictModel):
+    """Concrete metadata-only D1 authority layered over the Dev34 design freeze."""
+
+    schema_version: Literal[1] = 1
+    authority_id: Sha256
+    selection_freeze: ArtifactRef
+    selection_freeze_id: Sha256
+    outer_split_id: Literal["lodo-D1"] = "lodo-D1"
+    row_role_freeze: ArtifactRef
+    row_roles: tuple[FoldRowRoleRecord, ...]
+    nested_training_row_order: ArtifactRef
+    nested_training_row_order_hash: Sha256
+    feature_reference_rows: ArtifactRef
+    feature_reference_rows_hash: Sha256
+    feature_reference_rows_are_first_million: Literal[True] = True
+    seed_schedule: ArtifactRef
+    seed_schedule_id: Sha256
+    common_support_prior: G00CCommonSupportPriorV2
+    base_support_audit_contract: ArtifactRef
+    implementation: G00CImplementationAuthorityV1
+    fresh_attempt_id: str = Field(min_length=1)
+    publication_root_uri: str = Field(min_length=1)
+    prior_attempt_artifact_reuse_permitted: Literal[False] = False
+    expression_values_accessed_during_freeze: Literal[False] = False
+    protected_heldout_expression_values_accessed_during_freeze: Literal[False] = False
+    status: Literal["finalized_preaccess_not_executed"] = "finalized_preaccess_not_executed"
+    expression_access_authorized_by_this_record: Literal[False] = False
+    biological_claims: Literal[False] = False
+
+    @field_validator("publication_root_uri")
+    @classmethod
+    def safe_authority_publication_root(cls, value: str) -> str:
+        return validate_relative_uri(value)
+
+    @model_validator(mode="after")
+    def validate_authority(self) -> G00CD1ExecutionAuthorityFreezeV1:
+        expected_roles = (
+            "training_fit",
+            "training_validation",
+            "heldout_source_query",
+            "protected_heldout_stimulated",
+        )
+        if tuple(record.role for record in self.row_roles) != expected_roles:
+            raise ValueError("Dev35 D1 authority requires the four ordered row roles.")
+        expected = self.identity(id_field="authority_id")
+        if self.authority_id != expected:
+            raise ValueError(f"authority_id mismatch: expected {expected}.")
+        return self
+
+
+class G00CExecutionBundleV3(StrictModel):
+    """Dev35 authoritative chain from freeze through V3 selections and publication."""
+
+    schema_version: Literal[3] = 3
+    bundle_id: Sha256
+    execution_authority: ArtifactRef
+    execution_authority_id: Sha256
+    selection_freeze: ArtifactRef
+    selection_freeze_id: Sha256
+    seed_schedule: ArtifactRef
+    seed_schedule_id: Sha256
+    row_roles: ArtifactRef
+    feature_selection_result: ArtifactRef
+    feature_selection_result_id: Sha256
+    sample_size_selection_result: ArtifactRef
+    sample_size_selection_result_id: Sha256
+    common_support_receipt: ArtifactRef
+    base_support_audit_contract: ArtifactRef
+    base_support_audit: ArtifactRef
+    extension_support_audit_contract: ArtifactRef | None = None
+    extension_support_audit: ArtifactRef | None = None
+    sampler_evidence: ArtifactRef
+    publication_manifest: ArtifactRef
+    extension_freeze: ArtifactRef | None = None
+    compact_payload: ArtifactRef | None = None
+    compact_verification_receipt: ArtifactRef | None = None
+    reload_receipt: ArtifactRef | None = None
+    failure_receipt: ArtifactRef | None = None
+    terminal_status: Literal["pass", "extension_required", "fail_no_saturation", "failed_integrity"]
+
+    @model_validator(mode="after")
+    def validate_bundle(self) -> G00CExecutionBundleV3:
+        pass_artifacts = (
+            self.compact_payload,
+            self.compact_verification_receipt,
+            self.reload_receipt,
+        )
+        if self.terminal_status == "pass":
+            if (
+                any(artifact is None for artifact in pass_artifacts)
+                or self.failure_receipt is not None
+            ):
+                raise ValueError(
+                    "A Dev35 pass requires all materialization evidence and no failure."
+                )
+        elif any(artifact is not None for artifact in pass_artifacts):
+            raise ValueError("A nonpass Dev35 bundle cannot publish selected compact artifacts.")
+        if self.terminal_status == "fail_no_saturation" and self.extension_freeze is None:
+            raise ValueError("Terminal nonsaturation requires its extension authority.")
+        if self.terminal_status == "extension_required" and self.extension_freeze is not None:
+            raise ValueError("The base stop precedes creation of the extension authority.")
+        if self.terminal_status == "failed_integrity":
+            if self.failure_receipt is None:
+                raise ValueError("An integrity failure requires a bound failure receipt.")
+        elif self.failure_receipt is not None:
+            raise ValueError("Only failed_integrity may bind a failure receipt.")
+        extension_support = (
+            self.extension_support_audit_contract,
+            self.extension_support_audit,
+        )
+        if self.extension_freeze is None and any(
+            artifact is not None for artifact in extension_support
+        ):
+            raise ValueError("Two-million support evidence requires a frozen extension.")
+        if self.extension_freeze is not None and any(
+            artifact is None for artifact in extension_support
+        ):
+            raise ValueError("A frozen extension requires its separate support evidence.")
+        expected = self.identity(id_field="bundle_id")
+        if self.bundle_id != expected:
+            raise ValueError(f"bundle_id mismatch: expected {expected}.")
+        return self
+
+
+class G00CDecisionReceiptV3(StrictModel):
+    """Artifact-derived Dev35 terminal decision and sole G00D parent gate."""
+
+    schema_version: Literal[3] = 3
+    receipt_id: Sha256
+    execution_bundle_id: Sha256
+    execution_authority_id: Sha256
+    selection_freeze_id: Sha256
+    feature_selection_result_id: Sha256
+    sample_size_selection_result_id: Sha256
+    seed_schedule_id: Sha256
+    common_support_receipt_sha256: Sha256
+    support_audit_sha256s: tuple[Sha256, ...]
+    verifier_implementation_sha256: Sha256
+    verified_artifact_sha256s: tuple[Sha256, ...]
+    grid_stage: Literal["base", "extension"]
+    terminal_status: Literal["pass", "extension_required", "fail_no_saturation", "failed_integrity"]
+    verification_completed: Literal[True] = True
+    may_parent_g00d: bool
+    biological_claims: Literal[False] = False
+
+    @model_validator(mode="after")
+    def validate_decision(self) -> G00CDecisionReceiptV3:
+        if not self.verified_artifact_sha256s or len(self.verified_artifact_sha256s) != len(
+            set(self.verified_artifact_sha256s)
+        ):
+            raise ValueError("Dev35 verified artifact hashes must be nonempty and unique.")
+        expected_support_hashes = 2 if self.grid_stage == "extension" else 1
+        if (
+            len(self.support_audit_sha256s) != expected_support_hashes
+            or len(set(self.support_audit_sha256s)) != expected_support_hashes
+        ):
+            raise ValueError("Dev35 decision has the wrong stage-scoped support hashes.")
+        if self.may_parent_g00d != (self.terminal_status == "pass"):
+            raise ValueError("Only a fully verified Dev35 pass may parent G00D.")
+        expected = self.identity(id_field="receipt_id")
+        if self.receipt_id != expected:
+            raise ValueError(f"receipt_id mismatch: expected {expected}.")
         return self
 
 
@@ -3791,7 +4147,7 @@ class CompiledRunContract(StrictModel):
     schema_version: int = 1
     compiled_run_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev34"] = "4.0.dev34"
+    recipe_version: Literal["4.0.dev35"] = "4.0.dev35"
     recipe_wheel_hash: Sha256
     frozen_credo_artifact_hash: Sha256
     environment_lock_hash: Sha256
@@ -3858,7 +4214,7 @@ class InferenceBundleManifest(StrictModel):
     compiled_run_id: str
     selected_checkpoint_id: str
     recipe_id: Literal["credo.count_sde_v4"] = "credo.count_sde_v4"
-    recipe_version: Literal["4.0.dev34"] = "4.0.dev34"
+    recipe_version: Literal["4.0.dev35"] = "4.0.dev35"
     selected_family: Literal[
         "configured_checkpoint",
         "gene_decoder_selected",
