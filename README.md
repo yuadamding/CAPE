@@ -96,6 +96,10 @@ extension-parent, monitoring/access, and durable-restart defects. See the
 [Dev37 source-derived seal](docs/g00-dev37-source-derived-seal.md).
 Its metadata-only A3 authority and deterministic archive are finalized; G00C
 expression access and G00D remain blocked.
+Dev38 adds a behavior-preserving sampler optimization and three explicitly
+separated CUDA reduction envelopes. The H100 canaries are engineering evidence
+only; the fast CUDA-native stream requires a new authority. See the
+[Dev38 GPU qualification](docs/g00-dev38-gpu-qualification.md).
 
 ## Quick start
 

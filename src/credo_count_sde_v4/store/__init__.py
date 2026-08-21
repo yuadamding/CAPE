@@ -2,6 +2,16 @@
 
 from .csr import CountStore, SparseCountBatch, build_count_store
 from .g00c import validate_g00c_execution
+from .g00c_refit_cuda import (
+    CudaAccumulationReceipt,
+    CudaResidentCompactReduction,
+    Dev37CudaAccumulationReceipt,
+    accumulate_checkpoint_counts_cpu_compact,
+    accumulate_checkpoint_counts_cuda,
+    accumulate_checkpoint_counts_cuda_dev37,
+    compact_sampled_rows,
+    prepare_resident_checkpoint_counts_cuda,
+)
 from .g00c_selection import (
     checkpoint_multinomial_refit,
     checkpoint_multinomial_refit_common_support,
@@ -66,6 +76,14 @@ __all__ = [
     "sample_size_decision_v3",
     "checkpoint_multinomial_refit",
     "checkpoint_multinomial_refit_common_support",
+    "compact_sampled_rows",
+    "accumulate_checkpoint_counts_cpu_compact",
+    "accumulate_checkpoint_counts_cuda",
+    "CudaAccumulationReceipt",
+    "CudaResidentCompactReduction",
+    "Dev37CudaAccumulationReceipt",
+    "accumulate_checkpoint_counts_cuda_dev37",
+    "prepare_resident_checkpoint_counts_cuda",
     "derive_refit_seed_schedule",
     "expand_common_support_probabilities",
     "feature_selection_decision_v3",

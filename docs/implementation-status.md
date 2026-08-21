@@ -266,6 +266,14 @@ authority is finalized as A3 (`5ee82382…`) and independently archived as
 `2f3085c9…`. It remains metadata-only; G00C expression execution is still blocked.
 See the [Dev37 source-derived-seal record](g00-dev37-source-derived-seal.md).
 
+The Dev38 engineering branch caches the five sampler prefixes, replaces
+per-draw Pandas/dictionary construction with typed arrays, and adds three
+explicit CUDA refit envelopes. One-H100 Kubernetes canaries proved exact
+Dev37-reference/CUDA equality for the expanded-row path and a 273.20x warm
+batched speedup for the CUDA-native resident path. Both compact paths consume
+another RNG stream and are not Dev37 promotion evidence. See the
+[Dev38 GPU qualification record](g00-dev38-gpu-qualification.md).
+
 Deliberately not asserted complete in `4.0.0.dev37`:
 
 - stable CREDO entry-point discovery;

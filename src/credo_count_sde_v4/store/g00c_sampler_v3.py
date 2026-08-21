@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -82,18 +83,24 @@ def _entry_rows(
     return order[:count]
 
 
-def _draw_entry(
-    entry_index: int,
-    entry: G00CSamplerPlanEntryV3,
+@dataclass(frozen=True)
+class _PreparedHierarchy:
+    """Immutable lookup tables shared by every draw over one row prefix."""
+
+    sources: np.ndarray
+    targets: dict[int, np.ndarray]
+    guides: dict[tuple[int, int], np.ndarray]
+    rows: dict[tuple[int, int, int], np.ndarray]
+    control_row_ids: np.ndarray
+    control_values: np.ndarray
+
+
+def _prepare_hierarchy(
     hierarchy: pd.DataFrame,
     allowed_rows: np.ndarray,
-    schedule: G00CRefitSeedScheduleV1,
-    *,
-    resume_after_macro_update: int | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    seed = schedule.records[entry.refit_draw_id]
-    sampler = np.random.Generator(np.random.PCG64DXSM(seed.training_sampler))
-    thinning = np.random.Generator(np.random.PCG64DXSM(seed.thinning))
+) -> _PreparedHierarchy:
+    """Index one frozen prefix once instead of rescanning it for every seed."""
+
     selected = hierarchy.loc[hierarchy["row_id"].isin(allowed_rows)].copy()
     if len(selected) != len(allowed_rows) or selected["row_id"].duplicated().any():
         raise IntegrityError("Dev36 sampler rows are not one exact frozen prefix.")
@@ -102,45 +109,73 @@ def _draw_entry(
     }
     if not source_groups:
         raise IntegrityError("Dev36 sampler has no training-fit source strata.")
-    nested: dict[int, dict[int, dict[int, np.ndarray]]] = {}
+
+    targets: dict[int, np.ndarray] = {}
+    guides: dict[tuple[int, int], np.ndarray] = {}
+    rows: dict[tuple[int, int, int], np.ndarray] = {}
     for source, source_frame in source_groups.items():
-        nested[source] = {}
-        for target, target_frame in source_frame.groupby("target_code", sort=True):
-            nested[source][int(target)] = {
-                int(guide): guide_frame["row_id"].to_numpy(dtype=np.int64)
-                for guide, guide_frame in target_frame.groupby("guide_code", sort=True)
+        target_groups = {
+            int(target): frame
+            for target, frame in source_frame.groupby("target_code", sort=True)
+        }
+        targets[source] = np.asarray(sorted(target_groups), dtype=np.int64)
+        for target, target_frame in target_groups.items():
+            guide_groups = {
+                int(guide): frame
+                for guide, frame in target_frame.groupby("guide_code", sort=True)
             }
-    hierarchy_index = selected.set_index("row_id")
-    sources = np.asarray(sorted(nested), dtype=np.int64)
-    rows: list[dict[str, object]] = []
+            guides[(source, target)] = np.asarray(sorted(guide_groups), dtype=np.int64)
+            for guide, guide_frame in guide_groups.items():
+                rows[(source, target, guide)] = guide_frame["row_id"].to_numpy(
+                    dtype=np.int64
+                )
+
+    control = selected[["row_id", "is_control"]].sort_values("row_id", kind="stable")
+    return _PreparedHierarchy(
+        sources=np.asarray(sorted(source_groups), dtype=np.int64),
+        targets=targets,
+        guides=guides,
+        rows=rows,
+        control_row_ids=control["row_id"].to_numpy(dtype=np.int64),
+        control_values=control["is_control"].to_numpy(dtype=np.bool_),
+    )
+
+
+def _draw_prepared_entry(
+    entry_index: int,
+    entry: G00CSamplerPlanEntryV3,
+    prepared: _PreparedHierarchy,
+    schedule: G00CRefitSeedScheduleV1,
+    *,
+    resume_after_macro_update: int | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    seed = schedule.records[entry.refit_draw_id]
+    sampler = np.random.Generator(np.random.PCG64DXSM(seed.training_sampler))
+    thinning = np.random.Generator(np.random.PCG64DXSM(seed.thinning))
+    sources = prepared.sources
     states: list[dict[str, object]] = []
     total = entry.macro_updates * 4096
+    row_ids = np.empty(total, dtype=np.int64)
+    source_indices = np.empty(total, dtype=np.int64)
+    target_codes = np.empty(total, dtype=np.int64)
+    guide_codes = np.empty(total, dtype=np.int64)
+    weights = np.empty(total, dtype=np.float64)
+    thinning_draws = np.empty(total, dtype=np.uint64)
     for draw_index in range(total):
         source = int(sources[sampler.integers(len(sources))])
-        targets = np.asarray(sorted(nested[source]), dtype=np.int64)
+        targets = prepared.targets[source]
         target = int(targets[sampler.integers(len(targets))])
-        guides = np.asarray(sorted(nested[source][target]), dtype=np.int64)
+        guides = prepared.guides[(source, target)]
         guide = int(guides[sampler.integers(len(guides))])
-        candidates = nested[source][target][guide]
+        candidates = prepared.rows[(source, target, guide)]
         row_id = int(candidates[sampler.integers(len(candidates))])
         probability = 1.0 / (len(sources) * len(targets) * len(guides) * len(candidates))
-        observed = hierarchy_index.loc[row_id]
-        rows.append(
-            {
-                "entry_index": entry_index,
-                "draw_index": draw_index,
-                "macro_update": draw_index // 4096,
-                "microbatch": (draw_index % 4096) // 512,
-                "microbatch_offset": draw_index % 512,
-                "row_id": row_id,
-                "source_index": source,
-                "target_code": target,
-                "guide_code": guide,
-                "is_control": bool(observed["is_control"]),
-                "inverse_probability_weight": 1.0 / probability,
-                "thinning_draw": int(thinning.bit_generator.random_raw()),
-            }
-        )
+        row_ids[draw_index] = row_id
+        source_indices[draw_index] = source
+        target_codes[draw_index] = target
+        guide_codes[draw_index] = guide
+        weights[draw_index] = 1.0 / probability
+        thinning_draws[draw_index] = thinning.bit_generator.random_raw()
         cursor = draw_index + 1
         if cursor % 4096 == 0:
             states.append(
@@ -158,9 +193,49 @@ def _draw_entry(
                 thinning = np.random.Generator(np.random.PCG64DXSM())
                 sampler.bit_generator.state = sampler_state
                 thinning.bit_generator.state = thinning_state
+    control_positions = np.searchsorted(prepared.control_row_ids, row_ids)
+    if not np.array_equal(prepared.control_row_ids[control_positions], row_ids):
+        raise IntegrityError("Dev36 sampled row is absent from its prepared hierarchy.")
+    draw_indices = np.arange(total, dtype=np.int64)
     return (
-        pd.DataFrame(rows, columns=TRACE_COLUMNS),
+        pd.DataFrame(
+            {
+                "entry_index": np.full(total, entry_index, dtype=np.int64),
+                "draw_index": draw_indices,
+                "macro_update": draw_indices // 4096,
+                "microbatch": (draw_indices % 4096) // 512,
+                "microbatch_offset": draw_indices % 512,
+                "row_id": row_ids,
+                "source_index": source_indices,
+                "target_code": target_codes,
+                "guide_code": guide_codes,
+                "is_control": prepared.control_values[control_positions],
+                "inverse_probability_weight": weights,
+                "thinning_draw": thinning_draws,
+            },
+            columns=TRACE_COLUMNS,
+        ),
         pd.DataFrame(states, columns=STATE_COLUMNS),
+    )
+
+
+def _draw_entry(
+    entry_index: int,
+    entry: G00CSamplerPlanEntryV3,
+    hierarchy: pd.DataFrame,
+    allowed_rows: np.ndarray,
+    schedule: G00CRefitSeedScheduleV1,
+    *,
+    resume_after_macro_update: int | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Compatibility wrapper for one exact entry."""
+
+    return _draw_prepared_entry(
+        entry_index,
+        entry,
+        _prepare_hierarchy(hierarchy, allowed_rows),
+        schedule,
+        resume_after_macro_update=resume_after_macro_update,
     )
 
 
@@ -176,12 +251,17 @@ def replay_sampler_plan_v3(
 
     traces: list[pd.DataFrame] = []
     states: list[pd.DataFrame] = []
+    prepared_prefixes: dict[int, _PreparedHierarchy] = {}
     for index, entry in enumerate(plan.entries):
-        trace, state = _draw_entry(
+        allowed_rows = _entry_rows(entry, order)
+        prepared = prepared_prefixes.get(len(allowed_rows))
+        if prepared is None:
+            prepared = _prepare_hierarchy(hierarchy, allowed_rows)
+            prepared_prefixes[len(allowed_rows)] = prepared
+        trace, state = _draw_prepared_entry(
             index,
             entry,
-            hierarchy,
-            _entry_rows(entry, order),
+            prepared,
             schedule,
             resume_after_macro_update=(plan.resume_after_macro_update if resumed else None),
         )

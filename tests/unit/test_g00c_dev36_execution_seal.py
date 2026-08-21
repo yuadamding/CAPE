@@ -188,6 +188,40 @@ def test_dev36_sampler_exact_resume_and_derived_zero_support() -> None:
     resumed, resumed_state = replay_sampler_plan_v3(plan, hierarchy, order, schedule, resumed=True)
     assert uninterrupted.equals(resumed)
     assert state.equals(resumed_state)
+    # Frozen Dev37 PCG64DXSM characterization: the optimized prefix cache and
+    # typed trace construction must not change the historical stream.
+    assert uninterrupted["row_id"].iloc[:16].tolist() == [
+        13,
+        13,
+        13,
+        13,
+        13,
+        13,
+        12,
+        10,
+        11,
+        12,
+        13,
+        10,
+        12,
+        10,
+        10,
+        10,
+    ]
+    assert uninterrupted["thinning_draw"].iloc[:8].tolist() == [
+        6290477717619121792,
+        13064860109156429178,
+        5057985643900009592,
+        7633956249123397418,
+        6611851478989297693,
+        1200645861071004140,
+        12283433943111019792,
+        1443012210241635411,
+    ]
+    assert state["sampler_state_sha256"].tolist() == [
+        "0d4642ee0574757215e0e72414deb37ec4f187860ae01d2aab70ed791d38f93c",
+        "ea501171180b4f08f969f545ed30599a310aae440a856ca483669ad8b715c6db",
+    ]
     assert tuple(uninterrupted["microbatch"].iloc[:4096].unique()) == tuple(range(8))
     assert np.all(uninterrupted["inverse_probability_weight"].to_numpy() > 0)
     contract = _identified(
